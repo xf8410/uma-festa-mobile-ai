@@ -1,0 +1,79 @@
+name: Build hachimi_ura 3.29.2 (offset fix)
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/build-ura-3292.yml"
+      - ".github/scripts/apply_offset_fix_3292.js"
+      - "so/hachimi_ura_plugin/**"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: build-ura-3292
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Apply offset fix (idempotent)
+        run: node .github/scripts/apply_offset_fix_3292.js so/hachimi_ura_plugin/src/lib.rs
+
+      - name: Verify patch landed
+        run: |
+          set -euo pipefail
+          grep -qF 'read_obscured_field(chara_obj, chara_class, "_speed")' so/hachimi_ura_plugin/src/lib.rs
+          grep -qF 'unsafe fn selftest_offsets' so/hachimi_ura_plugin/src/lib.rs
+          grep -qF 'get_TargetRaceIdArray' so/hachimi_ura_plugin/src/lib.rs
+          echo "patch verified"
+
+      - name: Rust target + NDK linker
+        run: |
+          set -euo pipefail
+          rustup target add aarch64-linux-android
+          NDK="${ANDROID_NDK_HOME:-${ANDROID_NDK_LATEST_HOME:-}}"
+          if [ -z "$NDK" ] || [ ! -d "$NDK" ]; then
+            NDK=$(ls -d /usr/local/lib/android/sdk/ndk/* 2>/dev/null | sort -V | tail -1)
+          fi
+          echo "NDK=$NDK"
+          TC="$NDK/toolchains/llvm/prebuilt/linux-x86_64/bin"
+          test -x "$TC/aarch64-linux-android24-clang"
+          printf '[target.aarch64-linux-android]\nlinker = "%s/aarch64-linux-android24-clang"\n' "$TC" \
+            > so/hachimi_ura_plugin/.cargo/config.toml
+          {
+            echo "CC_aarch64_linux_android=$TC/aarch64-linux-android24-clang"
+            echo "AR_aarch64_linux_android=$TC/llvm-ar"
+          } >> "$GITHUB_ENV"
+
+      - name: cargo build (release, aarch64)
+        working-directory: so/hachimi_ura_plugin
+        run: |
+          set -o pipefail
+          cargo build --release --target aarch64-linux-android 2>&1 | tail -60
+          ls -l target/aarch64-linux-android/release/libhachimi_ura.so
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: libhachimi_ura-3.29.2-offsetfix
+          path: so/hachimi_ura_plugin/target/aarch64-linux-android/release/libhachimi_ura.so
+          if-no-files-found: error
+
+      - name: Commit patched source back to main
+        run: |
+          set -euo pipefail
+          git config user.name "dsh-bot"
+          git config user.email "dsh-bot@users.noreply.github.com"
+          git add so/hachimi_ura_plugin/src/lib.rs
+          if git diff --cached --quiet; then
+            echo "source already patched, nothing to commit"
+          else
+            git commit -m "fix(so): resolve field offsets at runtime, add /debug/selftest"
+            git push
+          fi
