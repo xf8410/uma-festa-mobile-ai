@@ -131,4 +131,4 @@ help: use `&raw mut` instead to create a raw pointer
       |          +++
 
 warning: `hachimi_ura` (lib) generated 141 warnings (run `cargo fix --lib -p hachimi_ura` to apply 57 suggestions)
-    Finished `release` profile [optimized] target(s) in 46.17s
+    Finished `release` profile [optimized] target(s) in 1m 15s
