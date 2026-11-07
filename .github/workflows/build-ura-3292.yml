@@ -14,16 +14,29 @@ permissions:
 
 concurrency:
   group: build-ura-3292
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@v4
 
+      - name: Diagnostics into ci-capture.txt
+        run: |
+          {
+            echo "=== toolchain ==="
+            rustc --version || true
+            cargo --version || true
+            node --version || true
+            echo "ANDROID_NDK_HOME=${ANDROID_NDK_HOME:-<unset>}"
+            echo "ANDROID_NDK_LATEST_HOME=${ANDROID_NDK_LATEST_HOME:-<unset>}"
+            echo "ANDROID_SDK_ROOT=${ANDROID_SDK_ROOT:-<unset>}"
+            ls -d /usr/local/lib/android/sdk/ndk/* 2>/dev/null || echo "no ndk dir"
+          } > ci-capture.txt 2>&1
+
       - name: Apply offset fix (idempotent)
-        run: node .github/scripts/apply_offset_fix_3292.js so/hachimi_ura_plugin/src/lib.rs
+        run: node .github/scripts/apply_offset_fix_3292.js so/hachimi_ura_plugin/src/lib.rs 2>&1 | tee -a ci-capture.txt
 
       - name: Verify patch landed
         run: |
@@ -31,18 +44,22 @@ jobs:
           grep -qF 'read_obscured_field(chara_obj, chara_class, "_speed")' so/hachimi_ura_plugin/src/lib.rs
           grep -qF 'unsafe fn selftest_offsets' so/hachimi_ura_plugin/src/lib.rs
           grep -qF 'get_TargetRaceIdArray' so/hachimi_ura_plugin/src/lib.rs
-          echo "patch verified"
+          echo "patch verified" | tee -a ci-capture.txt
 
       - name: Rust target + NDK linker
         run: |
           set -euo pipefail
-          rustup target add aarch64-linux-android
+          rustup target add aarch64-linux-android 2>&1 | tee -a ci-capture.txt
           NDK="${ANDROID_NDK_HOME:-${ANDROID_NDK_LATEST_HOME:-}}"
-          if [ -z "$NDK" ] || [ ! -d "$NDK" ]; then
-            NDK=$(ls -d /usr/local/lib/android/sdk/ndk/* 2>/dev/null | sort -V | tail -1)
+          if [ -z "${NDK:-}" ] || [ ! -d "$NDK" ]; then
+            NDK=$(ls -d /usr/local/lib/android/sdk/ndk/* 2>/dev/null | sort -V | tail -1 || true)
           fi
-          echo "NDK=$NDK"
+          if [ -z "${NDK:-}" ] || [ ! -d "$NDK" ]; then
+            NDK=$(find / -maxdepth 6 -type d -name "26.*" -path "*ndk*" 2>/dev/null | head -1)
+          fi
+          echo "NDK=$NDK" | tee -a ci-capture.txt
           TC="$NDK/toolchains/llvm/prebuilt/linux-x86_64/bin"
+          ls "$TC" 2>&1 | head -5 | tee -a ci-capture.txt
           test -x "$TC/aarch64-linux-android24-clang"
           printf '[target.aarch64-linux-android]\nlinker = "%s/aarch64-linux-android24-clang"\n' "$TC" \
             > so/hachimi_ura_plugin/.cargo/config.toml
@@ -55,7 +72,7 @@ jobs:
         working-directory: so/hachimi_ura_plugin
         run: |
           set -o pipefail
-          cargo build --release --target aarch64-linux-android 2>&1 | tail -60
+          cargo build --release --target aarch64-linux-android 2>&1 | tee -a "$GITHUB_WORKSPACE/ci-capture.txt" | tail -80
           ls -l target/aarch64-linux-android/release/libhachimi_ura.so
 
       - name: Upload artifact
@@ -65,15 +82,16 @@ jobs:
           path: so/hachimi_ura_plugin/target/aarch64-linux-android/release/libhachimi_ura.so
           if-no-files-found: error
 
-      - name: Commit patched source back to main
+      - name: Report (always)
+        if: always()
         run: |
-          set -euo pipefail
+          {
+            echo "job_status=${{ job.status }}"
+            echo "--- capture tail ---"
+            tail -c 7000 ci-capture.txt 2>/dev/null || echo "no capture file"
+          } > ci-last.txt
           git config user.name "dsh-bot"
           git config user.email "dsh-bot@users.noreply.github.com"
-          git add so/hachimi_ura_plugin/src/lib.rs
-          if git diff --cached --quiet; then
-            echo "source already patched, nothing to commit"
-          else
-            git commit -m "fix(so): resolve field offsets at runtime, add /debug/selftest"
-            git push
-          fi
+          git add ci-last.txt || true
+          git commit -m "ci: build log for run ${{ github.run_id }} (${{ job.status }})" || echo "nothing to commit"
+          git push || echo "push failed"
