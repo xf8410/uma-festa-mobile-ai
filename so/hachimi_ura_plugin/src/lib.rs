@@ -1698,24 +1698,24 @@ unsafe fn read_int_at(obj: *const c_void, field_offset: i32) -> i32 {
 }
 
 /// ★ v3.24.9: Read IL2CPP List<int> via pointer — zero runtime_invoke
+// [ARRAY-FIX-3292] read_il2cpp_int_list
 unsafe fn read_il2cpp_int_list(list_ptr: *const c_void) -> Vec<i32> {
     if list_ptr.is_null() {
         return Vec::new();
     }
     let base = list_ptr as *const u8;
     let count = std::ptr::read_unaligned::<usize>(base.add(IL2CPP_LIST_COUNT_OFF) as *const usize);
-    if count > 10000 {
+    if count > 256 {
         return Vec::new();
     }
+    let data_start = base.add(IL2CPP_LIST_ITEMS_OFF);
     let mut result = Vec::with_capacity(count);
     for i in 0..count {
-        let elem = read_obscured_int_at(
-            std::ptr::read_unaligned::<*mut c_void>(
-                base.add(IL2CPP_LIST_ITEMS_OFF + i * IL2CPP_LIST_ITEM_SIZE) as *const *mut c_void,
-            ) as *const c_void,
-            IL2CPP_OBSCURED_INT_KEY_OFF as i32,
-        );
-        result.push(elem);
+        // ObscuredInt 是内联结构体：currentCryptoKey@0, hiddenValue@4，步长 0x14
+        let elem = data_start.add(i * 0x14);
+        let key = std::ptr::read_unaligned::<i32>(elem as *const i32);
+        let hidden = std::ptr::read_unaligned::<i32>(elem.add(4) as *const i32);
+        result.push(hidden ^ key);
     }
     result
 }
@@ -4888,7 +4888,7 @@ fn read_summary() -> String {
     summary
 }
 
-// [OFFSET-FIX-3292] selftest
+// [ARRAY-FIX-3292] selftest
 unsafe fn selftest_offsets() -> String {
     let image = get_image();
     if image.is_null() {
@@ -4915,42 +4915,43 @@ unsafe fn selftest_offsets() -> String {
         call_getter_ref(sm_class, sm, "get_Character")
     };
 
-    let mut rows: Vec<String> = Vec::new();
-    let names = [
-        "_speed", "_stamina", "_power", "_guts", "_wiz", "_hp", "_maxHp",
-        "_motivation", "_skillPoint", "_fanCount", "_scenarioId",
+    let pairs: [(i32, &str); 13] = [
+        (208, "_hp"),
+        (228, "_maxHp"),
+        (248, "_speed"),
+        (268, "_stamina"),
+        (288, "_power"),
+        (308, "_guts"),
+        (328, "_wiz"),
+        (348, "MaxSpeed"),
+        (568, "_scenarioId"),
+        (704, "SkillPoint"),
+        (944, "RunningStyle"),
+        (996, "_fanCount"),
+        (1056, "_motivation"),
     ];
-    for name in names {
-        let off = field_offset_of(chara, chara_class, name);
-        let val = match off {
-            Some(o) => read_obscured_int_at(chara, o),
-            None => -1,
-        };
+    let mut rows: Vec<String> = Vec::new();
+    for (off, name) in pairs {
+        let val = read_obscured_int_at(chara, off);
         rows.push(format!(
             r#"{{"field":"{}","offset":{},"value":{}}}"#,
-            name,
-            off.map(|o| o.to_string()).unwrap_or_else(|| "null".to_string()),
-            val
+            name, off, val
         ));
     }
-    let tt = field_offset_of(sm as *const c_void, sm_class, "_totalTurnNum");
+    let total_turn = read_obscured_int_at(sm as *const c_void, 68);
     rows.push(format!(
-        r#"{{"field":"_totalTurnNum","offset":{},"value":{}}}"#,
-        tt.map(|o| o.to_string()).unwrap_or_else(|| "null".to_string()),
-        match tt {
-            Some(o) => read_obscured_int_at(sm as *const c_void, o),
-            None => -1,
-        }
+        r#"{{"field":"_totalTurnNum","offset":68,"value":{}}}"#,
+        total_turn
     ));
-
+    let effects = read_il2cpp_int_list(read_ptr_at(chara, 1080));
     format!(
-        r#"{{"ok":true,"chara_ok":{},"sm_ok":{},"fields":[{}]}}"#,
+        r#"{{"ok":true,"chara_ok":{},"sm_ok":{},"effects":{:?},"fields":[{}]}}"#,
         !chara.is_null(),
         !sm.is_null(),
+        effects,
         rows.join(",")
     )
 }
-
 unsafe fn read_summary_inner() -> String {
     // v3.22.51: IN_READ_PATH disabled - /debug/ramenfields proves IL2CPP APIs are safe from HTTP thread
     // Keep the wrapper for potential future use, but don't block any APIs
@@ -5046,17 +5047,17 @@ unsafe fn read_summary_inner_impl() -> String {
     }
 
     log_predict_step("S:before_read_speed");
-    let spd = read_obscured_field(chara_obj, chara_class, "_speed");
+    let spd = read_obscured_int_at(chara_obj, 248); // _speed
     log_predict_step("S:after_read_speed");
-    let sta = read_obscured_field(chara_obj, chara_class, "_stamina");
-    let pow_ = read_obscured_field(chara_obj, chara_class, "_power");
-    let gut = read_obscured_field(chara_obj, chara_class, "_guts");
-    let wiz = read_obscured_field(chara_obj, chara_class, "_wiz");
-    let vit = read_obscured_field(chara_obj, chara_class, "_hp");
-    let mvit = read_obscured_field(chara_obj, chara_class, "_maxHp");
-    let mot = read_obscured_field(chara_obj, chara_class, "_motivation");
-    let spt = read_obscured_field(chara_obj, chara_class, "_skillPoint");
-    let fan = read_obscured_field(chara_obj, chara_class, "_fanCount");
+    let sta = read_obscured_int_at(chara_obj, 268); // _stamina
+    let pow_ = read_obscured_int_at(chara_obj, 288); // _power
+    let gut = read_obscured_int_at(chara_obj, 308); // _guts
+    let wiz = read_obscured_int_at(chara_obj, 328); // _wiz
+    let vit = read_obscured_int_at(chara_obj, 208); // _hp
+    let mvit = read_obscured_int_at(chara_obj, 228); // _maxHp
+    let mot = read_obscured_int_at(chara_obj, 1056); // _motivation
+    let spt = read_obscured_int_at(chara_obj, 704); // _skillPoint
+    let fan = read_obscured_int_at(chara_obj, 996); // _fanCount
                                                     // ★ v3.24.9: Month/Half are computed properties — must use getter (no offset available)
     let mon = if !sm_class.is_null() {
         call_getter_int(sm_class, sm_obj, "get_Month")
@@ -5071,8 +5072,8 @@ unsafe fn read_summary_inner_impl() -> String {
        // v3.24.72: decrypt the field, but do NOT assign cumulative/countdown semantics yet.
        // 444444 is the ObscuredInt XOR key. The decrypted value is exposed only as raw data
        // until it has been compared with the in-game countdown display across boundaries.
-    let raw_total_turn_num = read_obscured_field(sm_obj as *const c_void, sm_class, "_totalTurnNum");
-    let sid = read_obscured_field(chara_obj, chara_class, "_scenarioId");
+    let raw_total_turn_num = read_obscured_int_at(sm_obj as *const c_void, 68); // _totalTurnNum
+    let sid = read_obscured_int_at(chara_obj, 568); // _scenarioId
                                                     // v3.27.10: Ramen turn mapping follows upstream umaai-rs semantics (turns 0-77, year boundaries at 24/48).
     let (year, cumulative_turn) = if sid == 14 {
         let y = if raw_total_turn_num < 24 {
