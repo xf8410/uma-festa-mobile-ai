@@ -118,6 +118,7 @@ const ENDPOINTS: &[&str] = &[
     "/debug/training_partners",
     "/debug/training_seed",
     "/debug/turn_probe",
+    "/debug/selftest",
     "/debug/unique_detail",
     "/debug/unique_skills",
     "/debug/upload",
@@ -1652,6 +1653,30 @@ unsafe fn read_obscured_int_at(obj: *const c_void, field_offset: i32) -> i32 {
     let key = std::ptr::read_unaligned::<i32>(base.add(off) as *const i32);
     let hidden = std::ptr::read_unaligned::<i32>(base.add(off + 4) as *const i32);
     hidden ^ key
+}
+
+// [OFFSET-FIX-3292]
+unsafe fn field_offset_of(obj: *const c_void, class: *mut c_void, name: &str) -> Option<i32> {
+    if obj.is_null() || class.is_null() {
+        return None;
+    }
+    let p = read_field_ptr(obj, class, name);
+    if p.is_null() {
+        return None;
+    }
+    let off = (p as usize).wrapping_sub(obj as usize);
+    if off == 0 || off > 4096 {
+        None
+    } else {
+        Some(off as i32)
+    }
+}
+
+unsafe fn read_obscured_field(obj: *const c_void, class: *mut c_void, name: &str) -> i32 {
+    match field_offset_of(obj, class, name) {
+        Some(o) => read_obscured_int_at(obj, o),
+        None => -1,
+    }
 }
 
 unsafe fn read_ptr_at(obj: *const c_void, field_offset: i32) -> *mut c_void {
@@ -4863,6 +4888,69 @@ fn read_summary() -> String {
     summary
 }
 
+// [OFFSET-FIX-3292] selftest
+unsafe fn selftest_offsets() -> String {
+    let image = get_image();
+    if image.is_null() {
+        return r#"{"error":"image_null"}"#.to_string();
+    }
+    let wdm_class = find_class(image, to_cstr("Gallop").as_ptr(), to_cstr("WorkDataManager").as_ptr());
+    if wdm_class.is_null() {
+        return r#"{"error":"no_wdm"}"#.to_string();
+    }
+    let wdm = get_singleton(wdm_class);
+    if wdm.is_null() {
+        return r#"{"error":"no_wdm_inst"}"#.to_string();
+    }
+    let sm_class = find_class(image, to_cstr("Gallop").as_ptr(), to_cstr("WorkSingleModeData").as_ptr());
+    let chara_class = find_class(image, to_cstr("Gallop").as_ptr(), to_cstr("WorkSingleModeCharaData").as_ptr());
+    let sm = if sm_class.is_null() {
+        ptr::null()
+    } else {
+        call_getter_ref(wdm_class, wdm, "get_SingleMode")
+    };
+    let chara = if sm.is_null() || sm_class.is_null() {
+        ptr::null()
+    } else {
+        call_getter_ref(sm_class, sm, "get_Character")
+    };
+
+    let mut rows: Vec<String> = Vec::new();
+    let names = [
+        "_speed", "_stamina", "_power", "_guts", "_wiz", "_hp", "_maxHp",
+        "_motivation", "_skillPoint", "_fanCount", "_scenarioId",
+    ];
+    for name in names {
+        let off = field_offset_of(chara, chara_class, name);
+        let val = match off {
+            Some(o) => read_obscured_int_at(chara, o),
+            None => -1,
+        };
+        rows.push(format!(
+            r#"{{"field":"{}","offset":{},"value":{}}}"#,
+            name,
+            off.map(|o| o.to_string()).unwrap_or_else(|| "null".to_string()),
+            val
+        ));
+    }
+    let tt = field_offset_of(sm as *const c_void, sm_class, "_totalTurnNum");
+    rows.push(format!(
+        r#"{{"field":"_totalTurnNum","offset":{},"value":{}}}"#,
+        tt.map(|o| o.to_string()).unwrap_or_else(|| "null".to_string()),
+        match tt {
+            Some(o) => read_obscured_int_at(sm as *const c_void, o),
+            None => -1,
+        }
+    ));
+
+    format!(
+        r#"{{"ok":true,"chara_ok":{},"sm_ok":{},"fields":[{}]}}"#,
+        !chara.is_null(),
+        !sm.is_null(),
+        rows.join(",")
+    )
+}
+
 unsafe fn read_summary_inner() -> String {
     // v3.22.51: IN_READ_PATH disabled - /debug/ramenfields proves IL2CPP APIs are safe from HTTP thread
     // Keep the wrapper for potential future use, but don't block any APIs
@@ -4958,17 +5046,17 @@ unsafe fn read_summary_inner_impl() -> String {
     }
 
     log_predict_step("S:before_read_speed");
-    let spd = read_obscured_int_at(chara_obj, 248); // _speed
+    let spd = read_obscured_field(chara_obj, chara_class, "_speed");
     log_predict_step("S:after_read_speed");
-    let sta = read_obscured_int_at(chara_obj, 268); // _stamina
-    let pow_ = read_obscured_int_at(chara_obj, 288); // _power
-    let gut = read_obscured_int_at(chara_obj, 308); // _guts
-    let wiz = read_obscured_int_at(chara_obj, 328); // _wiz
-    let vit = read_obscured_int_at(chara_obj, 208); // _hp
-    let mvit = read_obscured_int_at(chara_obj, 228); // _maxHp
-    let mot = read_obscured_int_at(chara_obj, 1056); // _motivation
-    let spt = read_obscured_int_at(chara_obj, 704); // _skillPoint
-    let fan = read_obscured_int_at(chara_obj, 996); // _fanCount
+    let sta = read_obscured_field(chara_obj, chara_class, "_stamina");
+    let pow_ = read_obscured_field(chara_obj, chara_class, "_power");
+    let gut = read_obscured_field(chara_obj, chara_class, "_guts");
+    let wiz = read_obscured_field(chara_obj, chara_class, "_wiz");
+    let vit = read_obscured_field(chara_obj, chara_class, "_hp");
+    let mvit = read_obscured_field(chara_obj, chara_class, "_maxHp");
+    let mot = read_obscured_field(chara_obj, chara_class, "_motivation");
+    let spt = read_obscured_field(chara_obj, chara_class, "_skillPoint");
+    let fan = read_obscured_field(chara_obj, chara_class, "_fanCount");
                                                     // ★ v3.24.9: Month/Half are computed properties — must use getter (no offset available)
     let mon = if !sm_class.is_null() {
         call_getter_int(sm_class, sm_obj, "get_Month")
@@ -4983,8 +5071,8 @@ unsafe fn read_summary_inner_impl() -> String {
        // v3.24.72: decrypt the field, but do NOT assign cumulative/countdown semantics yet.
        // 444444 is the ObscuredInt XOR key. The decrypted value is exposed only as raw data
        // until it has been compared with the in-game countdown display across boundaries.
-    let raw_total_turn_num = read_obscured_int_at(sm_obj as *const c_void, 68); // _totalTurnNum
-    let sid = read_obscured_int_at(chara_obj, 568); // _scenarioId
+    let raw_total_turn_num = read_obscured_field(sm_obj as *const c_void, sm_class, "_totalTurnNum");
+    let sid = read_obscured_field(chara_obj, chara_class, "_scenarioId");
                                                     // v3.27.10: Ramen turn mapping follows upstream umaai-rs semantics (turns 0-77, year boundaries at 24/48).
     let (year, cumulative_turn) = if sid == 14 {
         let y = if raw_total_turn_num < 24 {
@@ -7948,6 +8036,8 @@ fn handle_http(mut stream: std::net::TcpStream) {
         }
     } else if path == "/summary" {
         read_summary()
+    } else if path == "/debug/selftest" {
+        unsafe { selftest_offsets() }
     } else if path == "/debug/turn_probe" {
         // v3.24.72: expose decrypted raw field only; UI is a countdown and mapping is unknown.
         let s = read_summary();
@@ -20054,7 +20144,7 @@ unsafe fn read_inherit_compat() -> String {
 
     // 4. Read target races for overlap detection
     let mut target_races_json: Vec<String> = Vec::new();
-    let tr_arr = call_getter_on_instance(chara_class, chara_obj, "get_TargetRaceArray");
+    let tr_arr = call_getter_on_instance(chara_class, chara_obj, "get_TargetRaceIdArray");
     if !tr_arr.is_null() {
         let trb = tr_arr as *const u8;
         let trl = std::ptr::read_unaligned::<usize>(trb.add(IL2CPP_LIST_COUNT_OFF) as *const usize);
@@ -20161,7 +20251,7 @@ unsafe fn read_win_saddle_analysis() -> String {
     if wsm_class.is_null() {
         return r#"{"error":"wsm_class_null"}"#.to_string();
     }
-    let wsm = call_getter_ref(wdm_class, wdm, "get_WorkSingleModeData");
+    let wsm = call_getter_ref(wdm_class, wdm, "get_SingleMode");
     if wsm.is_null() {
         return r#"{"error":"wsm_null"}"#.to_string();
     }
