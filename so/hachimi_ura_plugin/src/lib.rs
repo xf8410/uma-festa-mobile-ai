@@ -119,6 +119,7 @@ const ENDPOINTS: &[&str] = &[
     "/debug/training_seed",
     "/debug/turn_probe",
     "/debug/selftest",
+    "/debug/ringlog",
     "/debug/unique_detail",
     "/debug/unique_skills",
     "/debug/upload",
@@ -715,7 +716,7 @@ extern "C" {
     fn sys_siglongjmp(env: *const u8, val: i32) -> !;
 }
 
-const CRASH_LOG_PATH: &str = "/data/data/jp.pokemon.pokeuma/files/uma_predict.log";
+const CRASH_LOG_PATH: &str = "/sdcard/Android/media/jp.co.cygames.umamusume/hachimi/uma_predict.log";
 
 // ★ v3.22.35: SIGSEGV recovery for push thread
 // sigsetjmp buffer: 200 bytes is enough for jmp_buf on aarch64 (typically 24 x 8 = 192 bytes)
@@ -778,7 +779,7 @@ extern "C" fn crash_signal_handler(sig: i32) {
     len += r.len();
     msg[len] = b'\n';
     len += 1;
-    let path = b"/data/data/jp.pokemon.pokeuma/files/uma_predict.log\0";
+    let path = b"/sdcard/Android/media/jp.co.cygames.umamusume/hachimi/uma_predict.log\0";
     let fd = unsafe { sys_open(path.as_ptr() as *const i8, 1 | 64 | 1024, 0o644) };
     if fd >= 0 {
         unsafe {
@@ -819,14 +820,64 @@ fn init_crash_handler() {
         let _ = std::fs::OpenOptions::new()
             .create(true)
             .append(true)
-            .open("/data/data/jp.pokemon.pokeuma/files/uma_predict.log")
+            .open("/sdcard/Android/media/jp.co.cygames.umamusume/hachimi/uma_predict.log")
             .and_then(|mut f| std::io::Write::write_all(&mut f, msg.as_bytes()));
     }));
+}
+
+// [LOG-FIX-3292]
+const RING_SLOTS: usize = 200;
+const RING_LINE: usize = 96;
+static mut RING_BUF: [[u8; RING_LINE]; RING_SLOTS] = [[0; RING_LINE]; RING_SLOTS];
+static RING_IDX: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+
+unsafe fn ring_push(msg: &str) {
+    let idx = RING_IDX.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    let slot = idx % RING_SLOTS;
+    let base = RING_BUF.as_mut_ptr() as *mut u8;
+    let dst = base.add(slot * RING_LINE);
+    for i in 0..RING_LINE {
+        *dst.add(i) = 0;
+    }
+    let n = msg.len().min(RING_LINE - 1);
+    std::ptr::copy_nonoverlapping(msg.as_ptr(), dst, n);
+}
+
+unsafe fn ringlog_json() -> String {
+    let n = RING_IDX.load(std::sync::atomic::Ordering::Relaxed);
+    let start = if n > RING_SLOTS { n - RING_SLOTS } else { 0 };
+    let mut items: Vec<String> = Vec::new();
+    let base = RING_BUF.as_ptr() as *const u8;
+    for i in start..n {
+        let slot = i % RING_SLOTS;
+        let src = base.add(slot * RING_LINE);
+        let mut end = RING_LINE;
+        for k in 0..RING_LINE {
+            if *src.add(k) == 0 {
+                end = k;
+                break;
+            }
+        }
+        let bytes = std::slice::from_raw_parts(src, end);
+        let text = String::from_utf8_lossy(bytes)
+            .replace('\\', "")
+            .replace('"', "'");
+        items.push(format!("{}:{}", i + 1, text));
+    }
+    format!(
+        r#"{{"ok":true,"count":{},"total":{},"steps":["{}"]}}"#,
+        items.len(),
+        n,
+        items.join("\",\"")
+    )
 }
 
 fn log_predict_step(msg: &str) {
     let step = PREDICT_STEP.fetch_add(1, std::sync::atomic::Ordering::Relaxed) + 1;
     let line = format!("[{}] {}\n", step, msg);
+    unsafe {
+        ring_push(msg);
+    }
 
     // Store last step in static buffer for /debug/laststep
     let bytes = msg.as_bytes();
@@ -838,7 +889,7 @@ fn log_predict_step(msg: &str) {
     LAST_STEP_LEN.store(len as u32, std::sync::atomic::Ordering::Relaxed);
 
     // Write to file using raw libc syscalls (more reliable than std::fs on Android)
-    let path1 = b"/data/data/jp.pokemon.pokeuma/files/uma_predict.log\0";
+    let path1 = b"/sdcard/Android/media/jp.co.cygames.umamusume/hachimi/uma_predict.log\0";
     let path2 = b"/data/local/tmp/uma_predict.log\0";
     let line_bytes = line.as_bytes();
     unsafe {
@@ -856,7 +907,7 @@ fn log_predict_step(msg: &str) {
         let _ = std::fs::OpenOptions::new()
             .create(true)
             .append(true)
-            .open("/data/data/jp.pokemon.pokeuma/files/uma_predict.log")
+            .open("/sdcard/Android/media/jp.co.cygames.umamusume/hachimi/uma_predict.log")
             .and_then(|mut f| std::io::Write::write_all(&mut f, line.as_bytes()));
     }
 }
@@ -884,7 +935,7 @@ fn is_plausible_ptr(p: *const c_void) -> bool {
 fn clear_predict_log() {
     PREDICT_STEP.store(0, std::sync::atomic::Ordering::Relaxed);
     LAST_STEP_LEN.store(0, std::sync::atomic::Ordering::Relaxed);
-    let path1 = b"/data/data/jp.pokemon.pokeuma/files/uma_predict.log\0";
+    let path1 = b"/sdcard/Android/media/jp.co.cygames.umamusume/hachimi/uma_predict.log\0";
     let path2 = b"/data/local/tmp/uma_predict.log\0";
     unsafe {
         let fd = sys_open(path1.as_ptr() as *const i8, 1 | 64 | 512, 0o644);
@@ -904,7 +955,7 @@ fn read_crash_log() -> String {
     if sig != 0 {
         return format!(r#"{{"crash":true,"signal":{},"step":{}}}"#, sig, step);
     }
-    match std::fs::read_to_string("/data/data/jp.pokemon.pokeuma/files/uma_predict.log") {
+    match std::fs::read_to_string("/sdcard/Android/media/jp.co.cygames.umamusume/hachimi/uma_predict.log") {
         Ok(s) if !s.is_empty() => s,
         _ => match std::fs::read_to_string("/data/local/tmp/uma_predict.log") {
             Ok(s) if !s.is_empty() => s,
@@ -937,7 +988,7 @@ fn base64_encode(data: &[u8]) -> String {
 }
 
 fn read_github_token() -> String {
-    let token_path = "/data/data/jp.pokemon.pokeuma/files/uma_github_token.txt";
+    let token_path = "/data/data/jp.co.cygames.umamusume/files/uma_github_token.txt";
     match std::fs::read_to_string(token_path) {
         Ok(t) => t.trim().to_string(),
         Err(_) => String::new(),
@@ -959,7 +1010,7 @@ fn boot_trace(step: &str) {
             v.pop();
             v.pop().map(|s| s.to_string())
         })
-        .unwrap_or_else(|| "/data/data/jp.pokemon.pokeuma/files".to_string());
+        .unwrap_or_else(|| "/data/data/jp.co.cygames.umamusume/files".to_string());
     let log_path = format!("{}/ura_boot.log", so_dir);
     if step == "BEGIN" {
         let _ = std::fs::write(&log_path, "ura boot trace\n");
@@ -1014,7 +1065,7 @@ fn upload_file_to_repo(local_path: &str, repo_name: &str) {
         r#"{{"message":"auto-upload {}","content":"{}"}}"#,
         repo_name, b64
     );
-    let tmp = "/data/data/jp.pokemon.pokeuma/files/uma_upload.json";
+    let tmp = "/data/data/jp.co.cygames.umamusume/files/uma_upload.json";
     let _ = std::fs::write(tmp, &json);
     let cmd = format!(
         "curl -s --max-time 15 -X PUT -H 'Authorization: token {}' -H 'Content-Type: application/json' -d @{} https://api.github.com/repos/xf8410/hlpatch/contents/{} >/dev/null 2>&1",
@@ -1029,7 +1080,7 @@ fn upload_file_to_repo(local_path: &str, repo_name: &str) {
 }
 
 fn check_and_upload_crash_log() {
-    let path = "/data/data/jp.pokemon.pokeuma/files/uma_predict.log";
+    let path = "/sdcard/Android/media/jp.co.cygames.umamusume/hachimi/uma_predict.log";
     if !std::path::Path::new(path).exists() {
         return;
     }
@@ -1050,18 +1101,18 @@ fn check_and_upload_crash_log() {
         r#"{{"message":"crash log auto-upload","content":"{}"}}"#,
         b64
     );
-    let _ = std::fs::write("/data/data/jp.pokemon.pokeuma/files/uma_upload.json", &json);
+    let _ = std::fs::write("/data/data/jp.co.cygames.umamusume/files/uma_upload.json", &json);
     let gh_token = read_github_token();
     if gh_token.is_empty() {
         return;
     }
-    let cmd = format!("curl -s --max-time 15 -X PUT -H 'Authorization: token {}' -H 'Content-Type: application/json' -d @/data/data/jp.pokemon.pokeuma/files/uma_upload.json https://api.github.com/repos/xf8410/hlpatch/contents/crash_log.txt >/dev/null 2>&1", gh_token);
+    let cmd = format!("curl -s --max-time 15 -X PUT -H 'Authorization: token {}' -H 'Content-Type: application/json' -d @/data/data/jp.co.cygames.umamusume/files/uma_upload.json https://api.github.com/repos/xf8410/hlpatch/contents/crash_log.txt >/dev/null 2>&1", gh_token);
     if let Ok(cmd_c) = std::ffi::CString::new(cmd) {
         unsafe {
             sys_system(cmd_c.as_ptr() as *const i8);
         }
     }
-    let _ = std::fs::remove_file("/data/data/jp.pokemon.pokeuma/files/uma_upload.json");
+    let _ = std::fs::remove_file("/data/data/jp.co.cygames.umamusume/files/uma_upload.json");
 }
 
 fn save_endpoint_log(endpoint: &str, data: &str) {
@@ -1076,16 +1127,16 @@ fn save_endpoint_log(endpoint: &str, data: &str) {
     {
         return;
     }
-    let _ = std::fs::create_dir_all("/data/data/jp.pokemon.pokeuma/files/uma_logs");
+    let _ = std::fs::create_dir_all("/data/data/jp.co.cygames.umamusume/files/uma_logs");
     let path = format!(
-        "/data/data/jp.pokemon.pokeuma/files/uma_logs/{}.json",
+        "/data/data/jp.co.cygames.umamusume/files/uma_logs/{}.json",
         safe_name
     );
     let _ = std::fs::write(&path, data);
 }
 
 fn upload_all_logs() -> String {
-    let dir = "/data/data/jp.pokemon.pokeuma/files/uma_logs";
+    let dir = "/data/data/jp.co.cygames.umamusume/files/uma_logs";
     let entries = match std::fs::read_dir(dir) {
         Ok(e) => e,
         Err(_) => return r#"{"error":"no_logs_dir"}"#.to_string(),
@@ -1104,7 +1155,7 @@ fn upload_all_logs() -> String {
         let b64 = base64_encode(&content);
         let github_path = format!("logs/{}", name);
         let json = format!(r#"{{"message":"upload {}","content":"{}"}}"#, name, b64);
-        let tmp_path = "/data/data/jp.pokemon.pokeuma/files/uma_upload_tmp.json";
+        let tmp_path = "/data/data/jp.co.cygames.umamusume/files/uma_upload_tmp.json";
         let _ = std::fs::write(tmp_path, &json);
 
         let cmd = format!(
@@ -1121,7 +1172,7 @@ fn upload_all_logs() -> String {
         file_names.push(name);
     }
 
-    let _ = std::fs::remove_file("/data/data/jp.pokemon.pokeuma/files/uma_upload_tmp.json");
+    let _ = std::fs::remove_file("/data/data/jp.co.cygames.umamusume/files/uma_upload_tmp.json");
 
     let files_json = file_names
         .iter()
@@ -8037,6 +8088,8 @@ fn handle_http(mut stream: std::net::TcpStream) {
         }
     } else if path == "/summary" {
         read_summary()
+    } else if path == "/debug/ringlog" {
+        unsafe { ringlog_json() }
     } else if path == "/debug/selftest" {
         unsafe { selftest_offsets() }
     } else if path == "/debug/turn_probe" {
@@ -14286,11 +14339,11 @@ fn stream_private_file(stream: &mut std::net::TcpStream, path: &str, filename: &
 
 fn find_mdb_path() -> Option<String> {
     let paths = [
-        "/data/data/jp.pokemon.pokeuma/files/master/master.mdb",
-        "/data/user/0/jp.pokemon.pokeuma/files/master/master.mdb",
-        "/data/data/jp.pokemon.pokeuma/files/master/master (1).mdb",
-        "/data/user/0/jp.pokemon.pokeuma/files/master/master (1).mdb",
-        "/storage/emulated/0/Android/data/jp.pokemon.pokeuma/files/master/master.mdb",
+        "/data/data/jp.co.cygames.umamusume/files/master/master.mdb",
+        "/data/user/0/jp.co.cygames.umamusume/files/master/master.mdb",
+        "/data/data/jp.co.cygames.umamusume/files/master/master (1).mdb",
+        "/data/user/0/jp.co.cygames.umamusume/files/master/master (1).mdb",
+        "/storage/emulated/0/Android/data/jp.co.cygames.umamusume/files/master/master.mdb",
     ];
 
     for p in &paths {
@@ -14693,7 +14746,7 @@ fn debug_push_table(table_name: &str, batch: usize, offset: usize) -> String {
         Err(_) => 0,
     };
 
-    let tmp_dir = "/data/data/jp.pokemon.pokeuma/files";
+    let tmp_dir = "/data/data/jp.co.cygames.umamusume/files";
     let tmp_path = format!("{}/uma_push_{}.json", tmp_dir, table_name);
 
     // If offset > 0 but tmp file doesn't exist, user needs to restart from offset=0
@@ -14854,7 +14907,7 @@ fn debug_download_table(table_name: &str, batch: usize) -> String {
             json_escape(table_name)
         );
     }
-    let tmp_dir = "/data/data/jp.pokemon.pokeuma/files";
+    let tmp_dir = "/data/data/jp.co.cygames.umamusume/files";
     let tmp_path = format!("{}/uma_push_{}.json", tmp_dir, table_name);
 
     // If file already exists from a previous successful build, return it directly
