@@ -74,7 +74,7 @@ rep('"get_WorkSingleModeData"', '"get_SingleMode"');
 // 5) 端点清单 + 路由
 rep('    "/debug/turn_probe",', '    "/debug/turn_probe",\n    "/debug/selftest",');
 rep('    } else if path == "/debug/turn_probe" {',
-    '    } else if path == "/debug/selftest" {\n        selftest_offsets()\n    } else if path == "/debug/turn_probe" {');
+    '    } else if path == "/debug/selftest" {\n        unsafe { selftest_offsets() }\n    } else if path == "/debug/turn_probe" {');
 
 // 6) selftest 函数
 const ANCHOR_FN = 'unsafe fn read_summary_inner() -> String {';
