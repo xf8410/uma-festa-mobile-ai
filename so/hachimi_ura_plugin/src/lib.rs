@@ -722,6 +722,8 @@ const CRASH_LOG_PATH: &str = "/sdcard/Android/media/jp.co.cygames.umamusume/hach
 // sigsetjmp buffer: 200 bytes is enough for jmp_buf on aarch64 (typically 24 x 8 = 192 bytes)
 static mut SIGSEGV_JMP_BUF: [u8; 200] = [0u8; 200];
 static SIGSEGV_RECOVERY: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+// [CRASH-DIAG-3292]
+static SIGSEGV_OWNER_TID: std::sync::atomic::AtomicI32 = std::sync::atomic::AtomicI32::new(0);
 // Cooldown: after SIGSEGV recovery, skip reads for N seconds
 static SIGSEGV_COOLDOWN_UNTIL: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
 
@@ -734,7 +736,11 @@ extern "C" fn crash_signal_handler(sig: i32) {
     // Log the crash
     let step = PREDICT_STEP.load(std::sync::atomic::Ordering::Relaxed);
     let mut msg = [0u8; 64];
-    let p = b"CRASH at step ";
+    // [CRASH-DIAG-3292] tid
+    let cur_tid = unsafe { libc::syscall(libc::SYS_gettid) } as i32;
+    let owner_tid = SIGSEGV_OWNER_TID.load(std::sync::atomic::Ordering::Relaxed);
+    let cross = SIGSEGV_RECOVERY.load(std::sync::atomic::Ordering::Relaxed) && cur_tid != owner_tid;
+    let p: &[u8] = if cross { &b"CRASH-OTHER at step "[..] } else { &b"CRASH at step "[..] };
     msg[..p.len()].copy_from_slice(p);
     let mut len = p.len();
     let mut n = step;
@@ -788,7 +794,7 @@ extern "C" fn crash_signal_handler(sig: i32) {
         }
     }
     // ★ v3.22.35: If sigsetjmp was set (push thread), longjmp back instead of killing process
-    if SIGSEGV_RECOVERY.load(std::sync::atomic::Ordering::Relaxed) {
+    if !cross && SIGSEGV_RECOVERY.load(std::sync::atomic::Ordering::Relaxed) {
         // Set cooldown: skip reads for 60 seconds
         let now = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
@@ -4921,6 +4927,9 @@ fn read_summary() -> String {
         return err;
     }
     // Set recovery flag so signal handler knows to longjmp instead of killing process
+    unsafe {
+        SIGSEGV_OWNER_TID.store(libc::syscall(libc::SYS_gettid) as i32, std::sync::atomic::Ordering::Relaxed);
+    }
     SIGSEGV_RECOVERY.store(true, std::sync::atomic::Ordering::Relaxed);
     let summary = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| unsafe {
         read_summary_inner()
@@ -7008,7 +7017,7 @@ unsafe fn read_summary_inner_impl() -> String {
     };
 
     log_predict_step("S:json");
-    format!(
+    let __json_out = format!(
         r#"{{"version":"{}","year":{},"turn":{},"raw_total_turn_num":{},"ui_turn_semantics":"countdown","raw_field_mapping":"verified_ramen_upstream_semantics","month":{},"half":{},"scenario":"{}","chara_id":{},"stats":{{"speed":{},"stamina":{},"power":{},"guts":{},"wiz":{},"vital":{},"max_vital":{},"motivation":"{}","skill_point":{},"fan":{}}},"max_stats":{{"speed":{},"stamina":{},"power":{},"guts":{},"wiz":{}}},"proper":{{"dist_short":{},"dist_mile":{},"dist_mid":{},"dist_long":{},"ground_turf":{},"ground_dirt":{},"style_nige":{},"style_senko":{},"style_sashi":{},"style_oikomi":{}}},"running_style":{},"scenario_progress":{},"training_event_type":{},"talent_level":{},"chara_grade":{},"difficulty":{},"fixed_turn_chara_seed":{},"trainings":{},"support_cards":{},"evaluation":{},"training_levels":{},"buffs":{},"chara_effect_ids":[{}],"skills":{{"eval":{},"count":{},"list":{}}},"skill_tips":{},"ai":{}{}{}{} }}"#,
         PLUGIN_VERSION,
         year,
@@ -7064,7 +7073,9 @@ unsafe fn read_summary_inner_impl() -> String {
         team_json,
         ramen_json,
         last_action_json
-    )
+    );
+    log_predict_step("S:json_done");
+    __json_out
 }
 
 // ============================================================
@@ -9053,7 +9064,10 @@ fn handle_http(mut stream: std::net::TcpStream) {
         if jmp_result != 0 {
             r#"{"error":"sigsegv_recovered","hint":"/debug/gauge hit native crash, game protected"}"#.to_string()
         } else {
-            SIGSEGV_RECOVERY.store(true, std::sync::atomic::Ordering::Relaxed);
+            unsafe {
+        SIGSEGV_OWNER_TID.store(libc::syscall(libc::SYS_gettid) as i32, std::sync::atomic::Ordering::Relaxed);
+    }
+    SIGSEGV_RECOVERY.store(true, std::sync::atomic::Ordering::Relaxed);
             let result =
                 std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| unsafe { debug_gauge() }))
                     .unwrap_or_else(|_| r#"{"error":"gauge_panic"}"#.to_string());
@@ -9067,7 +9081,10 @@ fn handle_http(mut stream: std::net::TcpStream) {
         if jmp_result != 0 {
             r#"{"error":"sigsegv_recovered","hint":"/debug/gauge2 hit native crash, game protected"}"#.to_string()
         } else {
-            SIGSEGV_RECOVERY.store(true, std::sync::atomic::Ordering::Relaxed);
+            unsafe {
+        SIGSEGV_OWNER_TID.store(libc::syscall(libc::SYS_gettid) as i32, std::sync::atomic::Ordering::Relaxed);
+    }
+    SIGSEGV_RECOVERY.store(true, std::sync::atomic::Ordering::Relaxed);
             let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| unsafe {
                 debug_gauge2()
             }))
@@ -9082,7 +9099,10 @@ fn handle_http(mut stream: std::net::TcpStream) {
         if jmp_result != 0 {
             r#"{"error":"sigsegv_recovered"}"#.to_string()
         } else {
-            SIGSEGV_RECOVERY.store(true, std::sync::atomic::Ordering::Relaxed);
+            unsafe {
+        SIGSEGV_OWNER_TID.store(libc::syscall(libc::SYS_gettid) as i32, std::sync::atomic::Ordering::Relaxed);
+    }
+    SIGSEGV_RECOVERY.store(true, std::sync::atomic::Ordering::Relaxed);
             let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| unsafe {
                 debug_ramengains()
             }))
@@ -9097,7 +9117,10 @@ fn handle_http(mut stream: std::net::TcpStream) {
         if jmp_result != 0 {
             r#"{"error":"sigsegv_recovered","hint":"/debug/paramsincdec hit native crash, game protected"}"#.to_string()
         } else {
-            SIGSEGV_RECOVERY.store(true, std::sync::atomic::Ordering::Relaxed);
+            unsafe {
+        SIGSEGV_OWNER_TID.store(libc::syscall(libc::SYS_gettid) as i32, std::sync::atomic::Ordering::Relaxed);
+    }
+    SIGSEGV_RECOVERY.store(true, std::sync::atomic::Ordering::Relaxed);
             let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| unsafe {
                 debug_paramsincdec()
             }))
@@ -9112,7 +9135,10 @@ fn handle_http(mut stream: std::net::TcpStream) {
         if jmp_result != 0 {
             r#"{"error":"sigsegv_recovered","hint":"/debug/training_seed hit native crash, game protected"}"#.to_string()
         } else {
-            SIGSEGV_RECOVERY.store(true, std::sync::atomic::Ordering::Relaxed);
+            unsafe {
+        SIGSEGV_OWNER_TID.store(libc::syscall(libc::SYS_gettid) as i32, std::sync::atomic::Ordering::Relaxed);
+    }
+    SIGSEGV_RECOVERY.store(true, std::sync::atomic::Ordering::Relaxed);
             let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| unsafe {
                 debug_training_seed()
             }))
@@ -21007,6 +21033,9 @@ unsafe fn debug_storydata() -> String {
         SIGSEGV_COOLDOWN_UNTIL.store(now + 60, std::sync::atomic::Ordering::Relaxed);
         return r#"{"error":"sigsegv_recovered_in_storydata"}"#.to_string();
     }
+    unsafe {
+        SIGSEGV_OWNER_TID.store(libc::syscall(libc::SYS_gettid) as i32, std::sync::atomic::Ordering::Relaxed);
+    }
     SIGSEGV_RECOVERY.store(true, std::sync::atomic::Ordering::Relaxed);
     let result = debug_storydata_inner();
     SIGSEGV_RECOVERY.store(false, std::sync::atomic::Ordering::Relaxed);
@@ -21190,6 +21219,9 @@ unsafe fn debug_all() -> String {
         SIGSEGV_COOLDOWN_UNTIL.store(now + 60, std::sync::atomic::Ordering::Relaxed);
         SIGSEGV_RECOVERY.store(false, std::sync::atomic::Ordering::Relaxed);
         return r#"{"error":"sigsegv_recovered_in_debug_all"}"#.to_string();
+    }
+    unsafe {
+        SIGSEGV_OWNER_TID.store(libc::syscall(libc::SYS_gettid) as i32, std::sync::atomic::Ordering::Relaxed);
     }
     SIGSEGV_RECOVERY.store(true, std::sync::atomic::Ordering::Relaxed);
 
