@@ -1,0 +1,432 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>祭典杯 AI · 盘面</title>
+<style>
+:root{
+  /* 亮色透明主题：浮窗盖在游戏上可隐约透出画面 */
+  --bg:rgba(250,252,250,.80); --card:rgba(255,255,255,.55); --line:rgba(28,48,38,.22); --line2:rgba(28,48,38,.11);
+  --txt:#18231d; --sub:#46564d; --dim:#7b8b81; --ok:#149053; --warn:#a87507; --bad:#cf4438;
+  --spd:#d84040; --sta:#2b74c9; --pow:#d97a12; --gut:#6553c9; --wis:#0d9387; --pt:#a96f12;
+  --base:#167a5c; --evo:#7145c4; --npc:#55697e; --kensan:#7145c4;
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;padding:0;overflow:hidden;background:var(--bg);color:var(--txt);
+  font:11px/1.35 -apple-system,system-ui,"PingFang SC",sans-serif}
+body{padding:6px 7px 7px}
+.row{margin-bottom:5px}
+.dim{color:var(--dim)} .sub{color:var(--sub)} .ok{color:var(--ok)} .warn{color:var(--warn)}
+
+/* 状态行 */
+.st{display:flex;justify-content:space-between;gap:6px;font-size:9.5px;color:var(--sub);
+  white-space:nowrap;overflow:hidden}
+.st b{color:var(--txt);font-weight:600}
+.st .live{color:var(--ok)} .st .arch{color:var(--warn)} .st .off{color:var(--bad)}
+
+/* 行动建议 / 外出建议 两栏 */
+.duo{display:grid;grid-template-columns:1.4fr 1fr;gap:5px}
+.duo>div{background:rgba(255,255,255,.5);border:1px solid var(--line2);border-radius:7px;padding:4px 7px 5px;min-width:0}
+.duo .k{font-size:8.5px;color:var(--dim);margin-bottom:1px}
+.duo .v{font-size:14px;font-weight:800;color:var(--ok);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.duo .v.alt{color:var(--pt)}
+.duo .v.wait{color:var(--sub);font-weight:600}
+
+/* 预估评分 / 本局运气分 / 本回合运气分 */
+.trio{display:grid;grid-template-columns:1fr 1fr 1fr;gap:5px}
+.trio>div{background:rgba(255,255,255,.5);border:1px solid var(--line2);border-radius:7px;padding:3px 6px 4px;min-width:0;text-align:center}
+.trio .k{font-size:8.5px;color:var(--dim)}
+.trio .v{font-size:13px;font-weight:800;display:block;white-space:nowrap}
+.trio .v.luck{color:var(--warn)}
+
+/* 五维 6 列 */
+.grid6{display:grid;grid-template-columns:repeat(6,1fr);gap:4px}
+.g6{background:rgba(255,255,255,.45);border:1px solid var(--line2);border-radius:6px;padding:3px 1px 4px;text-align:center;min-width:0}
+.g6 .nm{font-size:9px;font-weight:700;display:block}
+.g6 .vl{font-size:13px;font-weight:800;display:block;line-height:1.2}
+.g6 .mx{font-size:7.5px;color:var(--dim);display:block}
+.g6.spd .nm{color:var(--spd)}.g6.sta .nm{color:var(--sta)}.g6.pow .nm{color:var(--pow)}
+.g6.gut .nm{color:var(--gut)}.g6.wis .nm{color:var(--wis)}.g6.pt .nm{color:var(--pt)}
+
+/* 盘面 */
+.bhead{display:flex;justify-content:space-between;align-items:baseline;font-size:10px;
+  color:var(--sub);margin:1px 1px 3px;white-space:nowrap}
+.bhead .t{color:var(--txt);font-weight:700;font-size:10.5px}
+.grid5{display:grid;grid-template-columns:repeat(5,1fr);gap:4px}
+.g5{background:rgba(255,255,255,.4);border:1px solid var(--line2);border-radius:6px;overflow:hidden;min-width:0}
+.g5.on{border-color:rgba(95,192,141,.55)}
+.g5 .h{padding:2px 0;text-align:center;font-weight:800;font-size:10px;border-bottom:1px solid var(--line2)}
+.g5.spd .h{color:var(--spd)}.g5.sta .h{color:var(--sta)}.g5.pow .h{color:var(--pow)}
+.g5.gut .h{color:var(--gut)}.g5.wis .h{color:var(--wis)}
+.g5 .r{padding:2px 3px;border-bottom:1px solid var(--line2);min-height:19px}
+.g5 .r:last-child{border-bottom:none}
+.g5 .lb{font-size:7px;color:var(--dim);display:block}
+.g5 .va{font-size:8.5px;color:var(--txt);display:block;line-height:1.2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.g5 .va.keiko{color:var(--ok);font-weight:700}
+/* 人头 chip：类型底色点 + 名字 + 教诲角标 */
+.heads{display:flex;flex-direction:column;gap:1px}
+.hd2{display:flex;align-items:center;gap:2px;font-size:7.5px;line-height:1.25;border-radius:3px;
+  padding:1px 2px;background:rgba(255,255,255,.5);white-space:nowrap;overflow:hidden}
+.hd2 .ic{width:6px;height:6px;border-radius:50%;flex:none}
+.hd2 .nm{color:var(--txt);overflow:hidden;text-overflow:ellipsis;flex:none;max-width:60%}
+.hd2 .bdg{color:var(--base);overflow:hidden;text-overflow:ellipsis}
+.hd2.card .ic{background:#e8ecf0}.hd2.guest .ic{background:var(--npc)}
+.hd2.friend .ic{background:var(--ok)}.hd2.npc .ic{background:#5d6a61}
+.hd2.social .ic{background:#4a5450}.hd2.social .nm,.hd2.social .bdg{color:var(--dim)}
+.hd2.assist .nm{color:var(--warn)}.hd2.assist .bdg{color:var(--warn)}
+.hd2 .none{color:var(--dim)}
+.hd2.shine{background:rgba(255,196,40,.30);box-shadow:0 0 0 1px rgba(200,140,10,.65) inset}
+.hd2 .bd{font-size:6.5px;color:var(--dim);flex:none}
+.hd2.shine .bd{color:var(--warn)}
+/* 启示事件感叹号（真实局面，SO is_tips_event） */
+.hd2 .tp{color:#d81b60;font-weight:900;font-size:9px;flex:none;line-height:1;
+  text-shadow:0 0 2px rgba(255,255,255,.9)}
+
+/* 备选 */
+.pick{background:rgba(255,255,255,.5);border:1px solid var(--line2);border-radius:7px;padding:4px 7px;min-width:0}
+.pick .k{font-size:8.5px;color:var(--dim);margin-bottom:1px}
+.pick .v{font-size:10px;color:#dfeae2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pick .v b{color:var(--ok)}
+
+/* 稽古：仿游戏演目面板，5 格菱形槽 */
+.act{display:grid;grid-template-columns:28px 32px 82px 28px 1fr;gap:3px;align-items:center;
+  padding:2px 3px;border-bottom:1px solid var(--line2);font-size:9px}
+.act:last-child{border-bottom:none}
+.act .nm{font-weight:700;font-size:9.5px;white-space:nowrap}
+.act .lv{color:var(--sub);white-space:nowrap}
+.act .pips{white-space:nowrap;font-size:11px;letter-spacing:1px}
+/* 演目槽游戏式配色：空槽=白色透明（浅灰描边保证亮底可辨），填充=粉色，满槽亮起=亮粉带光 */
+.act .pips i{font-style:normal;color:rgba(255,255,255,.85);-webkit-text-stroke:.7px rgba(70,82,76,.35)}
+.act .pips i.f{color:#f061a6;-webkit-text-stroke:0}
+.act.on .pips i.f{color:#ff2f92;text-shadow:0 0 3px rgba(255,80,160,.55)}
+.act .g{color:var(--sub);text-align:right;white-space:nowrap;font-size:8.5px}
+.act .buf{color:var(--base);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:8.5px;text-align:right}
+.act.on .nm{color:var(--ok)}
+.act .on2{color:var(--ok);font-weight:700}
+.goal{display:flex;justify-content:space-between;font-size:8.5px;color:var(--sub);padding:3px 3px 1px;white-space:nowrap}
+.goal b{color:var(--warn)}
+
+/* 底行：発表会 + 接线诊断 一行 */
+.foot{display:flex;justify-content:space-between;gap:6px;font-size:8px;color:var(--dim);
+  white-space:nowrap;overflow:hidden;margin-top:2px}
+.cp{font-size:8px;border-radius:4px;padding:0 4px;border:1px solid var(--line2);margin-right:2px}
+.cp.done{color:#0f7a45;border-color:rgba(95,192,141,.35);background:rgba(95,192,141,.14)}
+.cp.pend{color:#8a6a10;border-color:rgba(230,189,85,.25)}
+
+/* 迷你条（折叠态）：只显示 运气分 ± 与 推荐训练 */
+#mini{display:none;align-items:center;gap:6px;height:100%;padding:0 8px;white-space:nowrap;overflow:hidden}
+#mini .lk{font-size:12px;font-weight:800;color:var(--warn)}
+#mini .sp{flex:none;color:var(--dim)}
+#mini .rc{font-size:12px;font-weight:800;color:var(--ok);overflow:hidden;text-overflow:ellipsis}
+#mini .rc.wait{color:var(--sub);font-weight:600}
+body.mini{padding:0;height:100vh}
+body.mini #panel{display:none}
+body.mini #mini{display:flex}
+</style>
+</head>
+<body>
+<div id="panel">
+  <!-- 状态行 -->
+  <div class="row st"><span id="stL">等待游戏连接</span><span id="stR">—</span></div>
+
+  <!-- 行动建议（友人外出由 AI 统一计算，不单独出格） -->
+  <div class="row duo" style="grid-template-columns:1fr">
+    <div><div class="k">行动建议 · 本回合该点哪个</div><div class="v wait" id="advAct">等待游戏连接</div></div>
+  </div>
+
+  <!-- 预估评分 / 运气分 -->
+  <div class="row trio">
+    <div><span class="k">预估评分</span><span class="v" id="score">—</span></div>
+    <div><span class="k">本局运气分</span><span class="v luck" id="luckGame">—</span></div>
+    <div><span class="k">本回合运气分</span><span class="v luck" id="luckTurn">—</span></div>
+  </div>
+
+  <!-- 五维 + PT -->
+  <div class="row grid6" id="five"></div>
+
+  <!-- 盘面 5 训练位：稽古状态 + 人头（带教诲角标） -->
+  <div class="bhead"><span class="t">盘面</span><span id="cond">体力 —/—　干劲 —</span></div>
+  <div class="row grid5" id="board"></div>
+
+  <!-- 训练备选 -->
+  <div class="row duo" style="grid-template-columns:1fr">
+    <div class="pick"><div class="k">训练备选</div><div class="v" id="picks">—</div></div>
+  </div>
+
+  <!-- 稽古：演目设施进度（槽满 5 触发该演目稽古） -->
+  <div class="bhead"><span class="t">稽古 · 演目槽</span><span id="gauges" class="dim">满 5 触发稽古</span></div>
+  <div class="row" id="acts" style="background:rgba(255,255,255,.4);border:1px solid var(--line2);border-radius:6px;padding:1px 3px"></div>
+
+  <!-- 底行：発表会 + 接线诊断 -->
+  <div class="foot"><span id="cps"></span><span id="diag">—</span></div>
+</div>
+
+<!-- 折叠迷你条：运气分 ± ｜ 推荐训练 -->
+<div id="mini"><span class="lk" id="mLuck">运气 —</span><span class="sp">｜</span><span class="rc wait" id="mRec">等待游戏连接</span></div>
+
+<script>
+/* 静态映射：来自上游 umaai-matsuri（glossary.md / mechanism.md / scenario_matsuri.json） */
+const ACTS=[
+  {t:1,name:'流镝马',  short:'流镝',attr:'速',key:'spd',guest:'大和赤骥'},
+  {t:2,name:'神旗争夺战',short:'神旗',attr:'耐',key:'sta',guest:'莫名其妙'},
+  {t:3,name:'纳舞',    short:'纳舞',attr:'力',key:'pow',guest:'摩耶重炮'},
+  {t:4,name:'大曳神舆', short:'大曳',attr:'根',key:'gut',guest:'雪之美人'},
+  {t:5,name:'飞悬',    short:'飞悬',attr:'智',key:'wis',guest:'防爆装束'}
+];
+const AX=[{k:'spd',n:'速'},{k:'sta',n:'耐'},{k:'pow',n:'力'},{k:'gut',n:'根'},{k:'wis',n:'智'}];
+const ADV={101:'牵绊',201:'擅长率',301:'灵感',401:'助力',501:'体力',601:'特化',701:'研习',801:'协助',901:'不屈',1001:'兼修'};
+const SCHED=[{turn:23,need:3},{turn:47,need:5},{turn:67,need:6}];
+const GAUGE_MAX=5; /* 真机 NeedActGauge=5：槽满 5 → 该训练位变演目稽古 */
+const U=-1;
+const n=v=>(v===U||v===null||v===undefined||v===''||v==='-1')?'—':v;
+const esc=s=>String(s??'').replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
+const dsp=v=>{v=+v;if(!isFinite(v)||v<0)return '—';return v;};
+/* 祭典杯属性上限（剧本提升后，用户实测口径）：速2200 耐1850 力1800 根1700 智1800 */
+const MAX_ATTR={spd:2200,sta:1850,pow:1800,gut:1700,wis:1800};
+const advName=id=>ADV[+id]||(+id>0?'#'+id:'—');
+const BASE='http://127.0.0.1:18766';
+let timer=null,paused=false,lastRec={txt:'等待游戏连接',wait:true};
+
+/* 五属性训练 command_id（SO lib.rs：101速/105耐/102力/103根/106智；URA 决赛 601-605 同序） */
+const ATTR_CMD={spd:[101,601],sta:[105,602],pow:[102,603],gut:[103,604],wis:[106,605]};
+/* partner_type（照 PC 小黑板 personType）：1友人卡 2支援卡 3NPC 4理事长 5记者 6不带卡佐岳 */
+const PTYPE_NAME={3:'NPC',4:'理事长',5:'记者',6:'佐岳'};
+/* 支援卡名表：assets/support_cards.json（源自 umaai-rs gamedata/cardDB.json，全游戏卡 ID 通用） */
+let CARDS={};
+fetch(BASE+'/support_cards.json',{cache:'force-cache'}).then(r=>r.json()).then(j=>{CARDS=j;}).catch(()=>{});
+const cardName=id=>{const c=CARDS[String(id)];return c?c.n:'';};
+const isFriendCard=id=>{const c=CARDS[String(id)];return c&&(c.t===5||c.t===6);}; /* 5=友人 6=团体 */
+const cardTypeName=id=>{const c=CARDS[String(id)];return c?(['速','耐','力','根','智','友','团'][c.t]||''):'';};
+
+function setMini(m){document.body.classList.toggle('mini',!!m);}
+/* 缩放档位（Kotlin 缩放按钮调用）：整体 zoom 缩小布局，报高随 zoom 收紧窗口。
+   注意：CSS zoom 不改变 scrollHeight 返回值，报高必须自乘 zoom。 */
+let curZoom=1;
+function reportH(){try{window.Android&&Android.reportHeight&&Android.reportHeight(document.body.scrollHeight*curZoom);}catch(e){}}
+function setZoom(z){
+  if(document.body.classList.contains('mini'))return; /* 迷你条不缩放 */
+  curZoom=z;
+  document.body.style.zoom=z;
+  reportH();
+}
+function togglePause(){
+  paused=!paused;
+  if(!paused){tick();if(!timer)timer=setInterval(tick,1500);}
+  else if(timer){clearInterval(timer);timer=null;}
+}
+function closeWin(){try{Android.close();}catch(e){window.close&&window.close();}}
+
+function stateLabel(s){
+  if(!s.service_running)return['接收端未启动','off'];
+  if(s.latest_source==='archive')return['归档帧 · 上次会话','arch'];
+  if(!s.latest)return['等待游戏连接','off'];
+  if(s.latest_source==='pull')return['实时帧 · 主动拉取','live'];
+  if(s.latest_source==='push')return['实时帧 · SO 推送','live'];
+  return['实时帧','live'];
+}
+const isOn=a=>a&&(+a.need_gauge>0)&&(+a.gauge>=+a.need_gauge);
+
+/* 推荐：亮起（槽满）稽古优先；无亮起→按真实彩圈数推荐属性训练（shining 为 SO 实测数据） */
+function recommend(acts,trByAttr){
+  if(!acts.length)return{txt:'等待游戏连接',wait:true};
+  const lit=ACTS.filter(a=>isOn(acts.find(x=>+x.act_type===a.t)));
+  if(lit.length)return{txt:'▶ '+lit.map(a=>a.attr).join('·')+' 稽古',wait:false};
+  // 稽古未触发 ≠ 普通训练不用建议：彩圈最多位优先（全未知→蓄力中）
+  let best=null;
+  ACTS.forEach(a=>{const tr=trByAttr[a.key];const sh=tr?+tr.shining:-1;
+    if(sh>0&&(!best||sh>best.sh))best={a,sh};});
+  if(best)return{txt:'▶ '+best.a.attr+'训练（彩圈×'+best.sh+'）',wait:false};
+  return{txt:'蓄力中 · 暂无亮起',wait:true};
+}
+
+/* 人头 chip：类型 + 名字 + 羁绊 + 教诲角标（角标=该演目绑定教诲，来自 acts[].advice_id 真实数据） */
+function chip(cls,name,badge,bond,shine,tips){
+  return `<div class="hd2 ${cls}${shine?' shine':''}"><span class="ic"></span><span class="nm">${esc(name)}</span>`+
+    (tips?'<span class="tp">!</span>':'')+
+    (bond>0?`<span class="bd">${bond}</span>`:'')+
+    (badge?`<span class="bdg">${esc(badge)}</span>`:'<span class="bdg none">无buff</span>')+`</div>`;
+}
+/* 真实人头：SO /summary trainings[].partners（卡名/羁绊/彩圈全是实测数据）。
+   ptype: 1友人卡 2支援卡 3NPC 4理事长 5记者 6佐岳 */
+function headReal(tr,badgeText,assist){
+  const ps=(tr&&tr.partners)||[];
+  if(!ps.length)return '';
+  const c=assist?'assist':'';
+  return ps.map(p=>{
+    const pt=+p.partner_type||0,scid=+p.support_card_id||0;
+    let cls='npc',nm='';
+    if(scid>0){
+      cls=(pt===1)?'friend':'card';
+      nm=cardName(scid)||p.name||('卡#'+scid);
+    }else{
+      cls=(pt===4||pt===5)?'social':'npc';
+      nm=PTYPE_NAME[pt]||p.name||'NPC';
+    }
+    const bond=+p.current_bond||0;
+    const shine=+p.is_shining===1;
+    const tips=+p.is_tips_event===1;   // 真实局面感叹号（SO 读 TipsEventPartnerArray）
+    // 稽古位才挂教诲角标；理事长/记者/无 buff 人头显「无buff」
+    const b=(scid>0||pt===3)?badgeText:'';
+    return chip(cls+(c?' '+c:''),nm,b,bond,shine,tips);
+  }).join('');
+}
+/* 每列人头：优先真实 partners（tr 存在）；SO 未推 trainings 时回退结构占位（mechanism §2.1） */
+function headList(a,on,anyOn,badgeText,assist,tr){
+  const real=headReal(tr,badgeText,assist);
+  if(real)return real;
+  const c=assist?'assist':'';
+  if(on){
+    // 稽古位：担当神驹+担当卡+担当NPC 必定锁定；理事长/记者绝不落稽古位；吾妻必补 1 稽古位
+    return chip('guest '+c,a.guest+'（神驹）',badgeText)
+         + chip('card '+c,'担当支援卡',badgeText)
+         + chip('npc '+c,'担当NPC',badgeText)
+         + chip('npc','其他NPC（可同框）','')
+         + chip('friend','吾妻（必补位）','');
+  }
+  // 普通位：支援卡/NPC 随机落位；理事长/记者只落普通位；有稽古时吾妻不落普通位
+  return chip('card','支援卡（随机）','')
+       + chip('npc','一般NPC（随机）','')
+       + (anyOn?chip('social','理事长/记者（仅普通位）','')
+               :chip('social','理事长/记者/吾妻',''));
+}
+
+function render(s){
+  const[txt,cls]=stateLabel(s);
+  const f=s.latest||{};
+  document.getElementById('stL').innerHTML=`<b class="${cls}">${txt}</b>`+(f.turn?`　骏大祭 T${n(f.turn)}/77`:'');
+  document.getElementById('stR').textContent=s.latest?(Math.round((s.age_ms||0)/1000)+'s 前'):(s.latest_source==='archive'?('归档 · '+Math.round((s.age_ms||0)/60000)+'分前'):'—');
+
+  const acts=f.acts||[],byT={};acts.forEach(a=>byT[+a.act_type]=a);
+  const advArr=f.advice||[];
+  const kensan=!!f.kensan_pending;
+  const onCnt=ACTS.filter(a=>isOn(byT[a.t])).length;
+
+  // SO 实测训练数据：trainings[]（含人头 partners / 彩圈 shining / 增益 gains）
+  const trainings=f.trainings||[];
+  const trByCmd={};trainings.forEach(t=>{trByCmd[+t.command_id]=t;});
+  const trByAttr={};
+  AX.forEach(a=>{const ids=ATTR_CMD[a.k]||[];
+    trByAttr[a.k]=trainings.find(t=>ids.includes(+t.command_id))||null;});
+  // 装备卡组（support_cards[]：position/卡ID/chara_id/kizuna）
+  const deck=f.support_cards||[];
+
+  // 行动建议（稽古亮起优先；否则彩圈最多的属性训练；友人外出由 AI 统一算）
+  const rec=recommend(acts,trByAttr);lastRec=rec;
+  const aa=document.getElementById('advAct');
+  aa.textContent=rec.txt+(kensan&&acts.length?' ⚡追加稽古':'');aa.className='v'+(rec.wait?' wait':'');
+  // 运气分 / 预估评分：内置 AI 未接入，无数据源，不编造
+  document.getElementById('score').textContent=n(f.score);
+  document.getElementById('luckGame').textContent=n(f.luck_game);
+  document.getElementById('luckTurn').textContent=n(f.luck_turn);
+
+  // 五维 6 列（上限用祭典杯剧本常量，不用 SO 的 max_stats——那是 URA 1200 口径）
+  const five=f.five||[];
+  document.getElementById('five').innerHTML=
+    AX.map((a,i)=>`<div class="g6 ${a.k}"><span class="nm">${a.n}</span><span class="vl">${dsp(five[i])}</span><span class="mx">/${MAX_ATTR[a.k]}</span></div>`).join('')+
+    `<div class="g6 pt"><span class="nm">PT</span><span class="vl">${n(f.skill_point)}</span><span class="mx">技能点</span></div>`;
+
+  // 盘面 5 列：稽古状态 / 人头（带教诲角标） / 增益
+  // command_info / gain_gauges 已并入 NativeEngine 透传字段，面板改显 SO 实测彩圈与失败率
+  document.getElementById('cond').textContent=`体力 ${n(f.vital)}/${n(f.max_vital)}　干劲 ${f.motivation||'—'}`+(kensan?'　⚡追加掷中':'');
+  document.getElementById('board').innerHTML=ACTS.map((a,i)=>{
+    const it=byT[a.t]||{},on=isOn(it);
+    const aid=+it.advice_id||0;
+    const advRec=advArr.find(x=>+x.advice_id===aid||+x.fusion_advice_id===aid);
+    const fus=advRec?+advRec.fusion_advice_id:0;
+    const badge=aid?(a.short+'·'+advName(aid)+(fus?'→'+advName(fus):'')):'';
+    const assist=(aid===401||fus===1001); // 助力绑定演目担当：稽古时触发助力支撑（上游口径标黄）
+    const kensanCol=on&&kensan&&(aid===701||fus===701); // 掷中且该列含研习担当
+    // 本列真实训练条目：稽古亮起→按 acts[].command_id 匹配稽古命令；普通→按属性 command_id
+    const tr=on?(trByCmd[+it.command_id]||trByAttr[a.key]):trByAttr[a.key];
+    const sh=tr?+tr.shining:-1;
+    const shTxt=sh<0?'—':(sh>0?'彩圈×'+sh:'无彩圈');
+    // AI 建议分/运气分：内置 AI（照 umaai-matsuri 移植）未落地，无数据源，不编造
+    const ta=(f.train_advice||[])[i]||{};
+    return `<div class="g5 ${a.key}${on?' on':''}">
+      <div class="h">${a.attr}</div>
+      <div class="r"><span class="va ${on?'keiko':' dim'}" style="font-weight:${on?'800':'400'};font-size:9px">${on?(a.attr+'触发·'+a.name+(kensanCol?' ⚡':'')):'未触发'}</span></div>
+      <div class="r"><span class="lb">人头（真实 · 角标=教诲buff）</span><div class="heads">${headList(a,on,onCnt>0,on?badge:'',assist,tr)}</div></div>
+      <div class="r"><span class="lb">彩圈 / 失败率</span><span class="va${sh<=0?' dim':''}">${shTxt}${tr&&+tr.failure_rate>0?(' · '+tr.failure_rate+'%'):''}</span></div>
+      <div class="r"><span class="lb">AI建议分 · 运气</span><span class="va${ta.score?'':' dim'}">${ta.score?n(ta.score):'—'}${ta.luck?(' · '+(+ta.luck>0?'+':'')+ta.luck):''}</span></div>
+    </div>`;
+  }).join('');
+
+  // 训练备选：亮起稽古 + 最接近亮起的蓄力位
+  if(acts.length){
+    const lit=ACTS.filter(a=>isOn(byT[a.t]));
+    const near=ACTS.filter(a=>!isOn(byT[a.t])&&byT[a.t]&&+byT[a.t].need_gauge>0)
+      .sort((x,y)=>(+byT[y.t].gauge/+byT[y.t].need_gauge)-(+byT[x.t].gauge/+byT[x.t].need_gauge)).slice(0,2);
+    document.getElementById('picks').innerHTML=
+      lit.map(a=>`<b>▶${a.name} Lv${n((byT[a.t]||{}).level)}</b>`).join('　')+
+      (lit.length&&near.length?'　':'')+
+      near.map(a=>`<span class="sub">${a.short} ${n((byT[a.t]||{}).gauge)}/${n((byT[a.t]||{}).need_gauge)}</span>`).join('　')||'—';
+  }else document.getElementById('picks').textContent='—';
+  // 装备卡组已解析（deck）：AI 落地后用于局面构建；友人外出由 AI 统一计算
+
+  // 稽古：5 演目设施进度（槽色照上游：满绿 / 差一格黄 / 有进度青 / 空灰）
+  let gSum=0,nSum=0,onCount=0;
+  document.getElementById('acts').innerHTML=ACTS.map(a=>{
+    const has=!!byT[a.t],it=byT[a.t]||{};
+    const g=+it.gauge||0,nd=+it.need_gauge||0;
+    const on=isOn(it);if(on)onCount++;gSum+=g>0?g:0;nSum+=nd>0?nd:0;
+    const aid=+it.advice_id||0;
+    const advRec=advArr.find(x=>+x.advice_id===aid||+x.fusion_advice_id===aid);
+    const fus=advRec?+advRec.fusion_advice_id:0;
+    const pips=Array.from({length:GAUGE_MAX},(_,i)=>`<i class="${i<g?'f':''}">◆</i>`).join('');
+    return `<div class="act${on?' on':''}">
+      <span class="nm" style="color:var(--${a.key})">${a.short}</span>
+      <span class="lv">Lv${has?n(it.level):'—'}</span>
+      <span class="pips">${pips}</span>
+      <span class="g">${has?n(it.gauge):'—'}/${has?n(it.need_gauge):'—'}${on?' <span class="on2">亮起</span>':''}</span>
+      <span class="buf">${aid?esc(advName(aid)):'—'}${fus?'<span style="color:var(--evo)">→'+esc(advName(fus))+'</span>':''}</span>
+    </div>`;
+  }).join('')+(()=>{
+    // 目标 Lv：下一个未达成発表会的门槛（T23→3 / T47→5 / T67→6）
+    const cps=f.checkpoints||[];
+    if(!cps.length)return `<div class="goal"><span>目标 —（等待演目数据）</span></div>`;
+    let gi=-1;for(let k=0;k<3;k++){const c=cps[k];if(!(c&&+c.result_type>0)){gi=k;break;}}
+    if(gi<0)return `<div class="goal"><span>全部発表会已结算 · 本番</span></div>`;
+    const need=SCHED[gi].need;
+    const reach=ACTS.filter(a=>+(byT[a.t]||{}).level>=need).length;
+    return `<div class="goal"><span>目标Lv <b>${need}</b>（T${SCHED[gi].turn} 発表会）</span><span>已达 ${reach}/5</span></div>`;
+  })();
+  document.getElementById('gauges').textContent=`槽 ${gSum}/${nSum||'—'} · 亮起 ${onCount}/5 · 满5触发`;
+
+  // 底行：発表会 + 接线诊断
+  const cps=f.checkpoints||[];
+  const st3=[0,1,2].map(i=>{const c=cps[i];return c&&(+c.result_type>0);});
+  const finalCp=cps.length>=3?cps[2]:null;
+  document.getElementById('cps').innerHTML=
+    ['発表会T23','T47','T67'].map((nm,i)=>`<span class="cp ${cps.length?(st3[i]?'done':'pend'):''}">${nm}${cps.length?(st3[i]?'✓':'…'):''}</span>`).join('')+
+    `<span class="cp ${finalCp&&+finalCp.result_type>0?'done':''}">本番${finalCp?(+finalCp.result_type>0?'✓':'…'):''}</span>`;
+  const diag=['SO '+(s.so_alive?'在线':'离线'),'推'+(s.push_recv??0),'拉'+(s.pull_recv??0),(s.stats_ok?'属性✓':'属性—'),(s.has_festa?'festa✓':'festa—'),'计'+(s.frames??0)];
+  if(s.last_summary_error)diag.push('ERR '+s.last_summary_error);
+  document.getElementById('diag').textContent=diag.join(' ');
+
+  renderMini();
+  // 高度回执：浮窗 Kotlin 侧按内容收紧高度（WRAP_CONTENT 对 WebView 无效；
+  // 必须报 body 的内容高，documentElement 会被视口撑大）
+  reportH();
+}
+
+/* 折叠迷你条：本回合运气分 ± ｜ 推荐训练 */
+function renderMini(){
+  const lk=document.getElementById('mLuck');
+  const v=document.getElementById('luckTurn').textContent;
+  lk.textContent='运气 '+(v==='—'?'—':((+v>0?'+':'')+v));
+  const rc=document.getElementById('mRec');
+  rc.textContent=lastRec.txt;rc.className='rc'+(lastRec.wait?' wait':'');
+}
+
+async function tick(){
+  let s;
+  try{s=await(await fetch(BASE+'/api/snapshot',{cache:'no-store'})).json();}
+  catch(e){document.getElementById('stL').innerHTML='<b class="off">接收端未响应</b>';return;}
+  render(s);
+}
+render({latest:null,frames:0});
+tick();
+if(!paused&&!timer)timer=setInterval(tick,1500);
+</script>
+</body></html>

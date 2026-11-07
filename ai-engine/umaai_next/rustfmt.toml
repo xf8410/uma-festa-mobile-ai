@@ -1,0 +1,8 @@
+# 稳定工具链可用选项（不再依赖 nightly）。
+# 迁移注记：由旧仓的 nightly 配置精简而来，放弃了仅在 nightly 可用的风格项
+# （wrap_comments / format_code_in_doc_comments / comment_width / imports_layout /
+#  imports_granularity / group_imports / overflow_delimited_expr / trailing_comma）。
+max_width = 120
+reorder_imports = true
+struct_lit_width = 30
+style_edition = "2024"

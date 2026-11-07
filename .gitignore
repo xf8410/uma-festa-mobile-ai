@@ -1,0 +1,9 @@
+target/
+build/
+.gradle/
+local.properties
+*.so
+*.apk
+*.keystore
+*.jks
+.DS_Store

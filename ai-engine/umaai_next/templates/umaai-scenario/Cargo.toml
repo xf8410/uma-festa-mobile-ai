@@ -1,0 +1,38 @@
+# 空剧本仓模板（`umaai-scenario`）workspace 根
+#
+# 复制本目录到自己的剧本仓后，把 `scenario` 统一替换为剧本名
+# （如 `ramen`：`scenario-core` → `ramen-core`）；依赖写法见 README.md。
+#
+# 依赖三档（详见引擎仓 docs/scenario/README.md）：
+#   1. 开发期：并列目录 path（本模板按「留在引擎仓内」写相对路径）
+#   2. 稳定期：git + tag（同一 repo、同一 tag）
+#   3. 下游（Web / Android）：default-features = false（剪掉并行后端与文件监听）
+[workspace]
+resolver = "3"
+members = [
+    "crates/scenario-core",
+    "crates/scenario-sim",
+    "crates/scenario-ai",
+    "crates/scenario-cli",
+    "crates/scenario-tools",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[workspace.dependencies]
+# 引擎稳定面（scenario-core 只依赖前三个；终端样例面另引 umaai-cli）
+umaai-core = { path = "../../crates/umaai-core" }
+umasim = { path = "../../crates/umasim" }
+umaai = { path = "../../crates/umaai" }
+umaai-cli = { path = "../../crates/umaai-cli" }
+
+# 本仓内部 crate（有消费者时再登记下一个）
+scenario-core = { path = "crates/scenario-core" }
+
+anyhow = "1.0.104"
+rand = { version = "0.9.5", features = ["std_rng"] }
+serde = { version = "1.0.229", features = ["derive"] }
+serde_json = "1.0.154"

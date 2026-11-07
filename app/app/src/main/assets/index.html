@@ -1,0 +1,1345 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#f7f8f3">
+<title>UmaAI · 骏大祭（祭典杯）</title>
+<style>
+:root{
+  --bg:#f7f8f3;
+  --card:#ffffff;
+  --card-line:#ecefeb;
+  --fg:#1c1f1d;
+  --dim:#7b857f;
+  --dim2:#9aa49e;
+  --green:#1e5c48;
+  --green-2:#2e8b6b;
+  --green-soft:#dcefe3;
+  --green-tint:#eef7f1;
+  --shadow:0 2px 14px rgba(30,60,45,.05);
+  --radius:16px;
+  --sp:#e0685d; --st:#4a90d9; --pw:#e09a3c; --gt:#4fae7d; --wz:#8b6fc9;
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;height:100%}
+body{
+  background:#e9ede8;
+  color:var(--fg);
+  font:14px/1.65 -apple-system,"PingFang SC","Noto Sans SC","Helvetica Neue",sans-serif;
+  display:flex;align-items:center;justify-content:center;
+  padding:24px;
+}
+/* 桌面预览底 */
+.stage-note{
+  position:fixed;left:24px;top:20px;color:#6b7a70;font-size:12px;line-height:1.8;
+  max-width:230px;
+}
+.stage-note b{color:#2f4438;font-size:13px}
+/* 手机框 */
+.phone{
+  width:390px;height:844px;flex:0 0 auto;
+  background:var(--bg);
+  border-radius:38px;
+  box-shadow:0 24px 70px rgba(20,45,32,.22),0 0 0 8px #202824,0 0 0 9px #3a4540;
+  overflow:hidden;position:relative;display:flex;flex-direction:column;
+}
+/* 状态栏 */
+.statusbar{
+  height:38px;flex:0 0 auto;display:flex;align-items:center;justify-content:space-between;
+  padding:0 22px;font-size:12px;font-weight:600;color:#20261f;letter-spacing:.02em;
+}
+.statusbar .icons{display:flex;align-items:center;gap:6px;font-size:10px;color:#4a554d}
+.bat{display:inline-flex;align-items:center;gap:2px;background:#7cc4a0;color:#123526;
+  border-radius:3px;padding:1px 4px;font-size:10px;font-weight:700}
+/* 页面滚动区 */
+.scroll{flex:1;overflow-y:auto;overflow-x:hidden;padding:8px 20px 24px;scrollbar-width:none}
+.scroll::-webkit-scrollbar{display:none}
+.app-title{text-align:center;font-size:20px;font-weight:500;letter-spacing:.02em;margin:12px 0 20px}
+.eyebrow{color:var(--green-2);font-size:13px;font-weight:600;margin:6px 0 2px}
+h1.big{font-size:33px;line-height:1.3;font-weight:700;margin:0 0 6px;letter-spacing:-.01em}
+.sub{color:var(--dim);font-size:13.5px;margin:0 0 18px;line-height:1.7}
+/* 卡片 */
+.card{background:var(--card);border:1px solid var(--card-line);border-radius:var(--radius);
+  box-shadow:var(--shadow);padding:18px 18px;margin:12px 0}
+.card h2{font-size:15px;font-weight:600;margin:0 0 14px;display:flex;align-items:center;gap:8px}
+.card h2 .badge{font-size:10px;font-weight:700;color:var(--green);background:var(--green-tint);
+  border-radius:5px;padding:2px 7px;letter-spacing:.04em}
+.hint{color:var(--dim2);font-size:12px;line-height:1.7;margin:10px 2px 0}
+/* 键值行 */
+.row{display:flex;justify-content:space-between;align-items:baseline;gap:12px;
+  padding:9px 0;border-bottom:1px solid #f1f3f0;font-size:14px}
+.row:last-child{border-bottom:none}
+.row .k{color:var(--dim);flex:0 0 auto}
+.row .v{font-weight:600;text-align:right;font-variant-numeric:tabular-nums}
+.row .v.mono{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12.5px}
+.v.ok{color:var(--green-2)}.v.warn{color:#d2803a}.v.off{color:var(--dim2)}
+/* 主按钮 */
+.btn{display:block;width:100%;border:none;background:var(--green);color:#fff;
+  border-radius:28px;padding:15px;font-size:15px;font-weight:600;cursor:pointer;
+  box-shadow:0 4px 14px rgba(30,92,72,.22);transition:transform .12s,background .2s}
+.btn:active{transform:scale(.985)}
+.btn.ghost{background:var(--green-tint);color:var(--green);box-shadow:none;font-size:13px;padding:11px}
+.btn.small{width:auto;display:inline-block;padding:9px 18px;font-size:13px;border-radius:20px}
+.btn.on{background:#fff;color:var(--green);border:2px solid var(--green);box-shadow:none}
+/* 输入 */
+.field{margin:14px 0}
+.field label{display:block;font-size:13px;color:var(--dim);margin-bottom:6px}
+.field input,.field select{
+  width:100%;border:1px solid #dfe5de;border-radius:10px;background:#fff;
+  padding:11px 12px;font:inherit;font-size:15px;color:var(--fg);outline:none}
+.field input:focus{border-color:var(--green-2)}
+.field .tip{font-size:11.5px;color:var(--dim2);margin-top:6px}
+/* 滑块（照抄截图的点状轨道） */
+.slider-block{margin:20px 0 6px}
+.slider-block .lbl{font-size:15px;font-weight:600;margin-bottom:12px}
+.slider{position:relative;height:18px;display:flex;align-items:center;cursor:pointer}
+.slider .track{position:absolute;left:0;right:0;height:14px;border-radius:8px;
+  background-image:radial-gradient(circle,#cfe0d4 1.6px,transparent 1.8px);
+  background-size:9px 9px;background-repeat:repeat-x;background-position:center}
+.slider .fill{position:absolute;left:0;height:14px;border-radius:8px;
+  background-color:var(--green);
+  background-image:radial-gradient(circle,rgba(255,255,255,.55) 1.6px,transparent 1.8px);
+  background-size:9px 9px;background-repeat:repeat-x;background-position:center}
+.slider .knob{position:absolute;width:3px;height:34px;background:var(--green);border-radius:2px;
+  transform:translateX(-1.5px)}
+/* 开关 */
+.switch{width:50px;height:29px;border-radius:16px;background:#d8ded7;position:relative;
+  flex:0 0 auto;cursor:pointer;transition:background .2s}
+.switch.on{background:var(--green)}
+.switch i{position:absolute;top:3px;left:3px;width:23px;height:23px;border-radius:50%;
+  background:#fff;box-shadow:0 1px 3px rgba(0,0,0,.18);transition:left .2s}
+.switch.on i{left:24px}
+.switch-row{display:flex;justify-content:space-between;align-items:center;gap:14px;padding:12px 0;
+  border-bottom:1px solid #f1f3f0}
+.switch-row:last-child{border-bottom:none}
+.switch-row .t{font-size:15px;font-weight:600}
+.switch-row .d{font-size:12px;color:var(--dim);margin-top:2px}
+/* 五维 */
+.five{display:grid;grid-template-columns:repeat(5,1fr);gap:7px;text-align:center;margin:4px 0 2px}
+.five .cell{background:#fbfcfa;border:1px solid #eef1ec;border-radius:10px;padding:9px 2px}
+.five .cell b{display:block;font-size:16px;font-weight:700;font-variant-numeric:tabular-nums}
+.five .cell i{font-style:normal;font-size:10.5px;color:var(--dim)}
+.five .cell em{font-style:normal;display:block;font-size:9.5px;color:var(--dim2)}
+.k1{color:var(--sp)}.k2{color:var(--st)}.k3{color:var(--pw)}.k4{color:var(--gt)}.k5{color:var(--wz)}
+/* 演目表 */
+.acts{width:100%;border-collapse:collapse;font-size:12px;margin-top:4px}
+.acts th{text-align:left;color:var(--dim2);font-weight:500;font-size:10.5px;padding:5px 4px;
+  border-bottom:1px solid #eef1ec;white-space:nowrap}
+.acts td{padding:9px 4px;border-bottom:1px solid #f3f5f2;vertical-align:middle}
+.acts tr:last-child td{border-bottom:none}
+.acts .nm{font-weight:600;white-space:nowrap}
+.acts .nm .act-full{font-weight:400;font-size:9.5px;color:var(--dim2);margin-top:1px;white-space:normal}
+.acts .n{text-align:right;font-variant-numeric:tabular-nums}
+.bar{height:4px;border-radius:2px;background:#edf1ec;overflow:hidden;margin-top:5px;min-width:52px}
+.bar>i{display:block;height:100%;border-radius:2px;background:linear-gradient(90deg,var(--green),#7dbf9b)}
+.tag{display:inline-block;font-size:10px;padding:2px 7px;border-radius:5px;
+  background:var(--green-tint);color:var(--green);font-weight:600;margin:0 3px 3px 0}
+.tag.grey{background:#f0f2ef;color:var(--dim)}
+.tag.warn{background:#fbf0e2;color:#b87830}
+.empty{color:var(--dim2);font-size:13px;padding:10px 0;text-align:center}
+/* 底部 tab */
+.tabs{flex:0 0 auto;height:74px;background:#fff;border-top:1px solid #eef0ec;
+  display:grid;grid-template-columns:repeat(4,1fr);padding:8px 8px calc(8px + env(safe-area-inset-bottom))}
+.tab{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;
+  color:var(--dim);font-size:11px;cursor:pointer;border-radius:14px;transition:background .2s}
+.tab svg{width:21px;height:21px;stroke:currentColor;fill:none;stroke-width:1.7;
+  stroke-linecap:round;stroke-linejoin:round}
+.tab.active{color:var(--green);background:var(--green-soft);font-weight:600}
+/* 页面切换 */
+.page{display:none}.page.active{display:block}
+/* 悬浮窗 */
+.overlay{position:absolute;inset:0;z-index:20;display:none;
+  background:linear-gradient(150deg,#9fc9c4 0%,#5f9a9b 38%,#2c5f6b 100%)}
+.overlay.show{display:block}
+.desk-icons{position:absolute;right:12px;top:112px;display:grid;grid-template-columns:56px;gap:16px}
+.desk-ico{width:56px;text-align:center;color:#fff;font-size:10px;text-shadow:0 1px 2px rgba(0,0,0,.25)}
+.desk-ico .sq{width:52px;height:52px;border-radius:14px;margin:0 auto 5px;
+  display:flex;align-items:center;justify-content:center;font-size:19px;font-weight:700;color:#fff;
+  box-shadow:0 3px 10px rgba(0,0,0,.18)}
+.float{position:absolute;left:8px;top:52px;width:300px;
+  background:rgba(43,52,50,.90);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);
+  border-radius:12px;color:#f2f5f2;padding:12px 13px 10px;
+  box-shadow:0 12px 34px rgba(0,0,0,.28);font-size:11px}
+.float .fh{display:flex;align-items:center;justify-content:space-between;
+  border-bottom:1px solid rgba(255,255,255,.13);padding-bottom:8px;margin-bottom:8px}
+.float .fh b{font-size:14px;font-weight:600}
+.float .fh .conn{color:#cfe0d6;font-size:11px}
+.float .fh .menu{letter-spacing:2px;color:#dfe7e0}
+.float .two{display:grid;grid-template-columns:1fr 1fr;gap:10px;color:#b9c6bf;font-size:11px}
+.float .hero{font-size:21px;font-weight:700;color:#d8f0dd;margin:2px 0 10px;letter-spacing:.01em}
+.float .metrics{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-bottom:10px}
+.float .m{background:rgba(255,255,255,.08);border-radius:7px;padding:6px 5px;position:relative;min-height:46px}
+.float .m i{font-style:normal;color:#b9c6bf;font-size:9px;display:block}
+.float .m b{font-size:14px;font-weight:700;color:#fff}
+.float .m .dot{position:absolute;right:5px;top:5px;width:7px;height:7px;border-radius:50%;background:#e0685d}
+.float .lbl{color:#b9c6bf;font-size:10.5px;margin:9px 0 5px;letter-spacing:.04em}
+.float .f5{display:grid;grid-template-columns:repeat(6,1fr);gap:5px;text-align:center}
+.float .f5 .c{background:rgba(255,255,255,.06);border-radius:6px;padding:5px 1px}
+.float .f5 .c i{font-style:normal;font-size:9px;color:#cdd8d1;display:block}
+.float .f5 .c b{font-size:12px;color:#fff}
+.float .board{display:grid;grid-template-columns:repeat(5,1fr);gap:5px;overflow:hidden}
+.float .board .b{background:rgba(255,255,255,.06);border-radius:6px;padding:6px 3px;text-align:center}
+.float .board .b .h{font-weight:700;color:#eaf3ec;font-size:11px}
+.float .board .b .s{color:#a9bcb0;font-size:9px;margin:3px 0}
+.float .board .b .v{color:#fff;font-size:9px;font-variant-numeric:tabular-nums;white-space:nowrap}
+.float .foot{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:9px;
+  border-top:1px solid rgba(255,255,255,.13);padding-top:8px;color:#b9c6bf;font-size:10px}
+.float .foot b{display:block;color:#fff;font-size:11px;font-weight:600;margin-top:3px}
+.float .kv{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-top:8px;
+  border-top:1px solid rgba(255,255,255,.13);padding-top:8px;color:#b9c6bf;font-size:9.5px}
+.float .kv b{display:block;color:#fff;font-size:11px;font-variant-numeric:tabular-nums}
+.float-close{position:absolute;right:14px;top:14px;z-index:2;background:rgba(0,0,0,.3);
+  color:#fff;border:none;border-radius:14px;padding:5px 11px;font-size:11px;cursor:pointer}
+.nav-tip{position:absolute;left:0;right:0;bottom:24px;text-align:center;color:rgba(255,255,255,.85);font-size:11px}
+/* 记录条目 */
+.rec{border:1px solid #ecefeb;border-radius:14px;padding:16px;margin:12px 0;background:#fff}
+.rec .dt{font-size:15px;font-weight:600}
+.rec .sm{color:var(--dim);font-size:12px;margin-top:6px}
+.rec .act{text-align:right;margin-top:10px;color:var(--green);font-size:13px;font-weight:600;cursor:pointer}
+.quote{border-left:3px solid var(--green-2);padding:2px 0 2px 12px;color:var(--dim);
+  font-size:12.5px;line-height:1.8;margin:12px 0}
+.chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+.kpi{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:12px 0}
+.kpi div{background:var(--green-tint);border-radius:10px;padding:10px 6px;text-align:center}
+.kpi b{display:block;font-size:16px;color:var(--green);font-variant-numeric:tabular-nums}
+.kpi i{font-style:normal;font-size:10px;color:var(--dim)}
+.sec-gap{height:6px}
+.toast{position:absolute;left:50%;bottom:92px;transform:translateX(-50%) translateY(10px);
+  background:rgba(28,38,32,.92);color:#fff;font-size:12px;padding:9px 16px;border-radius:20px;
+  opacity:0;transition:all .25s;pointer-events:none;z-index:30;white-space:nowrap}
+.toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+@media(max-width:430px){body{padding:0}.stage-note{display:none}.phone{width:100vw;height:100vh;border-radius:0;box-shadow:none}}
+
+/* ===== 电脑版原样盘面（1:1 复刻 FestaDisplayRenderer.cs） ===== */
+.board-overlay{position:absolute;inset:0;z-index:80;background:#000;display:none;flex-direction:column;color:#d8dedb}
+.board-overlay.show{display:flex}
+.bo-bar{flex:0 0 auto;display:flex;align-items:center;gap:6px;padding:8px 10px 8px 14px;border-bottom:1px solid #2d3a33;font-size:11px;color:#9fb3a8}
+.bo-bar b{color:#39e07a;font-size:12px;margin-right:auto}
+.bo-bar button{background:#0d1a13;color:#9fe8bd;border:1px solid #2f6f4e;border-radius:5px;padding:4px 8px;font:inherit;font-size:11px;cursor:pointer}
+.bo-scroll{flex:1;overflow:auto;background:#000;padding:10px}
+.bo-tip{flex:0 0 auto;padding:6px 14px;border-top:1px solid #2d3a33;color:#6f8a7a;font-size:10px}
+.badge.off{background:#4a2a28;color:#f0c8c2}
+.badge.warn{background:#4a4026;color:#f0dfae}
+
+.flist .act{display:flex;align-items:center;gap:6px;padding:6px 2px;border-bottom:1px solid #f3f5f2}
+.flist .act:last-child{border-bottom:none}
+.flist .act.on{background:linear-gradient(90deg,rgba(95,192,141,.14),transparent);border-radius:6px;margin:0 -4px;padding:6px 6px}
+.flist .act .nm{width:78px;flex:none}.flist .act .nm b{font-size:13px;font-weight:700}.flist .act .nm i{font-style:normal;color:var(--dim2);font-size:9px;display:block}
+.flist .act .g{font-size:10.5px;color:var(--dim2);width:36px;flex:none;text-align:center}
+.flist .act .bar{flex:1;min-width:22px;height:5px;background:#e9ece8;border-radius:3px;overflow:hidden}.flist .act .bar i{display:block;height:100%;background:var(--dim)}
+.flist .act.on .bar i{background:#34a76a}
+.flist .act .lv{width:42px;flex:none;text-align:center;font-size:10.5px;color:var(--dim2)}
+.flist .act .ad{font-size:10.5px;width:46px;flex:none;text-align:center;color:#1f9e8a}
+.flist .act .flag{font-size:9.5px;width:64px;flex:none;text-align:right;color:var(--dim2)}
+.flist .act.on .flag{color:#34a76a;font-weight:600}
+.flist .flink{font-size:10.5px;color:var(--dim2);margin-top:6px;line-height:1.55}.flist .flink b{color:var(--ink)}.flist .flink .note{color:var(--dim2)}
+
+/* ===== v0.5.0 完整盘面：盘面 5 列 / 教诲 buff 全表 / 人头角标规则 ===== */
+.v5-g5{display:grid;grid-template-columns:repeat(5,1fr);gap:5px}
+.v5-g5 .col{background:#fbfcfa;border:1px solid #eef1ec;border-radius:8px;overflow:hidden;min-width:0}
+.v5-g5 .col.on{border-color:#8fd0ac;box-shadow:0 0 0 1px #d9eadf inset}
+.v5-g5 .col .h{padding:5px 3px;text-align:center;font-weight:800;font-size:12px;border-bottom:1px solid #eef1ec}
+.v5-g5 .col.spd .h{color:var(--sp)}.v5-g5 .col.sta .h{color:var(--st)}.v5-g5 .col.pow .h{color:var(--pw)}
+.v5-g5 .col.gut .h{color:var(--gt)}.v5-g5 .col.wis .h{color:var(--wz)}
+.v5-g5 .col .rw{padding:4px 5px;border-bottom:1px solid #f3f5f2;min-height:26px}
+.v5-g5 .col .rw:last-child{border-bottom:none}
+.v5-g5 .lb{font-size:8.5px;color:var(--dim2);display:block;margin-bottom:2px}
+.v5-g5 .va{font-size:10px;color:var(--ink);line-height:1.3;display:block;word-break:break-all}
+.v5-kb{display:inline-block;font-size:9px;border-radius:4px;padding:1px 5px;background:var(--green-tint);color:var(--green);border:1px solid #cfe8d8;font-weight:600}
+.v5-kb.none{background:#f0f2ef;color:var(--dim);border-color:#eef1ec;font-weight:400}
+.v5-heads{display:flex;flex-direction:column;gap:2px}
+.v5-head{display:flex;align-items:center;gap:4px;font-size:9px;background:#f4f7f4;border-radius:4px;padding:2px 4px;white-space:nowrap;overflow:hidden}
+.v5-head .ic{width:8px;height:8px;border-radius:50%;flex:none;background:#7cbf9b}
+.v5-head.card .ic{background:#8fa6cf}.v5-head.god .ic{background:#b39ad2}
+.v5-head.npc .ic{background:#9aa7b2}.v5-head.social .ic{background:#b7c0b8}.v5-head.guest .ic{background:#d0a86a}
+.v5-head .tx{overflow:hidden;text-overflow:ellipsis;color:var(--ink)}
+.v5-head .nof{color:#b87830;font-size:8px;flex:none;margin-left:auto}
+/* 教诲 buff 全表 */
+.v5-grp{margin-bottom:8px}
+.v5-grp .gt{font-size:11px;font-weight:700;margin-bottom:5px}
+.v5-grp .gt.base{color:#1f9e8a}.v5-grp .gt.evo{color:#7a5bb0}
+.v5-grp .gt small{font-weight:400;color:var(--dim2);font-size:9px;margin-left:4px}
+.v5-alist{display:grid;grid-template-columns:1fr 1fr;gap:5px}
+.v5-adv{background:#fbfcfa;border:1px solid #eef1ec;border-radius:7px;padding:5px 7px;min-width:0}
+.v5-adv.base{border-left:3px solid #4fbfa0}.v5-adv.evo{border-left:3px solid #a487d4}
+.v5-adv.got{background:#f0f8f3}
+.v5-adv .an{font-size:11px;font-weight:700;color:var(--ink)}
+.v5-adv .an em{font-style:normal;color:var(--dim2);font-size:9px;font-weight:400;margin-left:4px}
+.v5-adv .gotmk{color:var(--green);font-size:9px;margin-left:3px}
+.v5-adv .ae{font-size:9.5px;color:#55645b;line-height:1.4;margin-top:2px}
+.v5-adv .as{font-size:9px;color:var(--dim2);margin-top:2px}
+/* 人头规则表 */
+.v5-rule{display:grid;grid-template-columns:1fr 56px 56px 60px;gap:5px;font-size:10px;align-items:center;padding:5px 3px;border-bottom:1px solid #f3f5f2}
+.v5-rule:last-child{border-bottom:none}
+.v5-rule.hdr{color:var(--dim2);font-size:9px}
+.v5-rule .rn{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.v5-rule .rc{text-align:center}.v5-rule .yes{color:var(--green);font-weight:600}.v5-rule .no{color:#c8786a}
+.v5-rule .rr{text-align:center;color:var(--dim)}
+
+</style>
+</head>
+<body>
+<div id="demo-banner" style="display:none;background:#4a4026;color:#f0dfae;padding:6px 12px;font-size:11px;text-align:center;position:sticky;top:0;z-index:99">布局预览 · 非游戏数据（当前不是真实盘面）</div>
+
+<div class="stage-note">
+  <b>UmaAI · 骏大祭（祭典杯）</b><br>
+  手机版 UI 原型 · 照旧版四 tab 视觉重做<br>
+  数据口径对齐 <b>matsuri-capture</b> 电脑版面板<br>
+  SO 推 /data → 本机 18766 收；本机后台持续主动拉 SO 18765 /summary（双通道）<br><br>
+  默认演示数据；设置页可切「实时 18766」<br>
+  点「建议」页顶部的悬浮窗按钮看浮层
+</div>
+
+<div class="phone">
+  <div class="statusbar">
+    <span id="clock">00:40</span>
+    <span class="icons">⏰ &nbsp;0.75 KB/s &nbsp;5G ▮ &nbsp;<span class="bat">65</span></span>
+  </div>
+
+  <div class="scroll" id="scroll">
+
+    <!-- ============ 连接 ============ -->
+    <section class="page active" id="page-connect">
+      <div class="app-title">UmaAI</div>
+
+      <div class="card" style="background:var(--green-tint);border-color:#d9eadf">
+        <button class="btn" id="btn-connect" onclick="toggleConnect()">开始连接</button>
+        <div class="hint" style="text-align:center;margin-top:10px">
+          SO 推 /summary → 本机 18766 收；本机后台持续主动拉 18765（推送静默时兜底）。暂停仅停止页面轮询，接收、主动拉取与归档继续。
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>连接状态 <span class="badge" id="link-badge">检测中…</span></h2>
+        <div class="row"><span class="k">接收服务</span><span class="v" id="v-service">检测中…</span></div>
+        <div class="row"><span class="k">游戏采集</span><span class="v" id="v-capture">等待游戏数据</span></div>
+        <div class="row"><span class="k">数据入口</span><span class="v mono" id="v-inport">本机 · 127.0.0.1:18766</span></div>
+        <div class="row"><span class="k">SO HTTP（拉取用）</span><span class="v mono" id="v-soport">127.0.0.1:18765</span></div>
+        <div class="row"><span class="k">已接收</span><span class="v" id="v-frames">0 个数据包</span></div>
+        <div class="row"><span class="k">最近接收</span><span class="v" id="v-last">等待游戏数据</span></div>
+        <div class="row"><span class="k">最近心跳</span><span class="v" id="v-beat">尚未连接</span></div>
+        <div class="row"><span class="k">盘面同步</span><span class="v" id="v-sync">等待育成同步</span></div>
+        <div class="row"><span class="k">接线诊断</span><span class="v" id="v-linkdiag">—</span></div>
+        <div class="hint">双通道持续接线：① SO 数据变化即把 /summary 以 POST /data 推到 18766；② 本机后台持续监控，一旦推送静默超过 20 秒（大于 SO 的 15 秒兜底心跳，避免把降频后的全量读拉回高频）就主动向 18765 拉 /summary 兜底。18766 只接收/拉取、绝不往外推。冷启动还会从 frames.jsonl 读回上次会话末帧（标注「归档」）。缺值一律显式 −1，「没有」和「是 0」长得不一样。</div>
+      </div>
+
+      <div class="card">
+        <h2>链路 <span class="badge">SO → 18766</span></h2>
+        <div class="quote">
+          游戏进程内 <b>libhachimi_ura.so</b> 在 18765 起 HTTP，<br>
+          <b>push_to_app()</b> 把 <b>/summary</b> 的 JSON 以 <b>POST /data</b> 推到 18766；<br>
+          接收端监听 18766 收推送，并在推送静默时后台主动 GET 18765 /summary 兜底；<br>
+          两条通道都把 /summary 归一化成育成属性帧，同源提供本面板。
+        </div>
+        <div class="row"><span class="k">剧本</span><span class="v ok">festa · scenarioId 15</span></div>
+        <div class="row"><span class="k">/summary 内嵌 festa</span><span class="v" id="v-hasfesta">待 SO 推送</span></div>
+        <div class="row"><span class="k">/debug/festa_probe</span><span class="v" id="v-probe">待检测</span></div>
+      </div>
+
+      <div class="card">
+        <h2>两条链路 <span class="badge">别弄混</span></h2>
+        <div class="quote">
+          本 App 走 <b>手机线</b>：SO 在 18765 提供 HTTP（本机后台持续主动拉），并主动 <b>POST /data</b> 把 /summary 推到本机 <b>18766</b> 收；18766 只收不推。<br>
+          电脑版 URA 是<b>另一条独立链路</b>：Hachimi-Edge V3 把原始 MessagePack 以 POST /notify/response 送到 <b>127.0.0.1:4693</b>，由 FestaScenarioAnalyzer / SendGameStatusPlugin / AIRedirector 解析与喂 AI。
+        </div>
+        <div class="row"><span class="k">手机线端口</span><span class="v mono">18765 / 18766</span></div>
+        <div class="row"><span class="k">电脑版端口</span><span class="v mono">4693（不共用）</span></div>
+        <div class="hint">上游官方仓（EtherealAO 项目组 / umaai-project）里只有 4693，没有 18765/18766——手机 SO 这套是你自己分支线的实现，字段口径两边一致但代码各自独立。</div>
+      </div>
+
+      <div class="card">
+        <h2>权限</h2>
+        <div class="row"><span class="k">通知</span><span class="v" id="v-notify-perm">检测中…</span></div>
+        <div class="hint">前台服务常驻通知，保证退到后台不丢帧</div>
+        <div class="row" style="margin-top:8px"><span class="k">悬浮窗</span><span class="v" id="v-overlay-perm">检测中…</span></div>
+        <div class="hint">系统「显示在其他应用上层」权限，需在系统设置里手动授予；未授权时系统设置里不会出现本 App 的浮窗项</div>
+        <button class="btn ghost small" style="width:100%;margin-top:8px" id="btn-overlay" onclick="onOverlayClick()">检测权限…</button>
+        <div class="hint" id="overlay-hint">点击下方按钮查询或申请权限。</div>
+      </div>
+
+      <div class="card">
+        <h2>SO 自检 <span class="badge">要不要重编译</span></h2>
+        <div class="quote" id="so-verdict">
+          未自检。点击下方按钮会<b>真实请求</b> 18765 的 /health 与 /summary（/api/pull 轻量拉取），/debug/festa_probe 由接收端在首次判活/重连时按需探测并缓存结论 —— 不预置任何版本或结论。
+        </div>
+        <button class="btn ghost" onclick="probeSo()">实测自检 /health + /summary</button>
+      </div>
+    </section>
+
+    <!-- ============ 建议 ============ -->
+    <section class="page" id="page-advice">
+      <div class="app-title">UmaAI</div>
+      <div class="eyebrow" id="adv-eyebrow">当前盘面</div>
+      <h1 class="big" id="adv-title">等待你的育成</h1>
+      <p class="sub" id="adv-sub">建议始终对应最新的有效局面。</p>
+
+      <div style="display:flex;gap:8px;margin-bottom:4px">
+        <button class="btn ghost small" style="flex:1" onclick="onOverlayClick()">开启游戏内悬浮窗</button>
+        <button class="btn ghost small" style="flex:1" onclick="refresh()">刷新一帧</button>
+      </div>
+      <button class="btn ghost small" style="width:100%;margin-bottom:8px" title="1:1 复刻 umaai-project/FestaScenarioAnalyzer/FestaDisplayRenderer.cs" onclick="showBoard()">电脑版原样盘面 · 1:1</button>
+
+      <div class="card">
+        <h2>演目态势 <span class="badge">FESTA</span></h2>
+        <div class="row"><span class="k">本局演目达成</span><span class="v" id="a-progress">—</span></div>
+        <div class="row"><span class="k">本回合槽增</span><span class="v" id="a-gain">—</span></div>
+        <div class="hint" id="a-camp">等待当前盘面的有效演目统计</div>
+      </div>
+
+      <div class="card">
+        <h2>本回合教诲 / 稽古</h2>
+        <div id="a-advice" class="empty">等待当前盘面的建议</div>
+      </div>
+
+      <div class="card">
+        <h2>数值总览</h2>
+        <div class="five" id="a-five"></div>
+        <div class="row" style="margin-top:10px"><span class="k">体力</span><span class="v" id="a-vital">—</span></div>
+        <div class="row"><span class="k">干劲</span><span class="v" id="a-motive">—</span></div>
+        <div class="row"><span class="k">技能点 PT</span><span class="v" id="a-pt">—</span></div>
+        <div class="row"><span class="k">粉丝</span><span class="v" id="a-fan">—</span></div>
+      </div>
+
+      <div class="card">
+        <h2>祭典杯 · 演目 <span class="badge">5 演目</span></h2>
+        <div class="flist" id="a-acts"></div>
+        <div class="flink" id="a-link"></div>
+        <div class="flink" id="a-festa"></div>
+        <div class="hint" id="a-actsinfo"></div>
+      </div>
+
+      <!-- v0.5.0 盘面 5 列：训练位角标 + 人头（含无 buff NPC） -->
+      <div class="card">
+        <h2>盘面 · 5 训练位 <span class="badge">角标 / 人头</span></h2>
+        <div class="v5-g5" id="a-board"></div>
+        <div class="hint" id="a-boardnote"></div>
+      </div>
+
+      <!-- v0.5.0 教诲 buff 全表：5 基础 + 5 进化 -->
+      <div class="card">
+        <h2>教诲 buff 全表 <span class="badge">5 基础 + 5 进化</span></h2>
+        <div id="a-adviceall"></div>
+      </div>
+
+      <!-- v0.5.0 人头 / 角标规则 -->
+      <div class="card">
+        <h2>人头 / 角标规则 <span class="badge">NPC 也随机到角标</span></h2>
+        <div id="a-rules"></div>
+      </div>
+
+      <!-- 本回合状态：SO 已推 command_info / gain_gauges / evaluation_info，v0.4.0 接入 -->
+      <div class="card">
+        <h2>本回合状态 <span class="badge">v0.4.0</span></h2>
+        <div class="chips" id="a-runtime"></div>
+        <div class="flist">
+          <div class="flink" id="a-gainLine"></div>
+          <div class="flink" id="a-evalLine"></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>教诲 · 転成 · 発表会</h2>
+        <div id="a-fusion" class="hint"></div>
+        <div id="a-cps" class="hint"></div>
+      </div>
+
+      <div class="card">
+        <h2>训练备选 / 教诲备选</h2>
+        <div id="a-picks"></div>
+      </div>
+    </section>
+
+    <!-- ============ 设置 ============ -->
+    <section class="page" id="page-settings">
+      <div class="app-title">UmaAI</div>
+      <div class="eyebrow">按你的设备调整</div>
+      <h1 class="big">计算与显示</h1>
+      <p class="sub">外观即时应用；更改计算参数后重新计算当前盘面。</p>
+
+      <div class="card">
+        <h2>连接与协议</h2>
+        <div class="field"><label>接收端口（本机监听）</label>
+          <input id="s-port-in" value="18766" inputmode="numeric">
+          <div class="tip">SO 的 push_to_app 打的是 POST /data → 这个端口</div></div>
+        <div class="field"><label>推送方 SO 端口</label>
+          <input id="s-port-so" value="18765" inputmode="numeric">
+          <div class="tip">/summary、/debug/festa_probe、/action/latest 都在这里</div></div>
+        <div class="field"><label>面板数据源</label>
+          <select id="s-source"><option value="live" selected>实时 18766 · /api/snapshot（默认）</option>
+          <option value="demo">布局预览 · 非游戏数据</option></select>
+          <div class="tip">默认只用真实帧；「布局预览」仅供离线看版式，不会冒充游戏盘面</div></div>
+        <div class="field"><label>实时 BASE（APK WebView 用）</label>
+          <input id="s-base" value="http://127.0.0.1:18766"></div>
+      </div>
+
+      <div class="card">
+        <h2>游戏内显示</h2>
+        <div class="switch-row"><div><div class="t">建议悬浮窗</div><div class="d">面板、窄条与悬浮球，可拖动切换</div></div>
+          <div class="switch on" id="sw-float" onclick="sw(this)"><i></i></div></div>
+        <div class="slider-block"><div class="lbl">背景不透明度 · <span id="lb-op">64</span>%</div>
+          <div class="slider" id="sl-op" onmousedown="dragStart(event,this)" ontouchstart="dragStart(event,this)">
+            <div class="track"></div><div class="fill" style="width:64%"></div><div class="knob" style="left:64%"></div></div></div>
+        <div class="slider-block"><div class="lbl">磨砂强度 · <span id="lb-bl">12</span></div>
+          <div class="slider" id="sl-bl" onmousedown="dragStart(event,this)" ontouchstart="dragStart(event,this)">
+            <div class="track"></div><div class="fill" style="width:38%"></div><div class="knob" style="left:38%"></div></div></div>
+        <div class="hint">调整后立即保存，仅改变浮窗背景。</div>
+      </div>
+
+      <div class="card">
+        <h2>固定种子</h2>
+        <div class="field"><label>复现种子</label><input id="s-seed" value="61444" inputmode="numeric">
+          <div class="tip">固定种子方便复现；默认 61444。调参一律换全新种子块</div></div>
+      </div>
+
+      <div class="card">
+        <h2>真实性契约 <span class="badge">锁定 · 只读</span></h2>
+        <div class="row"><span class="k">blue_count</span><span class="v mono">[18, 0, 0, 0, 0]</span></div>
+        <div class="row"><span class="k">extra_count</span><span class="v mono">[129,129,257,343,343,100]</span></div>
+        <div class="row"><span class="k">五维合计 / PT</span><span class="v ok">1201 ≈ 20杯×60 / 100</span></div>
+        <div class="row"><span class="k">uma / 卡组</span><span class="v mono">100101 / 默认 6 张</span></div>
+        <div class="row"><span class="k">[pre]</span><span class="v mono">xiaoqie=true, 盾=3</span></div>
+        <div class="hint">每次渲染配置前由 assert_real() 硬校验：禁止灌种马、灌 PT、换专项马娘、盾超过 5 次。两次继承 ≈ 2400 属性属真实可及量级。</div>
+      </div>
+
+      <div class="card">
+        <h2>冠军手写档 <span class="badge">gp_pi</span></h2>
+        <div class="kpi"><div><b>+485.0</b><i>合并 Δ</i></div><div><b>4.30</b><i>t 值</i></div><div><b>0.00002</b><i>p 值</i></div></div>
+        <div class="row"><span class="k">pt_favor_rate</span><span class="v mono">2.9778</span></div>
+        <div class="row"><span class="k">advice.route</span><span class="v mono">951.2</span></div>
+        <div class="row"><span class="k">weights.motivation</span><span class="v mono">49.1485</span></div>
+        <div class="row"><span class="k">weights.gauge</span><span class="v mono">40.3740</span></div>
+        <div class="row"><span class="k">dynamic.keiko_tempo</span><span class="v mono">1.6904</span></div>
+        <div class="row"><span class="k">dynamic.status_catchup</span><span class="v mono">2.1144</span></div>
+        <div class="hint">31 族算法大比武唯一通过 Bonferroni 校正者，T/U/V 三块全正。FlatSearch 序列决策族 8 对配对 0 胜 8 负，已止损。</div>
+      </div>
+
+      <button class="btn" onclick="saveSettings()">保存设置</button>
+      <div class="hint" style="margin-top:12px">
+        当前版本使用真实局面 gp_pi 手写档，不依赖云端账号；搜索训练员在真实局面下为重度负收益，已停用。
+      </div>
+      <div class="sec-gap"></div>
+    </section>
+
+    <!-- ============ 记录 ============ -->
+    <section class="page" id="page-records">
+      <div class="app-title">UmaAI</div>
+      <div class="eyebrow">留住每次判断</div>
+      <h1 class="big">本地记录</h1>
+      <p class="sub">原始包与结果保存在应用私有目录。</p>
+
+      <div class="card">
+        <h2>导出说明</h2>
+        <div class="quote">默认导出盘面、可读候选和评分；局号改为匿名编号。原始报文、认证信息与账号标识不会进入导出文件。</div>
+      </div>
+
+      <div class="rec">
+        <div class="dt" id="r-date">11 月 05 日 00:39</div>
+        <div class="sm" id="r-sum">0 包 · 0 个盘面 · 0 次计算</div>
+        <div class="act" onclick="doExport()">⤴ 脱敏导出</div>
+      </div>
+      <div class="rec">
+        <div class="dt">11 月 04 日 23:35</div>
+        <div class="sm">第三轮 · 31 族 × 300 局终裁</div>
+        <div class="act" onclick="doExport()">⤴ 脱敏导出</div>
+      </div>
+
+      <div class="card">
+        <h2>迭代结论 <span class="badge">已对齐</span></h2>
+        <div class="chips">
+          <span class="tag">真实性契约</span><span class="tag">31 族比武</span>
+          <span class="tag">gp_pi 冠军</span><span class="tag">Bonferroni</span>
+          <span class="tag grey">粗筛止损 23/31</span><span class="tag grey">独立块 1/31</span>
+          <span class="tag warn">FlatSearch 止损</span>
+        </div>
+        <div class="row" style="margin-top:10px"><span class="k">真实局面基线</span><span class="v mono">81910.9 / 82338.2 / 82580.8</span></div>
+        <div class="row"><span class="k">冠军合并增益</span><span class="v ok">+485.0 · t=4.30</span></div>
+        <div class="row"><span class="k">上一轮 LG24</span><span class="v warn">已作废（假账）</span></div>
+        <div class="hint">旧版 LG24 靠灌种马蓝因子、PT=1000、8 层盾、铁心专项做出，不是手写逻辑变强，全部不计入有效迭代。</div>
+      </div>
+
+      <div class="card">
+        <h2>上游对齐 <span class="badge">2026-11-05 复核</span></h2>
+        <div class="row"><span class="k">项目组</span><span class="v mono">UmamusumeResponseAnalyzer</span></div>
+        <div class="row"><span class="k">祭典杯组织</span><span class="v mono">umaai-project（15 仓）</span></div>
+        <div class="row"><span class="k">Festa 协议 DTO</span><span class="v ok">SingleModeFestaDataSet ✓</span></div>
+        <div class="row"><span class="k">电脑版喂 AI</span><span class="v warn">SendGameStatus 仅到 Ramen=14</span></div>
+        <div class="row"><span class="k">祭典杯显示插件</span><span class="v" >FestaScenarioAnalyzer(sc15)</span></div>
+        <div class="chips" style="margin-top:8px">
+          <span class="tag">act_info_array</span><span class="tag">advice_info_array</span>
+          <span class="tag">festa_info</span><span class="tag">check_point_result_array</span>
+          <span class="tag grey">max_act_level</span><span class="tag grey">need_act_gauge</span>
+        </div>
+        <div class="hint">字段口径已与 URA 主仓 Gallop/SingleModeFesta*.cs 逐项核对：本页演目的槽/Lv/教诲/発表会/合宿都能对上协议 DTO。电脑版 SendGameStatusPlugin 的 ScenarioType 只到 Ramen=14，尚无 Festa=15——正因如此手机端才靠 SO 的 /summary 自带 festa。</div>
+      </div>
+    </section>
+
+  </div>
+
+  <!-- 悬浮窗层 -->
+  <div class="overlay" id="overlay">
+    <button class="float-close" onclick="hideFloat()">返回 App ✕</button>
+    <div class="desk-icons">
+      <div class="desk-ico"><div class="sq" style="background:linear-gradient(135deg,#3a6df0,#7a9bff)">△</div>相册</div>
+      <div class="desk-ico"><div class="sq" style="background:#ff7a33">淘</div>淘宝</div>
+      <div class="desk-ico"><div class="sq" style="background:#eaf3fb;color:#2a7ad1">生活</div>生活</div>
+      <div class="desk-ico"><div class="sq" style="background:#4fc08d;color:#fff">✦</div>WorkBuddy</div>
+    </div>
+    <div class="float" id="float">
+      <div class="fh"><b>UmaAI</b><span class="conn" id="f-conn">等待游戏连接</span><span class="menu">≡</span></div>
+      <div class="two"><span>训练建议</span><span>教诲建议</span></div>
+      <div class="hero" id="f-hero">等待游戏连接</div>
+      <div class="metrics">
+        <div class="m"><i>预估评分</i><b id="f-score">—</b><span class="dot"></span></div>
+        <div class="m"><i>本局演目</i><b id="f-progress">—</b></div>
+        <div class="m"><i>本回合槽增</i><b id="f-gain">—</b></div>
+        <div class="m"><i>体力/干劲</i><b id="f-vital">—</b></div>
+      </div>
+      <div class="lbl">速 / 耐 / 力 / 根 / 智 / PT</div>
+      <div class="f5" id="f-five"></div>
+      <div class="lbl">演目盘面 · 槽 / Lv / 教诲</div>
+      <div class="board" id="f-board"></div>
+      <div class="foot"><div>训练备选<b id="f-train">—</b></div><div>教诲备选<b id="f-advice">—</b></div></div>
+      <div class="kv">
+        <div>合宿剩余<b id="f-camp">—</b></div>
+        <div>当前 PT<b id="f-pt">—</b></div>
+        <div>下次発表会<b id="f-next">—</b></div>
+      </div>
+    </div>
+    <div class="nav-tip">悬浮窗 · 面板 / 窄条 / 悬浮球可拖动切换</div>
+  </div>
+
+
+  <!-- ===== 电脑版原样盘面：1:1 复刻 umaai-project/FestaScenarioAnalyzer/FestaDisplayRenderer.cs ===== -->
+  <div class="board-overlay" id="boardOverlay">
+    <div class="bo-bar">
+      <b>电脑版原样盘面 · 1:1</b>
+      <button onclick="boardZoom(-1)">−</button>
+      <button onclick="boardZoom(1)">＋</button>
+      <button onclick="fitBoard()">适配</button>
+      <button onclick="hideBoard()">返回 App</button>
+    </div>
+    <div class="bo-scroll" id="boScroll">
+      <div id="boZoom">
+<style id="board-css">
+#board-root{
+  --n:#d8dedb; --cy:#4fd8e8; --gr:#39e07a; --yl:#e8d45a; --pu:#c08cff;
+  --rd:#ff6b6b; --dim:#8b9691; --line:#cfd6d2; --sel:#2fe06d;
+  width:max-content; color:var(--n);
+  font:15px/1.45 "Cascadia Mono","Sarasa Mono SC","Noto Sans Mono CJK SC","Microsoft YaHei",Consolas,monospace;
+  -webkit-font-smoothing:none;
+}
+#board-root *{box-sizing:border-box}
+#board-root .tui{display:flex;align-items:stretch;width:max-content}
+#board-root .main{width:95ch}
+#board-root .headers{display:flex;height:3.6em}
+#board-root .hd{border:1px solid var(--line);padding:.55em .8em;white-space:pre;overflow:hidden}
+#board-root .hd.w30{width:30ch} #board-root .hd.w27{width:27ch}
+#board-root .hd.w24{width:24ch} #board-root .hd.w14{width:14ch}
+#board-root .cards{display:flex}
+#board-root .card{width:19ch;border:1px solid var(--line);padding:.15em .55em .35em;
+  display:flex;flex-direction:column;min-height:27em}
+#board-root .card.sel{border-color:var(--sel)}
+#board-root .ttl{text-align:center;height:1.45em;white-space:pre;overflow:hidden}
+#board-root .marks{height:1.45em;white-space:pre;overflow:hidden}
+#board-root .sep{border-top:1px solid var(--line);margin:.1em 0 .35em}
+#board-root .g-cap{height:2.9em} #board-root .g-cost{height:2.9em}
+#board-root .g-gain{height:8.7em}
+#board-root .row{white-space:pre;overflow:hidden;height:1.45em}
+#board-root .cy{color:var(--cy)} #board-root .gr{color:var(--gr)}
+#board-root .yl{color:var(--yl)} #board-root .pu{color:var(--pu)}
+#board-root .rd{color:var(--rd)} #board-root .dim{color:var(--dim)}
+#board-root .extra{width:26ch;border:1px solid var(--line);padding:.45em .7em;white-space:normal}
+#board-root .extra .r{height:1.45em;white-space:pre;overflow:hidden}
+#board-root .extra .sp{height:.55em}
+#board-root [data-src]{cursor:help}
+/* 注入隔离：屏蔽宿主 App 全局 .card/.row 样式（仅手机原型内生效） */
+#board-root{background:#000;color:var(--n)}
+#board-root .card,#board-root .hd,#board-root .extra{background:#000;color:var(--n);border-radius:0;box-shadow:none;margin:0}
+#board-root .card{display:flex;flex-direction:column}
+#board-root .row,#board-root .r,#board-root .ttl,#board-root .marks{display:block;background:transparent;color:inherit;padding:0;margin:0}
+#board-root *{box-shadow:none;border-radius:0}
+</style>
+
+<div id="board-root">
+ <div class="tui">
+  <div class="main">
+   <!-- AddHeaders: festa-date / festa-total / festa-vital / festa-motivation -->
+   <div class="headers">
+    <div class="hd w30" data-src="FestaDisplayRenderer.cs:158 · Strings.resx:Date / FirstHalf / SecondHalf">2年 10月后半 · 第44回合</div>
+    <div class="hd w27" data-src="FestaDisplayRenderer.cs:159 · Strings.resx:TotalStats"><span class="cy">五围 5359 · Pt 2825</span></div>
+    <div class="hd w24" data-src="FestaDisplayRenderer.cs:161 · Strings.resx:VitalLabel / VitalLimit">体力:<span class="gr">108</span>/108</div>
+    <div class="hd w14" data-src="FestaDisplayRenderer.cs:166 · Strings.resx:Motivation5"><span class="gr">绝好调</span></div>
+   </div>
+   <!-- 五列 FrameView：CardWidth=19，Shining 列用 palette.Selected 绿框 -->
+   <div class="cards">
+
+    <div class="card sel" title="该列含彩圈支援卡 → 绿框（FestaDisplayRenderer.cs:123）">
+     <div class="ttl" data-src="Strings.resx:TrainingTitle / Stat0">速度</div>
+     <div class="marks"></div>
+     <div class="sep"></div>
+     <div class="g-cap">
+      <div class="row" data-src="Strings.resx:CurrentRemainStat">当前:可获得</div>
+      <div class="row" data-src="Strings.resx:CurrentStatValue + remaining">1726:1622</div>
+     </div>
+     <div class="sep"></div>
+     <div class="g-cost">
+      <div class="row" data-src="Strings.resx:VitalLabel / VitalLimit">体力:<span class="gr">86</span>/108</div>
+      <div class="row" data-src="Strings.resx:TrainingLevel">Lv3 | +2</div>
+     </div>
+     <div class="sep"></div>
+     <div class="g-gain">
+      <div class="row" data-src="Strings.resx:TrainingGainLabel / TrainingPt">属:44|Pt:19</div>
+      <div class="row"><span class="cy">[速]杳目</span></div>
+      <div class="row"></div><div class="row"></div><div class="row"></div><div class="row"></div>
+     </div>
+     <div class="sep"></div>
+    </div>
+
+    <div class="card sel" title="该列含彩圈支援卡 → 绿框（FestaDisplayRenderer.cs:123）">
+     <div class="ttl" data-src="Strings.resx:ActTrainingTitle"><span class="cy">神旗  Lv6</span></div>
+     <div class="marks" data-src="Strings.resx:AssistMark · CreateCard:247"><span class="yl">助力支撑</span></div>
+     <div class="sep"></div>
+     <div class="g-cap">
+      <div class="row">当前:可获得</div>
+      <div class="row">903:1597</div>
+     </div>
+     <div class="sep"></div>
+     <div class="g-cost">
+      <div class="row">体力:<span class="gr">92</span>/108</div>
+      <div class="row">Lv1 | +0</div>
+     </div>
+     <div class="sep"></div>
+     <div class="g-gain">
+      <div class="row">属:<span class="cy">227</span>|Pt:129</div>
+      <div class="row"><span class="gr">[友]吾妻</span></div>
+      <div class="row"><span class="rd">!</span>[力]美妙</div>
+      <div class="row"><span class="rd">!</span><span class="cy">[耐]怒涛</span></div>
+      <div class="row"><span class="rd">!</span>[速]乐透</div>
+      <div class="row"><span class="dim">莫名</span></div>
+     </div>
+     <div class="sep"></div>
+    </div>
+
+    <div class="card">
+     <div class="ttl" data-src="Strings.resx:TrainingTitle / Stat2">力量</div>
+     <div class="marks" data-src="Strings.resx:KensanMark · CreateCard:249"><span class="pu">追加稽古</span></div>
+     <div class="sep"></div>
+     <div class="g-cap">
+      <div class="row">当前:可获得</div>
+      <div class="row">1158:1278</div>
+     </div>
+     <div class="sep"></div>
+     <div class="g-cost">
+      <div class="row">体力:<span class="gr">86</span>/108</div>
+      <div class="row">Lv2 | +1</div>
+     </div>
+     <div class="sep"></div>
+     <div class="g-gain">
+      <div class="row">属:21|Pt:8</div>
+      <div class="row"><span class="dim">记者</span></div>
+      <div class="row">防爆</div>
+      <div class="row"></div><div class="row"></div><div class="row"></div>
+     </div>
+     <div class="sep"></div>
+    </div>
+
+    <div class="card">
+     <div class="ttl" data-src="Strings.resx:TrainingTitle / Stat3">根性</div>
+     <div class="marks"></div>
+     <div class="sep"></div>
+     <div class="g-cap">
+      <div class="row">当前:可获得</div>
+      <div class="row">702:1536</div>
+     </div>
+     <div class="sep"></div>
+     <div class="g-cost">
+      <div class="row">体力:<span class="gr">86</span>/108</div>
+      <div class="row">Lv2 | +2</div>
+     </div>
+     <div class="sep"></div>
+     <div class="g-gain">
+      <div class="row">属:23|Pt:9</div>
+      <div class="row">大和</div>
+      <div class="row">雪美</div>
+      <div class="row"></div><div class="row"></div><div class="row"></div>
+     </div>
+     <div class="sep"></div>
+    </div>
+
+    <div class="card sel" title="该列含彩圈支援卡 → 绿框（FestaDisplayRenderer.cs:123）">
+     <div class="ttl" data-src="Strings.resx:TrainingTitle / Stat4">智力</div>
+     <div class="marks"><span class="pu">追加稽古</span></div>
+     <div class="sep"></div>
+     <div class="g-cap">
+      <div class="row">当前:可获得</div>
+      <div class="row">870:1530</div>
+     </div>
+     <div class="sep"></div>
+     <div class="g-cost">
+      <div class="row">体力:<span class="gr">108</span>/108</div>
+      <div class="row">Lv3 | +1</div>
+     </div>
+     <div class="sep"></div>
+     <div class="g-gain">
+      <div class="row">属:35|Pt:18</div>
+      <div class="row"><span class="cy">[智]太子</span></div>
+      <div class="row"><span class="dim">理事</span></div>
+      <div class="row"></div><div class="row"></div><div class="row"></div>
+     </div>
+     <div class="sep"></div>
+    </div>
+
+   </div>
+  </div>
+
+  <!-- festa-extra：AdviceRows + FestaTrainingDisplay 挂接的 EventLogger part -->
+  <div class="extra" data-src="FestaDisplayRenderer.cs:78 · FestaTrainingDisplay.cs:16 · FestaScenarioDisplayBridge.cs:7">
+   <div class="r"><span class="cy" data-src="Strings.resx:AdviceHeader">教诲/转成</span></div>
+   <div class="r"><span class="cy">速度</span>  特化<span class="cy">→</span><span class="gr">牵绊</span></div>
+   <div class="r"><span class="cy">耐力</span>  体力</div>
+   <div class="r"><span class="cy">力量</span>  助力</div>
+   <div class="r"><span class="cy">根性</span>  灵感</div>
+   <div class="r"><span class="cy">智力</span>  研习<span class="cy">→</span><span class="gr">擅长率</span></div>
+   <div class="sp"></div>
+   <div class="r"><span class="cy" data-src="FestaScenarioDisplayBridge.cs:7 RegisterPartProducer(&quot;EventLogger&quot;)">EventLogger</span></div>
+   <div class="r"><span class="yl" data-src="EventLogger.PrintCardEventPerf">连续事件出现  3  次</span></div>
+   <div class="r"><span class="yl">走完  1  张卡</span></div>
+   <div class="r"><span class="yl">连续事件运气： −77%</span></div>
+   <div class="r">事件数： 25</div>
+   <div class="r">继承属性： <span class="cy">247</span>, PT： <span class="cy">0</span></div>
+   <div class="r">胜场： <span class="yl">4</span></div>
+  </div>
+ </div>
+</div>
+      </div>
+    </div>
+    <div class="bo-tip">左右滑动 = 原版 ScrollHorizontal；绿框 = 该列有彩圈支援卡（partner.Shining）。＋ 放大 /「适配」全宽。</div>
+  </div>
+
+  <div class="toast" id="toast"></div>
+
+  <nav class="tabs">
+    <div class="tab active" data-p="connect" onclick="go('connect')">
+      <svg viewBox="0 0 24 24"><path d="M9 15l6-6"/><path d="M11.5 8.5l1.9-1.9a4 4 0 015.7 5.7l-2.6 2.6"/><path d="M12.5 15.5l-1.9 1.9a4 4 0 01-5.7-5.7l2.6-2.6"/></svg>
+      <span>连接</span></div>
+    <div class="tab" data-p="advice" onclick="go('advice')">
+      <svg viewBox="0 0 24 24"><path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8L12 3z"/><path d="M18.5 16l.7 2 2 .7-2 .7-.7 2-.7-2-2-.7 2-.7.7-2z"/></svg>
+      <span>建议</span></div>
+    <div class="tab" data-p="settings" onclick="go('settings')">
+      <svg viewBox="0 0 24 24"><path d="M4 7h10M18 7h2M4 17h2M10 17h10"/><circle cx="16" cy="7" r="2"/><circle cx="8" cy="17" r="2"/></svg>
+      <span>设置</span></div>
+    <div class="tab" data-p="records" onclick="go('records')">
+      <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
+      <span>记录</span></div>
+  </nav>
+</div>
+
+<script>
+/* ===== 内嵌真机帧（抄自 matsuri-capture/sessions/demo/frames.jsonl，逐字不改字段口径） ===== */
+const DEMO = {
+  seq:1, source:"push", turn:46, raw_total_turn_num:46, year:2, month:3, half:2,
+  turn_semantics:"countdown", scenario:"festa", chara_id:100101,
+  five:[412,388,501,300,255], max_five:[3179,2415,2200,2200,2400],
+  vital:64, max_vital:100, motivation:"GREAT", skill_point:780, fan:92378,
+  acts:[
+    {act_type:1,command_id:5101,name:"流镝",name_src:"mdb",gauge:3,need_gauge:12,level:2,state:1,advice_id:101,friend_outing:0},
+    {act_type:2,command_id:5102,name:"神旗",name_src:"mdb",gauge:5,need_gauge:12,level:1,state:1,advice_id:201,friend_outing:0},
+    {act_type:3,command_id:5103,name:"纳舞",name_src:"mdb",gauge:0,need_gauge:10,level:1,state:0,advice_id:0,friend_outing:0},
+    {act_type:4,command_id:5104,name:"大曳",name_src:"mdb",gauge:7,need_gauge:12,level:1,state:1,advice_id:401,friend_outing:0},
+    {act_type:5,command_id:5105,name:"飞悬",name_src:"mdb",gauge:2,need_gauge:10,level:2,state:1,advice_id:501,friend_outing:0}
+  ],
+  advice:[], checkpoints:[{schedule_id:23,result_type:2}],
+  camp_remain_turn:2, max_act_level:10, act_training_step:3,
+  last_action:{action:"Training",normalized_command_id:5101,raw_command_id:5101,result_type:0,sequence:88,source:"training_hook"},
+  notes:[], missing:[]
+};
+const AX=["速","耐","力","根","智"], KC=["k1","k2","k3","k4","k5"];
+/* 官方演目/教诲中文名：抄自 umaai-project/FestaScenarioAnalyzer/scripts/generate_festa_data.py */
+const ACT_FULL={1:"流镝马",2:"神旗争夺战",3:"纳舞",4:"大曳神舆",5:"飞悬"};
+const ADVICE_NAME={101:"牵绊教诲",201:"擅长率教诲",301:"灵感教诲",401:"助力教诲",501:"体力教诲",
+                   601:"特化教诲",701:"研习教诲",801:"协助教诲",901:"不屈教诲",1001:"兼修教诲"};
+const fullAct=a=>ACT_FULL[a.act_type]||a.name||('cid'+a.command_id);
+const adviceName=id=>ADVICE_NAME[id]||('#'+id);
+const U=-1;
+
+// 固定映射（主仓 mechanism.md / panel.rs，非编造）
+const ACTS=[
+  {t:1,name:'流镝马',attr:'速',guest:'ダイワスカーレット'},
+  {t:2,name:'神旗争夺战',attr:'耐',guest:'ノーリーズン'},
+  {t:3,name:'纳舞',attr:'力',guest:'マヤノトップガン'},
+  {t:4,name:'大曳神舆',attr:'根',guest:'ユキノビジン'},
+  {t:5,name:'飞悬',attr:'智',guest:'ブラストワンピース'}
+];
+const ADV={101:'牵绊',201:'擅长率',301:'灵感',401:'助力',501:'体力',601:'特化',701:'研习',801:'协助',901:'不屈',1001:'兼修'};
+function dsp(v){v=+v; if(!isFinite(v))return "—"; return v<=1200?v:(1200+Math.floor((v-1200)/2));}
+const SCHED={1:{turn:23,need:3},2:{turn:47,need:5},3:{turn:67,need:6}};
+
+const n=v=>(v===U||v===null||v===undefined)?'—':v;
+const esc=s=>String(s??'').replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
+const fmt=v=>typeof v==='number'?v.toLocaleString('zh-CN'):String(v);
+
+/* 所有数值都来自 18766 真实接口；DEMO 仅在用户显式点「布局预览」时使用，且明确标注非游戏数据 */
+let state={polling:true, source:"live", base:"http://127.0.0.1:18766", frame:null, frames:0,
+           service:false, soAlive:false, latestSource:"none", archiveCount:0, ageMs:0,
+           probeOk:null, overlayOk:false, overlayRunning:false,
+           timer:null, lastPullAt:0, pullBusy:false, lastPull:null,
+           pushRecv:0, pullRecv:0, statsOk:false, lastSummaryError:""};
+// v0.6.0：主动拉取已收敛到接收端后台 pullLoop（推送静默 20s 兜底）；
+// 页面 tick 不再自动 pull，这两个常量只用于手动「刷新/自检」的去抖。
+// 20s 阈值大于 SO 的 15s 兜底心跳，避免把降频后的全量读拉回高频。
+const STALE_MS=20000, PULL_MIN_MS=5000;
+
+/* 连接页 UI：全部按 18766 真实状态渲染，无数据就显式显示「未接收」 */
+function syncConnectUI(){
+  const q=id=>document.getElementById(id);
+  const svc=state.service, so=state.soAlive, f=state.frame;
+  if(state.source==='live') q('demo-banner').style.display='none';
+  q('btn-connect').textContent=state.polling?'暂停轮询':'恢复轮询';
+  q('btn-connect').classList.toggle('on',state.polling);
+  const badge=q('link-badge');
+  if(!svc){ badge.textContent='接收端未启动'; badge.className='badge off'; }
+  else if(!so){ badge.textContent='SO 未响应'; badge.className='badge warn'; }
+  else { badge.textContent='SO 在线'; badge.className='badge'; }
+  q('v-service').textContent=svc?'运行中 · 18766':'未启动';
+  q('v-service').className='v '+(svc?'ok':'off');
+  q('v-capture').textContent=f?(f.has_festa?'骏大祭 · festa':'剧本未识别'):'等待游戏数据';
+  q('v-capture').className='v '+(f?'':'off');
+  q('v-frames').textContent=state.frames+' 个数据包';
+  q('v-last').textContent=f?`T${n(f.turn)} · ${Math.round(state.ageMs/1000)}s 前`:'等待游戏数据';
+  q('v-beat').textContent=!svc?'接收端未运行':(!f?'尚未收到心跳':(state.ageMs<5000?'刚刚':Math.round(state.ageMs/1000)+'s 前'));
+  q('v-beat').className='v '+(svc&&f&&state.ageMs<5000?'ok':'off');
+  const srcLabel={push:'SO 推送',pull:'主动拉取',archive:'归档 · 上次会话',none:'—'}[state.latestSource]||'—';
+  q('v-sync').textContent=f?`已同步 T${n(f.turn)} · ${srcLabel}`:'等待育成同步';
+  q('v-sync').className='v '+(f?(state.latestSource==='archive'?'warn':'ok'):'off');
+  const ld=q('v-linkdiag');
+  if(ld){
+    ld.textContent='推送 '+state.pushRecv+' · 拉取 '+state.pullRecv+' · 属性 '+(state.statsOk?'已解析':'未解析')+
+      (state.lastSummaryError?' · SO 错误 '+state.lastSummaryError:'');
+    ld.className='v '+(state.statsOk?'ok':(state.pushRecv+state.pullRecv>0?'warn':'off'));
+  }
+  q('r-sum').textContent=`${state.frames} 包 · ${state.frames} 个盘面 · ${state.frames} 次计算`;
+  q('f-conn').textContent=f?('实时帧 · '+srcLabel):'等待游戏连接';
+  const ah=q('v-hasfesta');
+  if(f){ ah.textContent=f.has_festa?'是（真实帧）':'否 · SO 需重编译'; ah.className='v '+(f.has_festa?'ok':'off'); }
+  else { ah.textContent='待 SO 推送'; ah.className='v'; }
+  const pb=q('v-probe'), pk=state.probeOk;
+  pb.textContent=pk===true?'可用':(pk===false?'不可用 · 需重编 SO':(state.soAlive?'待检测':'18765 未响应'));
+  pb.className='v '+(pk===true?'ok':(pk===false?'off':''));
+}
+
+/* ===== 页切换 ===== */
+function go(p){
+  document.querySelectorAll('.page').forEach(e=>e.classList.remove('active'));
+  document.getElementById('page-'+p).classList.add('active');
+  document.querySelectorAll('.tab').forEach(e=>e.classList.toggle('active',e.dataset.p===p));
+  document.getElementById('scroll').scrollTop=0;
+}
+
+/* ===== 连接 ===== */
+function toggleConnect(){
+  state.polling=!state.polling;
+  if(state.polling){ startPolling(); toast('已恢复轮询 · 立即重连'); }
+  else { if(state.timer){clearInterval(state.timer);state.timer=null;} toast('已暂停页面轮询 · 接收端与归档仍在运行'); }
+  syncConnectUI();
+}
+
+/* ===== v0.5.0 静态权威数据：来自上游 scenario_matsuri.json / mechanism.md（非编造） ===== */
+// 10 教诲：5 基础（101-501）+ 5 进化/融合（601-1001）
+const V5_BASE=[{id:101,name:'牵绊',eff:'稽古主加成 +3~15（随绑定演目 Lv）',fus:'融合后合宿额外 1 人'},
+  {id:201,name:'擅长率',eff:'得意率 +10~50%（随 Lv）',fus:'融合后友情稽古 +10'},
+  {id:301,name:'灵感',eff:'灵感发生率 +30~80%（随 Lv）',fus:'融合后稽古灵感 Lv+1'},
+  {id:401,name:'助力',eff:'训练效果 +20~40% · 支援协助',fus:'融合后固定 +20% 支援'},
+  {id:501,name:'体力',eff:'稽古体力消耗 −1~15（随 Lv）',fus:'融合后固定 −15'}];
+const V5_EVO=[{id:601,name:'特化',eff:'主属性获得 +5~25 / 上限 +5~25',when:'T23 与 101/201 之一融合'},
+  {id:701,name:'研习',eff:'追加稽古掷中率 +20~80%',when:'T23 与 101/201 之一融合'},
+  {id:801,name:'协助',eff:'友情 +1~10 · 分身 +1',when:'T47 默认挂 501 槽'},
+  {id:901,name:'不屈',eff:'失败体力阈值 45→0 · 稽古效果 +0~5',when:'T47 默认与 301 融合'},
+  {id:1001,name:'兼修',eff:'副属性获得 +1~25 · 稽古效果 +1~15',when:'T47 默认与 401 融合'}];
+const V5_KEYS=['spd','sta','pow','gut','wis'];
+function v5Head(type,label,noBuff){
+  const c={link:'',card:'card',god:'god',guest:'guest',npc:'npc',social:'social'}[type]||'npc';
+  return `<div class="v5-head ${c}"><span class="ic"></span><span class="tx">${esc(label)}</span>${noBuff?'<span class="nof">无buff</span>':''}</div>`;
+}
+// 盘面 5 列：每列一个训练位，逐行展开稽古角标 / 人头 / 收益 / 状态
+function v5RenderBoard(f){
+  const acts=f.acts||[],byT={};acts.forEach(a=>byT[a.act_type]=a);
+  const ci=f.command_info||[],gg=f.gain_gauges||[];
+  let on=0,gS=0,nS=0;
+  const html=ACTS.map((a,idx)=>{
+    const it=byT[a.t]||{},g=+it.gauge||0,nd=+it.need_gauge||0;
+    const lit=nd>0&&g>=nd;if(lit)on++;gS+=g>0?g:0;nS+=nd>0?nd:0;
+    const kb=lit?`<span class="v5-kb">稽古·${esc(a.name)}</span>`:'<span class="v5-kb none">普通训练</span>';
+    let heads=lit?(v5Head('link',a.guest+'（担当锁定）',false)+v5Head('card','担当支援卡 ×N',false))
+                 :v5Head('card','支援卡人头（占位）',false);
+    heads+=v5Head('npc','一般 NPC（随机角标）',false)+v5Head('social','理事长 / 记者',true)+v5Head('guest','友人·吾妻（必补位）',true);
+    const gain=gg.length?n((gg.find(x=>+x.command_type===idx)||{}).predict_len):'—';
+    const ap=ci.length?n((ci.find(x=>+x.command_type===idx)||{}).params_len):'—';
+    return `<div class="col ${V5_KEYS[idx]}${lit?' on':''}"><div class="h">${a.attr}</div>
+      <div class="rw"><span class="lb">稽古角标</span><span class="va">${kb}</span></div>
+      <div class="rw"><span class="lb">人头（≤5）</span><div class="v5-heads">${heads}</div></div>
+      <div class="rw"><span class="lb">属性增益</span><span class="va">${ap==='—'?'—':ap+' 项'}</span></div>
+      <div class="rw"><span class="lb">PT / 槽增益</span><span class="va">${gain==='—'?'—':gain+' 项'}</span></div>
+      <div class="rw"><span class="lb">状态</span><span class="va" style="color:${lit?'var(--green)':'var(--dim)'}">${lit?'可稽古·锁定':'蓄力 / 待判定'}</span></div></div>`;
+  }).join('');
+  const el=document.getElementById('a-board');if(el)el.innerHTML=html;
+  const nt=document.getElementById('a-boardnote');if(nt)nt.innerHTML=
+    `📊 槽进度 <b>${gS}/${nS||'—'}</b> · 亮起 <b>${on}/5</b> 演目可稽古。人头栏：亮起位=固定 link 神驹＋担当卡；<b>理事长 / 记者 / 友人</b>即使无剧本 buff、无稽古角标也保留人头位（SO 未推名单，显示类型标签占位）。`;
+}
+// 教诲 buff 全表（5 基础 + 5 进化）
+function v5RenderAdvice(f){
+  const acts=f.acts||[],adv=f.advice||[];
+  const gb=new Set(adv.map(x=>+x.advice_id).filter(id=>id>=101&&id<=501));
+  const ge=new Set(adv.map(x=>+x.fusion_advice_id).filter(id=>id>=601));
+  acts.forEach(a=>{const id=+a.advice_id;if(id){if(id<=501)gb.add(id);else ge.add(id);}});
+  const cell=(a,cls)=>`<div class="v5-adv ${cls}${(cls==='base'?gb:ge).has(a.id)?' got':''}">
+    <div class="an">${a.id} ${esc(a.name)}<em>${cls==='base'?'基础':'进化'}</em>${(cls==='base'?gb:ge).has(a.id)?'<span class="gotmk">✔已获得</span>':''}</div>
+    <div class="ae">${esc(a.eff)}</div><div class="as">${esc(cls==='base'?a.fus:a.when)}</div></div>`;
+  const html=`<div class="v5-grp"><div class="gt base">基础教诲 · 5 <small>T2 授予，5 槽各绑 1 演目；效果等级 = 绑定演目 Lv</small></div>
+      <div class="v5-alist">${V5_BASE.map(a=>cell(a,'base')).join('')}</div></div>
+    <div class="v5-grp"><div class="gt evo">进化（融合）教诲 · 5 <small>T23 融 2 / T47 融 3；原基础教诲被消耗，升级版占该槽</small></div>
+      <div class="v5-alist">${V5_EVO.map(a=>cell(a,'evo')).join('')}</div></div>`;
+  const el=document.getElementById('a-adviceall');if(el)el.innerHTML=html;
+}
+// 人头 / 角标规则（用户 2026-11-05 实测 + 上游 mechanism §2.1）
+function v5RenderRules(){
+  const rows=[['支援卡（编成 5 张）',1,1],['编成外神驹（5 固定 link）',1,1],['一般 NPC（随机到角标）',1,1],
+    ['理事长（秋川弥生）',0,0],['记者（Reporter）',0,0],['友人（吾妻）',0,0]];
+  const mk=v=>v?'<span class="yes">有</span>':'<span class="no">无</span>';
+  const html=`<div class="v5-rule hdr"><span class="rn">人头类型</span><span class="rc">剧本 buff</span><span class="rc">稽古角标</span><span class="rr">人头显示</span></div>`+
+    rows.map(([nm,b,a])=>`<div class="v5-rule"><span class="rn">${nm}</span><span class="rc">${mk(b)}</span><span class="rc">${mk(a)}</span><span class="rr">显示</span></div>`).join('')+
+    `<div class="hint">① 理事长 / 记者<b>不出现在稽古训练位</b>、不产生剧本 buff 与稽古角标——但<b>人头照样显示</b>。② 友人无稽古 buff / 角标，但有稽古训练就<b>必补到未满 5 人的稽古位</b>，人头照样显示。③ 每训练位至多 1 名社交人头。④ 没有 buff ≠ 不需要做人头显示。</div>`;
+  const el=document.getElementById('a-rules');if(el)el.innerHTML=html;
+}
+
+/* ===== 渲染 ===== */
+function applyFrame(f){
+  if(!f) return;
+  const five=AX.map((a,i)=>`<div class="cell"><i class="${KC[i]}">${a}</i><b class="${KC[i]}">${n(f.five[i])}</b><em>/${n(f.max_five&&f.max_five[i])}</em></div>`).join('');
+  document.getElementById('a-five').innerHTML=five;
+  document.getElementById('a-vital').textContent=`${n(f.vital)} / ${n(f.max_vital)}`;
+  document.getElementById('a-motive').textContent=f.motivation||'—';
+  document.getElementById('a-pt').textContent=fmt(n(f.skill_point));
+  document.getElementById('a-fan').textContent=fmt(n(f.fan));
+
+  // 演目稽古表（竖版）：演目=稽古，槽满亮起即可稽古并锁定担当
+  const acts=f.acts||[];
+  const byT={}; acts.forEach(a=>byT[a.act_type]=a);
+  // v0.5.0：盘面 5 列 / 教诲 buff 全表 / 人头规则，逐项展开（无帧也渲染静态骨架）
+  v5RenderBoard(f); v5RenderAdvice(f); v5RenderRules();
+  let onCount=0, gSum=0, nSum=0;
+  document.getElementById('a-acts').innerHTML=ACTS.map(a=>{
+    const it=byT[a.t]||{}; const g=+it.gauge||0, nd=+it.need_gauge||0, lv=+it.level||0, ad=+it.advice_id||0;
+    const on = nd>0 && g>=nd; if(on)onCount++; gSum+=g>0?g:0; nSum+=nd>0?nd:0;
+    const pct = nd>0?Math.min(100,Math.round(g/nd*100)):0;
+    return `<div class="act${on?' on':''}">
+      <div class="nm"><b>${esc(a.name)}</b><i>${a.attr}</i></div>
+      <div class="g">${n(g)}/${n(nd)}</div>
+      <div class="bar"><i style="width:${pct}%"></i></div>
+      <div class="lv">Lv${n(lv)}/${n(f.max_act_level)}</div>
+      <div class="ad">${ad?esc(adviceName(ad)):'—'}</div>
+      <div class="flag${on?' lock':''}">${on?'担当锁定✔':'蓄力'}</div>
+    </div>`;
+  }).join('');
+  // v0.4.0：担当姓名不再写「需 SO 提供」——SO 已推 evaluation_info 原始记录，
+  // 只是 target_id/chara_id/act_type 布局未真机实测（上游 ❓G5），不编造人名。
+  const evN=(+f.evaluation_count)||0;
+  document.getElementById('a-link').innerHTML='🔗 固定 link（编成外神駒）：'+ACTS.map(a=>'<b>'+esc(a.attr)+'</b>·'+esc(a.guest)).join(' ／ ')+
+    `<span class="note">　担当原始记录 ${evN} 条（字段布局待 ❓G5 实测，不解析成人名）</span>`;
+  document.getElementById('a-festa').innerHTML='📊 槽进度 '+gSum+'/'+nSum+' · 亮起 '+onCount+'/5 演目可稽古';
+  const gaugeSum=acts.reduce((s,a)=>s+(a.gauge>0?a.gauge:0),0);
+  const needSum=acts.reduce((s,a)=>s+(a.need_gauge>0?a.need_gauge:0),0);
+  document.getElementById('a-progress').textContent=`${gaugeSum} / ${needSum} 槽`;
+  document.getElementById('a-gain').textContent=`${acts.length} 演目有槽`;
+  document.getElementById('a-camp').textContent=`合宿剩余 ${n(f.camp_remain_turn)} · 演目稽古步数 ${n(f.act_training_step)} · 演目 Lv 上限 ${n(f.max_act_level)}`;
+  document.getElementById('a-actsinfo').textContent=`剧本 ${esc(f.scenario||'?')} · chara ${n(f.chara_id)} · 回合语义 ${esc(f.turn_semantics||'—')}`;
+
+  // 本回合状态（v0.4.0）：追加稽古掷中来自 command_info[].is_upper_training_event_occurred
+  // （上游 online_wiring.md §2 #21，2026-11-04 已定位）；predict_len 是内存探测数组长度，非收益评分。
+  const kensan=!!f.kensan_pending;
+  const ci=f.command_info||[], gg=f.gain_gauges||[];
+  document.getElementById('a-runtime').innerHTML=
+    `<span class="tag ${kensan?'':'grey'}">${kensan?'⚡ 追加稽古掷中':'追加稽古未掷中'}</span>`+
+    `<span class="tag">训练位 ${ci.length} · 增益预测 ${gg.length}</span>`+
+    `<span class="tag ${evN?'':'grey'}">担当记录 ${evN} 条</span>`;
+  document.getElementById('a-gainLine').innerHTML= gg.length
+    ? '📈 槽增益预测（按训练位）：'+gg.map(g=>`<b>${n(g.command_type)}</b>位 ${n(g.predict_len)} 项`).join(' ／ ')+
+      '<span class="note">　predict 为内存探测，非收益评分</span>'
+    : '<span class="note">本帧无槽增益预测（结算后释放）</span>';
+  document.getElementById('a-evalLine').innerHTML= evN
+    ? `🔗 担当：SO 已推 <b>${evN}</b> 条 evaluation_info 原始记录；`+
+      `<span class="note">解析状态 ${f.evaluation_parsed===true?'已解析':'未解析'}，仅显示固定编成外神駒 link</span>`
+    : '<span class="note">🔗 担当：SO 本帧未推 evaluation_info，仅显示固定编成外神駒 link</span>';
+
+  document.getElementById('a-fusion').innerHTML=(f.advice&&f.advice.length)
+    ? '教诲：'+f.advice.map(a=>`<span class="tag">${esc(adviceName(a.advice_id))}</span>`+
+        (+a.fusion_advice_id>0 ? `→ 転成 <span class="tag">${esc(adviceName(a.fusion_advice_id))}</span>` : ' 未転成')).join(' ／ ')
+    : '教诲：本帧无転成记录';
+  // v0.4.0：与浮窗同口径。上游 §2 #15/#16 —— check_points 按 schedule 顺序 3 项，
+  // finals_done 由 checkPoints[2] 派生；schedule_id 值域待 ❓G3，故按数组顺序取，不硬编码。
+  const cps=f.checkpoints||[];
+  const st3=[0,1,2].map(i=>{const c=cps[i]; return (c && +c.result_type>0)?'达成':'未达成';});
+  const finalCp=cps.length>=3?cps[2]:cps.find(c=>+c.schedule_id===3);
+  const hon=(finalCp && +finalCp.result_type>0)?'已结算':'未';
+  document.getElementById('a-cps').innerHTML=
+    ['発表会①T23','発表会②T47','発表会③T67'].map((nm,i)=>
+      `<span class="tag ${st3[i]==='达成'?'':'grey'}">${nm} ${st3[i]}</span>`).join(' ')+
+    ` <span class="tag ${hon==='已结算'?'':'grey'}">本番 ${hon}</span>`+
+    (cps.length ? ` <span class="note">（sched ${cps.map(c=>n(c.schedule_id)).join('/')} · 结果 ${cps.map(c=>n(c.result_type)).join('/')}）</span>` : '');
+
+  const top=[...acts].sort((a,b)=>(b.gauge/b.need_gauge)-(a.gauge/a.need_gauge));
+  document.getElementById('a-picks').innerHTML=
+    `<div class="chips"><span class="tag">训练备选 ${esc(top[0]?top[0].name:'—')}</span>`+
+    `<span class="tag">稽古备选 ${esc(top[1]?top[1].name:'—')}</span>`+
+    `<span class="tag grey">教诲备选 ${esc(top[2]?top[2].name:'—')}</span></div>`+
+    `<div class="hint">最近动作：${f.last_action?(esc(f.last_action.action)+' · cid '+n(f.last_action.normalized_command_id)):'—'}</div>`;
+
+  // 悬浮窗
+  document.getElementById('f-hero').textContent=f?`骏大祭 T${n(f.turn)}/77`:'等待游戏连接';
+  document.getElementById('f-score').textContent=f?fmt(n(f.skill_point)):'—';
+  document.getElementById('f-progress').textContent=`${gaugeSum}/${needSum}`;
+  document.getElementById('f-gain').textContent=n(f.act_training_step);
+  document.getElementById('f-vital').textContent=`${n(f.vital)}/${n(f.max_vital)}`;
+  document.getElementById('f-five').innerHTML=AX.map((a,i)=>
+    `<div class="c"><i>${a}</i><b>${n(f.five[i])}</b></div>`).join('')+
+    `<div class="c"><i>PT</i><b>${n(f.skill_point)}</b></div>`;
+  document.getElementById('f-board').innerHTML=acts.map(a=>
+    `<div class="b"><div class="h">${esc(a.name||('c'+a.command_id))}</div>
+     <div class="s">槽 ${n(a.gauge)}/${n(a.need_gauge)}</div>
+     <div class="v">Lv${n(a.level)} · 教${n(a.advice_id)}</div>
+     <div class="bar"><i style="width:${a.need_gauge>0?Math.min(100,a.gauge/a.need_gauge*100):0}%"></i></div></div>`).join('');
+  document.getElementById('f-train').textContent=esc(top[0]?top[0].name:'—');
+  document.getElementById('f-advice').textContent=esc(top[2]?top[2].name:'—');
+  document.getElementById('f-camp').textContent=`${n(f.camp_remain_turn)} T`;
+  document.getElementById('f-pt').textContent=fmt(n(f.skill_point));
+  document.getElementById('f-next').textContent=(f.checkpoints&&f.checkpoints.length)?`sched ${n(f.checkpoints[0].schedule_id)}`:'—';
+
+  document.getElementById('adv-eyebrow').textContent='当前盘面';
+  document.getElementById('adv-title').textContent=f?`骏大祭 T${n(f.turn)}/77`:'等待你的育成';
+  document.getElementById('adv-sub').textContent=f
+    ? '建议对应最新有效局面 · 演目五维与教诲按真实帧对齐。'
+    : '等待当前盘面的建议。';
+  document.getElementById('a-advice').textContent=f?`本回合教诲：暂无転成；稽古步数 ${n(f.act_training_step)}`:'等待当前盘面的建议';
+  document.getElementById('a-advice').className=f?'hint':'empty';
+}
+
+/* ===== 实时模式：全部真接线，断线不回退演示帧 ===== */
+function setOffline(msg){
+  state.service=false; state.soAlive=false; state.frame=null; state.latestSource='none';
+  syncConnectUI();
+  document.getElementById('v-last').textContent=msg||'接收端未响应';
+}
+function clearFrame(){
+  document.getElementById('a-five').innerHTML=AX.map(a=>`<div class="cell"><i>${a}</i><b>—</b></div>`).join('');
+  document.getElementById('a-vital').textContent='— / —';
+  document.getElementById('a-motive').textContent='—';
+  document.getElementById('a-pt').textContent='—';
+  document.getElementById('a-fan').textContent='—';
+  // v0.4.0：a-acts 已由 <table> 改为 <div class="flist">，清屏时不再塞 <tr><td>。
+  document.getElementById('a-acts').innerHTML='<div class="empty">等待游戏数据（不加载演示帧）</div>';
+  document.getElementById('a-runtime').innerHTML='<span class="tag grey">等待当前盘面</span>';
+  document.getElementById('a-gainLine').innerHTML='';
+  document.getElementById('a-evalLine').innerHTML='';
+  document.getElementById('a-cps').innerHTML='';
+  // v0.5.0：静态骨架不省略（教诲全表、人头规则、盘面 5 列结构）
+  v5RenderBoard({}); v5RenderAdvice({}); v5RenderRules();
+  document.getElementById('adv-title').textContent='等待你的育成';
+}
+async function tick(allowPull=true){
+  let s;
+  try{
+    const r=await fetch(state.base+'/api/snapshot',{cache:'no-store'});
+    if(!r.ok) throw new Error('http '+r.status);
+    s=await r.json();
+  }catch(e){ setOffline('接收端未响应 · 重试中'); return; }
+  state.service=s.service_running===true;
+  state.soAlive=s.so_alive===true;
+  state.frames=s.frames||0;
+  state.archiveCount=s.archived_frames||0;
+  state.latestSource=s.latest_source||'none';
+  state.ageMs=s.age_ms||0;
+  // 记录页统计接真：推送包数 · 盘面帧数 · 归档帧数（「计算次数」等内置 AI 落地后再加）
+  const rd=document.getElementById('r-date'),rs=document.getElementById('r-sum');
+  if(rd&&rs){
+    const d=new Date();
+    rd.textContent=`${d.getMonth()+1} 月 ${String(d.getDate()).padStart(2,'0')} 日 ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
+    rs.textContent=`${s.push_recv||0} 包 · ${state.frames} 个盘面 · ${state.archiveCount} 归档`;
+  }
+  state.probeOk=(s.probe_ok===null||s.probe_ok===undefined)?null:s.probe_ok;
+  state.pushRecv=s.push_recv||0;
+  state.pullRecv=s.pull_recv||0;
+  state.statsOk=s.stats_ok===true;
+  state.lastSummaryError=s.last_summary_error||'';
+  const f=(s.latest&&typeof s.latest==='object'&&!Array.isArray(s.latest))?s.latest:null;
+  state.frame=f;
+  if(f) applyFrame(f); else clearFrame();
+  syncConnectUI();
+  /* v0.6.0 接线修复：持续主动拉 18765 由接收端后台 pullLoop 单通道负责
+     （SO 推送静默超过 20s 才兜底拉 /summary，避免把全量读拉回高频）。
+     页面只轮询 /api/snapshot，不再自动触发 /api/pull；手动「刷新/自检」仍走 pullNow()。 */
+}
+async function pullNow(){
+  state.pullBusy=true; state.lastPullAt=Date.now();
+  try{
+    const p=await (await fetch(state.base+'/api/pull',{cache:'no-store'})).json();
+    state.lastPull=p;
+    if(p.ok===false) toast('SO 未响应 · 已保留'+(state.frame?'当前帧':'归档帧'));
+  }catch(e){ /* 保持现有帧，不伪造数据 */ }
+  finally{ state.pullBusy=false; }
+  await tick(false); // pull 结果落档后立刻刷新画面，避免递归 pull
+}
+function startPolling(){
+  if(state.timer) clearInterval(state.timer);
+  tick();
+  state.timer=setInterval(()=>tick(),1500);
+}
+async function refresh(){
+  // v0.6.0：手动刷新显式向 18765 拉一次（低频人工动作，不触发高频全量读）
+  if(state.source==='live'){ await pullNow(); toast('已刷新 · 并向 SO 主动拉取'); }
+  else { document.getElementById('demo-banner').style.display='block'; applyFrame(DEMO); toast('布局预览 · 非游戏数据'); }
+}
+function onAppResume(){
+  // 回前台也真拉一次当前盘面；日常自动接线由接收端后台 pullLoop 承担
+  if(state.source==='live') pullNow();
+  refreshOverlayState();
+}
+document.addEventListener('visibilitychange',()=>{
+  if(document.visibilityState==='visible') onAppResume();
+});
+
+/* ===== 真实悬浮窗权限 / 系统级浮窗 ===== */
+function hasBridge(){ try{ return typeof Android!=='undefined'&&Android&&typeof Android.canDrawOverlays==='function'; }catch(e){ return false; } }
+function updateOverlayState(ok,running){
+  state.overlayOk=!!ok; state.overlayRunning=!!running;
+  const q=id=>document.getElementById(id);
+  if(!q('v-overlay-perm')) return;
+  if(!hasBridge()){
+    q('v-overlay-perm').textContent='浏览器预览 · 不可用';
+    q('v-overlay-perm').className='v off';
+    q('v-notify-perm').textContent='浏览器预览 · 不可用';
+    q('btn-overlay').textContent='需在 APK 内操作';
+    q('overlay-hint').textContent='当前不是 APK 内的 WebView，系统权限不可用。';
+    return;
+  }
+  q('v-notify-perm').textContent='已声明（前台服务）';
+  q('v-notify-perm').className='v ok';
+  q('v-overlay-perm').textContent=ok?'已允许':'未允许 · 需到系统设置开启';
+  q('v-overlay-perm').className='v '+(ok?'ok':'off');
+  q('btn-overlay').textContent=running?'关闭游戏内悬浮窗':(ok?'开启游戏内悬浮窗':'去开启悬浮窗权限');
+  q('overlay-hint').textContent=ok
+    ? (running?'浮窗已启动：可拖动标题栏、最小化或关闭。':'已授权，点上方按钮启动盖在游戏上的实时盘面。')
+    : '未授权：点上方按钮跳转系统设置，开启「显示在其他应用上层」后返回本页。';
+}
+function refreshOverlayState(){
+  if(!hasBridge()){ updateOverlayState(false,false); return; }
+  try{ Android.refreshOverlayState(); }
+  catch(e){ try{ updateOverlayState(Android.canDrawOverlays(),Android.isFloating()); }catch(e2){ updateOverlayState(false,false); } }
+}
+function onOverlayClick(){
+  if(!hasBridge()){ toast('需在 APK 内操作'); return; }
+  if(!Android.canDrawOverlays()){ Android.requestOverlayPermission(); toast('请在系统设置开启后返回本页'); return; }
+  if(state.overlayRunning){ Android.stopFloating(); state.overlayRunning=false; toast('悬浮窗已关闭'); }
+  else { const ok=Android.startFloating(); state.overlayRunning=!!ok; toast(ok?'悬浮窗已启动':'启动失败'); }
+  updateOverlayState(true,state.overlayRunning);
+}
+
+/* ===== SO 自检：真调 18765，不预置版本或结论 ===== */
+async function probeSo(){
+  const v=document.getElementById('so-verdict');
+  v.innerHTML='正在向 18765 请求 /health、/summary（festa_probe 结论取后台缓存）…';
+  try{
+    const p=await (await fetch(state.base+'/api/pull',{cache:'no-store'})).json();
+    if(p.ok===false){
+      v.innerHTML='<b>18765 不可达</b>：'+esc(p.error||'')+'<br>请确认游戏在育成中、SO 插件已加载且插件目录里只有一个 URA .so。';
+      toast('SO 未响应'); return;
+    }
+    const ver=p.so_version||'未返回 version';
+    const festa=p.has_festa===true, probe=p.probe_ok===true;
+    const miss=(p.missing||[]).join('、')||'无';
+    v.innerHTML='<b>实测结果</b>：/health version = <b>'+esc(ver)+'</b>；'+
+      '/summary 内嵌 festa：<b>'+(festa?'是':'否')+'</b>；'+
+      '/debug/festa_probe（后台缓存）：<b>'+(probe?'可用':'不可用/未探测')+'</b>；缺失字段：'+esc(miss)+'。<br>'+
+      '<b>结论：'+(festa?'无需重编译 SO':'SO 未内嵌 festa，需替换/重编译')+'</b>。';
+    toast('SO 自检完成 · '+(festa?'有 festa':'缺 festa'));
+    await tick(false);
+  }catch(e){ v.innerHTML='<b>自检失败</b>：'+esc(String(e))+'<br>接收端或 SO 不可达。'; }
+}
+
+/* ===== 设置 ===== */
+function saveSettings(){
+  state.source=document.getElementById('s-source').value;
+  state.base=document.getElementById('s-base').value.replace(/\/$/,'');
+  const so=document.getElementById('s-port-so').value, inn=document.getElementById('s-port-in').value;
+  /* SO 状态由 syncConnectUI 按真实帧渲染，这里不写死 */
+  document.getElementById('v-inport').textContent='本机 · 127.0.0.1:'+inn;
+  document.getElementById('v-soport').textContent='127.0.0.1:'+so;
+  if(state.source==='live'&&state.polling) startPolling();
+  else if(state.timer){clearInterval(state.timer);state.timer=null;}
+  toast(`已保存 · SO ${so} → 本机 ${inn} · ${state.source==='demo'?'演示':'实时'}`);
+}
+function sw(el){el.classList.toggle('on');}
+function dragStart(e,el){
+  const move=ev=>{
+    const r=el.getBoundingClientRect();
+    const cx=(ev.touches?ev.touches[0].clientX:ev.clientX);
+    let p=Math.max(0,Math.min(100,(cx-r.left)/r.width*100));
+    el.querySelector('.fill').style.width=p+'%';
+    el.querySelector('.knob').style.left=p+'%';
+    if(el.id==='sl-op')document.getElementById('lb-op').textContent=Math.round(p);
+    else document.getElementById('lb-bl').textContent=Math.round(p*32/100);
+  };
+  const end=()=>{document.removeEventListener('mousemove',move);document.removeEventListener('mouseup',end);
+    document.removeEventListener('touchmove',move);document.removeEventListener('touchend',end);};
+  document.addEventListener('mousemove',move);document.addEventListener('mouseup',end);
+  document.addEventListener('touchmove',move);document.addEventListener('touchend',end);
+  move(e);
+}
+
+/* ===== 悬浮窗 ===== */
+function showFloat(){document.getElementById('overlay').classList.add('show');if(state.frame)applyFrame(state.frame);toast('页面内布局预览 · 真浮窗请点「开启游戏内悬浮窗」');}
+function hideFloat(){document.getElementById('overlay').classList.remove('show');}
+
+/* ===== toast ===== */
+let tt=null;
+/* 脱敏导出：接收端落盘 NDJSON（去原始报文 raw、局号匿名），喂模拟器迭代 */
+async function doExport(){
+  try{
+    const r=await fetch(state.base+'/api/export_file',{method:'POST'});
+    const j=await r.json();
+    if(j.ok) toast(`已导出 ${j.frames} 帧 · ${(j.bytes/1024).toFixed(0)}KB\n${j.path}`);
+    else toast('导出失败：'+(j.error||'未知错误'));
+  }catch(e){ toast('导出失败：接收端未响应'); }
+}
+function toast(msg){
+  const e=document.getElementById('toast');e.textContent=msg;e.classList.add('show');
+  clearTimeout(tt);tt=setTimeout(()=>e.classList.remove('show'),1800);
+}
+
+/* 初始渲染：不铺演示帧，等真实数据；归档帧由接收端自动恢复 */
+syncConnectUI();
+clearFrame();
+refreshOverlayState();
+if(state.source==='live') startPolling();
+
+/* ===== 电脑版原样盘面（1:1 复刻视图） ===== */
+let boardZ = 0.42;
+function setBoardZoom(z){
+  boardZ = Math.max(.25, Math.min(1.4, +z.toFixed(3)));
+  document.getElementById('board-root').style.zoom = boardZ;
+}
+function fitBoard(){
+  const root = document.getElementById('board-root');
+  root.style.zoom = 1;
+  const nat = root.scrollWidth || 900;
+  const w = (document.getElementById('boScroll').clientWidth || 370) - 20;
+  setBoardZoom(Math.max(.25, Math.min(1, w / nat)));
+}
+function boardZoom(d){ setBoardZoom(boardZ + d * .08); }
+function showBoard(){
+  document.getElementById('boardOverlay').classList.add('show');
+  setBoardZoom(0.75);   /* 可读缩放；横向滑动对应原版 ScrollHorizontal */
+}
+function hideBoard(){ document.getElementById('boardOverlay').classList.remove('show'); }
+</script>
+</body>
+</html>

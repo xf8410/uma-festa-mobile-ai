@@ -1,0 +1,34 @@
+# 剧本外围工具（测卡 / 复盘）
+#
+# 本仓只立骨架；依赖与 bin（单 bin 多子命令）待实现时再登记。
+[package]
+name = "matsuri-tools"
+version.workspace = true
+edition.workspace = true
+publish.workspace = true
+
+# 性能测量入口：手写档整局 / 决策链分段 / 搜索固定根
+[[bin]]
+name = "bench"
+path = "src/bin/bench.rs"
+
+# 开局预设扫参：blue_count × extra_count 枚举 / 评估
+[[bin]]
+name = "sweep"
+path = "src/bin/sweep.rs"
+
+[features]
+# CPU 剖面（pprof）：只在 bench 的 `prof` 子命令用到，默认不编译、不进 core / 下游
+profile = ["dep:pprof"]
+
+[dependencies]
+matsuri-core.workspace = true
+umaai-core.workspace = true
+umasim.workspace = true
+umaai.workspace = true
+anyhow.workspace = true
+log.workspace = true
+rand.workspace = true
+
+# 仅 `--features profile`：SIGPROF 采样 + SVG 火焰图（不依赖 perf_event / root）
+pprof = { version = "0.15.0", features = ["flamegraph"], optional = true }
