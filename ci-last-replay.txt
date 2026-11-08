@@ -1,1 +1,8 @@
 job_status=success
+exit=1
+=== stdout ===
+{"event":"connected","scenario":"matsuri","type":"info"}
+{"message":"校验失败 cardDB.json/3031: 未找到该 ID（可能需要更新数据）","scenario":"matsuri","type":"error"}
+
+=== stderr ===
+错误: 回放有 1 帧处理失败
