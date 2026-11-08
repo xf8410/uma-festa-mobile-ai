@@ -1,0 +1,70 @@
+name: "Build umaai engine for Android arm64"
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/build-engine-android.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Clone upstream engine + scenario side by side
+        run: |
+          set -euo pipefail
+          rm -rf /tmp/w && mkdir -p /tmp/w
+          git clone --depth 1 https://github.com/umaai-project/umaai-next.git /tmp/w/umaai_next
+          git clone --depth 1 https://github.com/umaai-project/umaai-matsuri.git /tmp/w/umaai-matsuri
+          echo "engine=$(git -C /tmp/w/umaai_next rev-parse --short HEAD) scenario=$(git -C /tmp/w/umaai-matsuri rev-parse --short HEAD)"
+          ls /tmp/w/umaai_next/crates
+          ls /tmp/w/umaai-matsuri/data | head
+
+      - name: Toolchain
+        run: |
+          set -euo pipefail
+          rustup default stable
+          rustup target add aarch64-linux-android
+          NDK="${ANDROID_NDK_HOME:-${ANDROID_NDK_LATEST_HOME:-}}"
+          if [ -z "${NDK:-}" ] || [ ! -d "$NDK" ]; then NDK=$(ls -d /usr/local/lib/android/sdk/ndk/* 2>/dev/null | sort -V | tail -1 || true); fi
+          TC="$NDK/toolchains/llvm/prebuilt/linux-x86_64/bin"
+          echo "NDK=$NDK"
+          mkdir -p /tmp/w/umaai-matsuri/.cargo
+          printf '[target.aarch64-linux-android]\nlinker = "%s/aarch64-linux-android24-clang"\n' "$TC" > /tmp/w/umaai-matsuri/.cargo/config.toml
+          { echo "CC_aarch64_linux_android=$TC/aarch64-linux-android24-clang"; echo "AR_aarch64_linux_android=$TC/llvm-ar"; } >> "$GITHUB_ENV"
+          rustc --version
+
+      - name: Build matsuri-cli for android
+        working-directory: /tmp/w/umaai-matsuri
+        run: |
+          set -o pipefail
+          cargo build --release --target aarch64-linux-android -p matsuri-cli 2>&1 | tee -a "$GITHUB_WORKSPACE/engine-capture.txt" | tail -40
+          ls -l target/aarch64-linux-android/release/matsuri || true
+
+      - name: Publish engine binary
+        if: success()
+        run: |
+          set -euo pipefail
+          mkdir -p app/engine
+          cp /tmp/w/umaai-matsuri/target/aarch64-linux-android/release/matsuri app/engine/libmatsuri_engine-arm64.so
+          ls -l app/engine/
+          git config user.name dsh-bot
+          git config user.email dsh-bot@users.noreply.github.com
+          git add -f app/engine/libmatsuri_engine-arm64.so
+          git commit -m "build(engine): umaai matsuri engine arm64 (matsuri bin)" || echo nothing
+          git push || echo "push failed"
+
+      - name: Report (always)
+        if: always()
+        run: |
+          { echo "job_status=${{ job.status }}"; tail -c 5000 engine-capture.txt 2>/dev/null || true; } > ci-last-engine.txt
+          git config user.name dsh-bot
+          git config user.email dsh-bot@users.noreply.github.com
+          git add ci-last-engine.txt || true
+          git commit -m "ci: engine log (${{ job.status }})" || echo nothing
+          git push || echo "push failed"
