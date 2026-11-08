@@ -269,6 +269,9 @@ h1.big{font-size:33px;line-height:1.3;font-weight:700;margin:0 0 6px;letter-spac
 .v5-adv .gotmk{color:var(--green);font-size:9px;margin-left:3px}
 .v5-adv .ae{font-size:9.5px;color:#55645b;line-height:1.4;margin-top:2px}
 .v5-adv .as{font-size:9px;color:var(--dim2);margin-top:2px}
+/* [APP-FIX-095] 人头角标 */
+.bg{display:inline-block;min-width:14px;margin-left:3px;padding:0 2px;border-radius:3px;font-size:9px;line-height:13px;text-align:center;font-style:normal;color:#fff}
+.bg.shine{background:#d24c9b}.bg.tip{background:#3f9e58}.bg.on{background:#2a6fb3}
 /* 人头规则表 */
 .v5-rule{display:grid;grid-template-columns:1fr 56px 56px 60px;gap:5px;font-size:10px;align-items:center;padding:5px 3px;border-bottom:1px solid #f3f5f2}
 .v5-rule:last-child{border-bottom:none}
@@ -314,7 +317,7 @@ h1.big{font-size:33px;line-height:1.3;font-weight:700;margin:0 0 6px;letter-spac
         <h2>连接状态 <span class="badge" id="link-badge">检测中…</span></h2>
         <div class="row"><span class="k">接收服务</span><span class="v" id="v-service">检测中…</span></div>
         <div class="row"><span class="k">游戏采集</span><span class="v" id="v-capture">等待游戏数据</span></div>
-        <div class="row"><span class="k">数据入口</span><span class="v mono" id="v-inport">本机 · 127.0.0.1:18766</span></div>
+        <div class="row"><span class="k">数据入口</span><span class="v mono" id="v-inport">本机 · 当前端口</span></div>
         <div class="row"><span class="k">SO HTTP（拉取用）</span><span class="v mono" id="v-soport">127.0.0.1:18765</span></div>
         <div class="row"><span class="k">已接收</span><span class="v" id="v-frames">0 个数据包</span></div>
         <div class="row"><span class="k">最近接收</span><span class="v" id="v-last">等待游戏数据</span></div>
@@ -470,7 +473,7 @@ h1.big{font-size:33px;line-height:1.3;font-weight:700;margin:0 0 6px;letter-spac
           <option value="demo">布局预览 · 非游戏数据</option></select>
           <div class="tip">默认只用真实帧；「布局预览」仅供离线看版式，不会冒充游戏盘面</div></div>
         <div class="field"><label>实时 BASE（APK WebView 用）</label>
-          <input id="s-base" value="http://127.0.0.1:18766"></div>
+          <input id="s-base" value=""></div>
       </div>
 
       <div class="card">
@@ -880,7 +883,8 @@ const esc=s=>String(s??'').replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt
 const fmt=v=>typeof v==='number'?v.toLocaleString('zh-CN'):String(v);
 
 /* 所有数值都来自 18766 真实接口；DEMO 仅在用户显式点「布局预览」时使用，且明确标注非游戏数据 */
-let state={polling:true, source:"live", base:"http://127.0.0.1:18766", frame:null, frames:0,
+// [APP-FIX-095] 同源：App 的 HTTP 端口可能不是 18766（被占用时落到 18764/18772/18773）
+let state={polling:true, source:"live", base:(location&&location.origin&&location.origin!=='null'?location.origin:'http://127.0.0.1:18766'), frame:null, frames:0,
            service:false, soAlive:false, latestSource:"none", archiveCount:0, ageMs:0,
            probeOk:null, overlayOk:false, overlayRunning:false,
            timer:null, lastPullAt:0, pullBusy:false, lastPull:null,
@@ -970,23 +974,30 @@ function v5RenderBoard(f){
     const it=byT[a.t]||{},g=+it.gauge||0,nd=+it.need_gauge||0;
     const lit=nd>0&&g>=nd;if(lit)on++;gS+=g>0?g:0;nS+=nd>0?nd:0;
     const kb=lit?`<span class="v5-kb">稽古·${esc(a.name)}</span>`:'<span class="v5-kb none">普通训练</span>';
-    // [APP-FIX-093] 人头用真数据：trainings[command_id].partners
+    // [APP-FIX-095] 人头/角标全部按真实字段渲染（partner_type 2=卡 1=友人 0=NPC）
     const cmdId=5101+idx;
     const tr=(f.trainings||[]).find(function(t){return +t.command_id===cmdId;})||{};
     const ppl=(tr.partners||[]).slice(0,5);
+    const badge=function(p){
+      let b='';
+      if(p.is_shining===true) b+='<i class="bg shine" title="彩圈（友情前提）">彩</i>';
+      if(p.is_tips_event===true) b+='<i class="bg tip" title="叹号 Hint">叹</i>';
+      if(p.is_unique_active===true) b+='<i class="bg on" title="亮起（担当锁位）">亮</i>';
+      return b;
+    };
     let heads='';
     if(ppl.length){
       heads=ppl.map(function(p){
+        const pt=+p.partner_type;
+        const typ=pt===1?'guest':(pt===2?'card':'npc');
         const nm=esc(p.name||('#'+p.partner_id));
-        const bd=(p.current_bond!=null)?(' ·'+p.current_bond):'';
-        const typ=p.support_card_id?'card':'npc';
-        return v5Head(typ, nm+bd, !p.is_unique_active);
+        const bd=(p.current_bond!=null&&p.support_card_id)?(' ·'+p.current_bond):'';
+        return '<div class="v5-head '+typ+'"><span class="ic"></span><span class="tx">'+nm+bd+'</span>'+badge(p)+'</div>';
       }).join('');
     } else {
-      heads=v5Head('card','人头未推('+(tr.heads||0)+'人)',false);
+      heads='<div class="v5-head npc"><span class="tx">本轮无站位</span></div>';
     }
-    // [APP-FIX-093] 末尾补位说明只在没真数据时提示
-    if(!ppl.length) heads+=v5Head('npc','一般 NPC（随机角标）',false)+v5Head('social','理事长 / 记者',true);
+    // [APP-FIX-095] 不再追加写死的 NPC / 理事长 / 记者 占位——真实站位已经在上面按 partners 渲染
     const gain=gg.length?n((gg.find(x=>+x.command_type===idx)||{}).predict_len):'—';
     const ap=ci.length?n((ci.find(x=>+x.command_type===idx)||{}).params_len):'—';
     return `<div class="col ${V5_KEYS[idx]}${lit?' on':''}"><div class="h">${a.attr}</div>

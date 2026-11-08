@@ -202,6 +202,8 @@ object NativeEngine {
                             pullRecv++
                             lastPullOkAtMs = now
                             lastSummaryError = ""
+                            // [APP-FIX-096] 主动拉取这条线也要喂内置引擎（原来只 store，引擎收不到帧）
+                            appContext?.let { EngineBridge.onSummary(it, jo) }
                             store(normalize(jo, null, "pull"))
                         }
                     }

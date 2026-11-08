@@ -97,6 +97,9 @@ object EngineBridge {
         FrameAdapter.loadCardDb(File(dataDir(ctx), "cardDB.json"))
         val marker = File(rootDir(ctx), ".portable")
         if (!marker.exists()) marker.writeText("")
+        // [APP-FIX-096] 上游 FileChannel 要求插件目录先存在，否则直接报错退出
+        pluginDir(ctx, "matsuri")
+        pluginDir(ctx, "search")
         startOne(ctx, engine, "matsuri")
         startOne(ctx, engine, "search")
     }

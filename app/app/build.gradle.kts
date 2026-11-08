@@ -11,8 +11,8 @@ android {
         applicationId = "com.ranko.matsuricapture"
         minSdk = 24
         targetSdk = 35
-        versionCode = 39
-        versionName = "0.9.14-dsh23"
+        versionCode = 40
+        versionName = "0.9.15-dsh24"
     }
 
     // 18766 接收端改为纯 Kotlin 实现（NativeEngine.kt），不再需要 NDK / .so
