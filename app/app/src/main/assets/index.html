@@ -309,7 +309,7 @@ h1.big{font-size:33px;line-height:1.3;font-weight:700;margin:0 0 6px;letter-spac
       <div class="card" style="background:var(--green-tint);border-color:#d9eadf">
         <button class="btn" id="btn-connect" onclick="toggleConnect()">开始连接</button>
         <div class="hint" style="text-align:center;margin-top:10px">
-          SO 推 /summary → 本机 18766 收；本机后台持续主动拉 18765（推送静默时兜底）。暂停仅停止页面轮询，接收、主动拉取与归档继续。
+          <span id="conn-hint">SO 推送 /summary → 本机同端口接收（18766 被别的服务占用时，SO 会自动改推 18764/18772/18773）；App 后台同时主动拉 18765。暂停只停页面轮询，接收与归档继续。</span> <!-- [APP-FIX-104] -->
         </div>
       </div>
 
@@ -906,11 +906,13 @@ function syncConnectUI(){
   q('btn-connect').textContent=state.polling?'暂停连接':'开始连接'; // [APP-FIX-103]
   q('btn-connect').classList.toggle('on',state.polling);
   const badge=q('link-badge');
-  if(!svc){ badge.textContent='接收端未启动'; badge.className='badge off'; }
-  else if(!so){ badge.textContent='SO 未响应'; badge.className='badge warn'; }
+  // [APP-FIX-104] 状态语义：暂停 / 未连接 / 已连接(等帧) / 已连接(在线)
+  if(!state.polling){ badge.textContent='已暂停'; badge.className='badge off'; }
+  else if(!svc){ badge.textContent='未连接 · 接收端未启动'; badge.className='badge off'; }
+  else if(!so){ badge.textContent='未连接 · SO 未响应'; badge.className='badge warn'; }
   else if(!f){ badge.textContent='已连接 · 等育成帧'; badge.className='badge warn'; }
-  else { badge.textContent='已连接 · SO 在线'; badge.className='badge ok'; } // [APP-FIX-103]
-  q('v-service').textContent=svc?'运行中 · 18766':'未启动';
+  else { badge.textContent='已连接 · SO 在线'; badge.className='badge ok'; }
+  q('v-service').textContent=svc?('运行中 · :'+(location.port||'?')):'未启动'; // [APP-FIX-104]
   q('v-service').className='v '+(svc?'ok':'off');
   q('v-capture').textContent=f?(f.has_festa?'骏大祭 · festa':'剧本未识别'):'等待游戏数据';
   q('v-capture').className='v '+(f?'':'off');
@@ -946,11 +948,27 @@ function go(p){
 }
 
 /* ===== 连接 ===== */
-function toggleConnect(){
-  state.polling=!state.polling;
-  if(state.polling){ startPolling(); toast('已恢复轮询 · 立即重连'); }
-  else { if(state.timer){clearInterval(state.timer);state.timer=null;} toast('已暂停页面轮询 · 接收端与归档仍在运行'); }
+async function toggleConnect(){
+  // [APP-FIX-104] 点一次就真连一次：拉 SO → 读快照 → 立刻回写按钮/徽章
+  if(state.polling){
+    state.polling=false;
+    if(state.timer){clearInterval(state.timer);state.timer=null;}
+    syncConnectUI();
+    toast('已暂停连接 · 接收端仍在后台运行');
+    return;
+  }
+  state.polling=true;
+  const btn=document.getElementById('btn-connect');
+  if(btn){ btn.textContent='连接中…'; }
+  try{ await pullNow(); }catch(e){}
+  let ok=false;
+  try{
+    const r=await fetch(state.base+'/api/snapshot',{cache:'no-store'});
+    if(r.ok){ const s=await r.json(); ok=(s.so_alive===true); }
+  }catch(e){}
+  startPolling();
   syncConnectUI();
+  toast(ok?'已连接 · SO 在线':'未连接 · SO 未响应（游戏里 SO 可能没起来）');
 }
 
 /* ===== v0.5.0 静态权威数据：来自上游 scenario_matsuri.json / mechanism.md（非编造） ===== */
@@ -1250,7 +1268,7 @@ function applyFrame(f){
 /* ===== 实时模式：全部真接线，断线不回退演示帧 ===== */
 function setOffline(msg){
   state.service=false; state.soAlive=false; state.frame=null; state.latestSource='none';
-  syncConnectUI();
+  syncConnectUI(); // [APP-FIX-104] 让徽章立刻显示「未连接」，不再停在检测中
   document.getElementById('v-last').textContent=msg||'接收端未响应';
 }
 function clearFrame(){
