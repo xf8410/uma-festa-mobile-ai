@@ -1,0 +1,76 @@
+name: Sync upstream ai-engine
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/sync-ai-engine.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: sync-ai-engine
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Clone upstream umaai-matsuri
+        run: |
+          set -euo pipefail
+          git clone --depth 1 https://github.com/umaai-project/umaai-matsuri.git /tmp/upstream
+          cd /tmp/upstream
+          echo "UPSTREAM_SHA=$(git rev-parse HEAD)" >> "$GITHUB_ENV"
+          echo "UPSTREAM_DATE=$(git log -1 --format=%cI)" >> "$GITHUB_ENV"
+          git log -1 --format='%h %s' | tee /tmp/upstream_head.txt
+
+      - name: Mirror into ai-engine/umaai-matsuri (data files excluded)
+        run: |
+          set -euo pipefail
+          rm -rf ai-engine/umaai-matsuri
+          mkdir -p ai-engine/umaai-matsuri
+          rsync -a \
+            --exclude '.git' \
+            --exclude 'target' \
+            --exclude 'data/*.json' \
+            --exclude 'data/*.mdb' \
+            --exclude 'gamedata' \
+            /tmp/upstream/ ai-engine/umaai-matsuri/
+          echo "files: $(find ai-engine/umaai-matsuri -type f | wc -l)"
+
+      - name: Write sync manifest
+        run: |
+          set -euo pipefail
+          {
+            echo "# ai-engine 上游同步记录"
+            echo
+            echo "- 上游：https://github.com/umaai-project/umaai-matsuri"
+            echo "- commit：\`$UPSTREAM_SHA\`"
+            echo "- 提交时间：$UPSTREAM_DATE"
+            echo "- 同步时间：$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+            echo "- 规则：镜像全部源码，排除 .git / target / data 下大文件 / gamedata"
+            echo
+            echo "> 说明：手机端 App（Kotlin + WebView JS）不能直接运行本 Rust 引擎，"
+            echo "> 这里的源码用于对照规则与后续移植，不是 App 的运行时依赖。"
+          } > ai-engine/UPSTREAM_SYNC.md
+          cat ai-engine/UPSTREAM_SYNC.md
+
+      - name: Commit if changed
+        run: |
+          set -euo pipefail
+          git config user.name "dsh-bot"
+          git config user.email "dsh-bot@users.noreply.github.com"
+          git add -A ai-engine
+          if git diff --cached --quiet; then
+            echo "already up to date"
+          else
+            git commit -m "chore(ai-engine): sync upstream umaai-matsuri @ ${UPSTREAM_SHA:0:8}
+
+$(cat /tmp/upstream_head.txt)"
+            git push
+          fi
