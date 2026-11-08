@@ -38,9 +38,9 @@ jobs:
           set -euo pipefail
           cargo build --release -p matsuri-cli 2>&1 | tail -5
 
-      - name: Replay our real frame (search) and dump JSON
+      - name: Replay (never fails the job, always logs)
         run: |
-          set -o pipefail
+          set +e
           OUT="$GITHUB_WORKSPACE/ci-last-replay.txt"
           : > "$OUT"
           say() { echo "$@" | tee -a "$OUT"; }
@@ -48,15 +48,14 @@ jobs:
           export CARD_DB=/tmp/w/umaai-matsuri/data/cardDB.json
           base64 -d "$GITHUB_WORKSPACE/.github/fixtures/summary_real.b64" | gunzip > /tmp/summary_real.json
           node "$GITHUB_WORKSPACE/.github/scripts/summary_to_frame.js" /tmp/summary_real.json > /tmp/frame.json
+          say "frame_bytes=$(wc -c < /tmp/frame.json)"
           rm -rf ci-frames && mkdir -p ci-frames
           cp /tmp/frame.json ci-frames/game102003_turn12.json
-          set +e
           timeout 300 ./target/release/matsuri online --replay ./ci-frames --trainer search --json > /tmp/out.json 2> /tmp/err.txt
-          RC=$?
-          set -e
-          say "exit=$RC"
+          say "engine_exit=$?"
           say "---- decision json ----"
           head -c 4000 /tmp/out.json >> "$OUT"
+          say ""
           say "---- stderr ----"
           head -c 1000 /tmp/err.txt >> "$OUT"
           say "---- end ----"
@@ -65,7 +64,8 @@ jobs:
           cp "$OUT" ./ci-last-replay.txt
           git config user.name dsh-bot
           git config user.email dsh-bot@users.noreply.github.com
-          git checkout -B ci-log > /dev/null 2>&1
+          git checkout -B ci-log
           git add -f ci-last-replay.txt
-          git commit -m "ci: replay log (panel json)" || echo nothing
+          git commit -m "ci: replay log" || echo "nothing to commit"
           git push -f "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git" HEAD:refs/heads/ci-log || echo "push failed"
+          exit 0
