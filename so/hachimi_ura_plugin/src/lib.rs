@@ -497,6 +497,10 @@ struct PluginConfig {
     push_interval_secs: u64, // default: 1
     push_enabled: bool,      // default: true
     http_enabled: bool,      // default: true
+    // [LUCK-3292] 运气分显示投影的每回合加成（上游 record.luck_turn_bonus，默认 100）
+    luck_turn_bonus: i32,
+    // [LUCK-3292] 搜索线程数（上游 [search].threads；0 = 自动）
+    search_threads: u32,
 }
 
 impl PluginConfig {
@@ -508,6 +512,8 @@ impl PluginConfig {
             push_interval_secs: 5,
             push_enabled: true,
             http_enabled: true,
+            luck_turn_bonus: 100,
+            search_threads: 0,
         }
     }
 
@@ -559,6 +565,18 @@ impl PluginConfig {
                         cfg.http_enabled = v == "true";
                         changed = true;
                     }
+                    "luck_turn_bonus" => {
+                        if let Ok(n) = v.parse::<i32>() {
+                            cfg.luck_turn_bonus = n.max(0);
+                            changed = true;
+                        }
+                    }
+                    "search_threads" => {
+                        if let Ok(n) = v.parse::<u32>() {
+                            cfg.search_threads = n.min(64);
+                            changed = true;
+                        }
+                    }
                     _ => {}
                 }
             }
@@ -572,13 +590,15 @@ impl PluginConfig {
 
     fn to_json(&self) -> String {
         format!(
-            r#"{{"push_host":"{}","push_port":{},"http_port":{},"push_interval_secs":{},"push_enabled":{},"http_enabled":{}}}"#,
+            r#"{{"push_host":"{}","push_port":{},"http_port":{},"push_interval_secs":{},"push_enabled":{},"http_enabled":{},"luck_turn_bonus":{},"search_threads":{}}}"#,
             self.push_host,
             self.push_port,
             self.http_port,
             self.push_interval_secs,
             self.push_enabled,
-            self.http_enabled
+            self.http_enabled,
+            self.luck_turn_bonus,
+            self.search_threads
         )
     }
 }
@@ -7378,6 +7398,31 @@ unsafe fn read_summary_inner_impl() -> String {
                 &format!(
                     ",\"score\":{},\"five_score\":{},\"pt_score\":{},\"skill_score\":0",
                     total_s, five_s, pt_s
+                ),
+            );
+        }
+    }
+    // [LUCK-3292] 上游口径：运气分显示投影 + 期望分投影（评级必须跟着投影分查表）
+    {
+        let max_turn: i32 = 77;
+        let e_raw: i32 = (mon - 1) * 2 + (half - 1);
+        let elapsed: i32 = if e_raw < 0 { 0 } else if e_raw > max_turn { max_turn } else { e_raw };
+        let remaining = max_turn - elapsed;
+        let cfg_l = unsafe { get_config() };
+        let luck_projected = remaining * cfg_l.luck_turn_bonus;
+        let base_s = five_status_final_score(spd + sta + pow_ + gut + wiz) + pt_score_value(spt, false);
+        if let Some(pos) = __out.rfind('}') {
+            __out.insert_str(
+                pos,
+                &format!(
+                    ",\"luck\":{{\"turn_elapsed\":{},\"max_turn\":{},\"bonus_per_turn\":{},\"projected\":{},\"search_threads\":{},\"semantics\":\"upstream_luck_turn_projection\"}},\"expected\":{{\"base\":{},\"base_kind\":\"chokutei\",\"projected\":{},\"projection\":\"base+remaining*luck_bonus\",\"rank\":null,\"rank_source\":\"missing_rank_table\"}}",
+                    elapsed,
+                    max_turn,
+                    cfg_l.luck_turn_bonus,
+                    luck_projected,
+                    cfg_l.search_threads,
+                    base_s,
+                    base_s + luck_projected
                 ),
             );
         }
