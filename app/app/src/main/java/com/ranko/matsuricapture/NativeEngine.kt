@@ -68,6 +68,8 @@ object NativeEngine {
      *  若手机端高频无条件拉，会把 SO「事件驱动 + 15s 兜底」降频后的真读频率又拉回高频，
      *  导致游戏卡顿/崩溃。因此主动拉取只在 SO 推送静默超过本阈值时兜底接管。 */
     private const val PULL_STALE_MS = 20000L
+    // [APP-FIX-083] 实际绑定到的接收端口（0 = 没绑上，只靠 pull 收帧）
+    @Volatile var boundPort: Int = 0
     private val FIVE_KEYS = arrayOf("speed", "stamina", "power", "guts", "wiz")
 
     fun start(bind: String, dir: String, ctx: Context? = null): Boolean {
@@ -79,11 +81,23 @@ object NativeEngine {
             val i = bind.lastIndexOf(':')
             val host = if (i > 0) bind.substring(0, i) else "127.0.0.1"
             val port = if (i > 0) bind.substring(i + 1).toInt() else 18766
-            val server = ServerSocket(port, 32, InetAddress.getByName(host))
+            // [APP-FIX-083] 18766 可能被 DSH 之类占用：换端口绑；绑不上也继续（走 pullLoop）
+            var server: ServerSocket? = null
+            for (p in intArrayOf(port, 18764, 18772, 18773)) {
+                try {
+                    server = ServerSocket(p, 32, InetAddress.getByName(host))
+                    boundPort = p
+                    break
+                } catch (ignored: Exception) {
+                }
+            }
             sessionDir = File(dir).apply { mkdirs() }
             restoreFromArchive()
             running.set(true)
-            Thread({ loop(server) }, "matsuri-18766").apply { isDaemon = true }.start()
+            val srv = server
+            if (srv != null) {
+                Thread({ loop(srv) }, "matsuri-recv").apply { isDaemon = true }.start()
+            }
             Thread({ probeLoop() }, "matsuri-so-probe").apply { isDaemon = true }.start()
             Thread({ pullLoop() }, "matsuri-so-pull").apply { isDaemon = true }.start()
             true
