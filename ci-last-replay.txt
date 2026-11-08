@@ -1,8 +1,20 @@
-job_status=success
+step=clone
+step=build
+   Compiling umaai-cli v0.1.0 (/tmp/w/umaai_next/crates/umaai-cli)
+   Compiling matsuri-ai v0.1.0 (/tmp/w/umaai-matsuri/crates/matsuri-ai)
+   Compiling inquire v0.9.4
+   Compiling clap v4.6.6
+   Compiling matsuri-cli v0.1.0 (/tmp/w/umaai-matsuri/crates/matsuri-cli)
+    Finished `release` profile [optimized] target(s) in 45.01s
+-rwxr-xr-x 2 runner runner 6922208 Nov  8 16:08 target/release/matsuri
+step=frame
+frame_bytes=1580
+step=run
 exit=1
-=== stdout ===
+stdout_bytes=304 stderr_bytes=36
+---- stdout ----
 {"event":"connected","scenario":"matsuri","type":"info"}
-{"message":"校验失败 cardDB.json/3031: 未找到该 ID（可能需要更新数据）","scenario":"matsuri","type":"error"}
-
-=== stderr ===
+{"message":"编成不合规：没带 SSR 吾妻（本剧本仅支持带 SSR 吾妻的编成）；卡组不符合通用规则：卡类型不合法（card_id 30137，card_type=6；本剧本不模拟团队卡）","scenario":"matsuri","type":"error"}
+---- stderr ----
 错误: 回放有 1 帧处理失败
+---- end ----
