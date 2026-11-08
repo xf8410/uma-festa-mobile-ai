@@ -1,0 +1,27 @@
+name: Revert app source to 18766 baseline
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/revert-app-source.yml"
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  revert:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Restore baseline app sources (port 18766, original UI)
+        run: |
+          set -e
+          git checkout 4a0009f3 -- app/app/src/main
+          grep -c '18766' app/app/src/main/assets/index.html || true
+          grep -c '18767' app/app/src/main/assets/index.html || true
+          git config user.name dsh-bot
+          git config user.email dsh-bot@users.noreply.github.com
+          git add -A app/app/src/main
+          git commit -m "revert(app): restore 0.7.4 baseline sources (port 18766, original UI)" || echo "nothing"
+          git push || echo "push failed"
