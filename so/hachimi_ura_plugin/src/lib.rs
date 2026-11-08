@@ -7402,6 +7402,31 @@ unsafe fn read_summary_inner_impl() -> String {
             );
         }
     }
+    // [FIELDS-3292] 补帧字段：playing_state / friend_outgoing_used / total_hints
+    {
+        let mut playing_state = 0i32;
+        if !sm_class.is_null() && !sm_obj.is_null() {
+            playing_state = read_obscured_field(sm_obj as *const c_void, sm_class, "_playingState");
+        }
+        let mut friend_used = -1i32;
+        if !chara_class.is_null() && !chara_obj.is_null() {
+            let g_list = read_field_value(chara_class, chara_obj, "GuestOutingInfoList");
+            for e in walk_obj_list(g_list) {
+                let ei = e as *const c_void;
+                let eclass = get_class_from_object(ei);
+                if eclass.is_null() { continue; }
+                let cid = call_getter_int(eclass, ei, "get_SupportCardId");
+                if cid == 30323 || cid == 10149 {
+                    let step = call_getter_int(eclass, ei, "get_StoryStep");
+                    if step >= 0 { friend_used = step; break; }
+                }
+            }
+        }
+        let total_hints: i32 = read_skill_tips(chara_class, chara_obj, image).iter().map(|t| t.2).sum();
+        if let Some(pos) = __out.rfind('}') {
+            __out.insert_str(pos, &format!(",\"playing_state\":{},\"friend_outgoing_used\":{},\"total_hints\":{}", playing_state, friend_used, total_hints));
+        }
+    }
     // [LUCK-3292] 上游口径：运气分显示投影 + 期望分投影（评级必须跟着投影分查表）
     {
         let max_turn: i32 = 77;
