@@ -6,6 +6,7 @@ on:
       - ".github/workflows/engine-replay-test.yml"
       - ".github/scripts/summary_to_frame.js"
       - ".github/fixtures/summary_min.json"
+      - ".github/fixtures/summary_real.b64"
   workflow_dispatch:
 
 permissions:
@@ -26,7 +27,7 @@ jobs:
             ~/.cargo/registry
             ~/.cargo/git
             /tmp/w
-          key: engine-replay-v6
+          key: engine-replay-v7
 
       - name: Build + replay + push log
         run: |
@@ -40,19 +41,22 @@ jobs:
           cd /tmp/w/umaai-matsuri
           cargo build --release -p matsuri-cli 2>&1 | tail -3 | tee -a "$OUT"
           export CARD_DB=/tmp/w/umaai-matsuri/data/cardDB.json
-          node "$GITHUB_WORKSPACE/.github/scripts/summary_to_frame.js" "$GITHUB_WORKSPACE/.github/fixtures/summary_min.json" > /tmp/frame.json
-          say "frame_bytes=$(wc -c < /tmp/frame.json)"
+          # 真机样本优先：base64+gzip → JSON
+          base64 -d "$GITHUB_WORKSPACE/.github/fixtures/summary_real.b64" | gunzip > /tmp/summary_real.json
+          say "real_summary_bytes=$(wc -c < /tmp/summary_real.json)"
+          node "$GITHUB_WORKSPACE/.github/scripts/summary_to_frame.js" /tmp/summary_real.json > /tmp/frame_real.json
+          say "real_frame_bytes=$(wc -c < /tmp/frame_real.json)"
           rm -rf ci-frames && mkdir -p ci-frames
-          cp /tmp/frame.json ci-frames/game102003_turn12.json
+          cp /tmp/frame_real.json ci-frames/game102003_turn12.json
           set +e
-          timeout 240 ./target/release/matsuri online --replay ./ci-frames --json > /tmp/out.json 2> /tmp/err.txt
+          timeout 300 ./target/release/matsuri online --replay ./ci-frames --json > /tmp/out_real.json 2> /tmp/err_real.txt
           RC=$?
           set -e
           say "exit=$RC"
-          say "---- stdout ----"
-          head -c 3000 /tmp/out.json >> "$OUT"
-          say "---- stderr ----"
-          head -c 3000 /tmp/err.txt >> "$OUT"
+          say "---- stdout(real) ----"
+          head -c 4000 /tmp/out_real.json >> "$OUT"
+          say "---- stderr(real) ----"
+          head -c 3000 /tmp/err_real.txt >> "$OUT"
           say "---- end ----"
           cat "$OUT"
           cd "$GITHUB_WORKSPACE"
