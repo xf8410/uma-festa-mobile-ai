@@ -7356,6 +7356,8 @@ unsafe fn read_summary_inner_impl() -> String {
         ramen_json,
         last_action_json
     );
+    // [BOOTGATE-3292] 已经能读到育成数据 → 置位，后续所有端点放行
+    GAME_INITIALIZED.store(true, Ordering::Relaxed);
     log_predict_step("S:festa");
     let mut __out = __json_out;
     if sid == 15 {
@@ -8305,6 +8307,9 @@ fn handle_http(mut stream: std::net::TcpStream) {
             "/log",
             "/carddb",
             "/skilldata",
+            // [BOOTGATE-3292] 晚加载时也要能读育成数据（门禁不能只看 on_game_initialized）
+            "/summary",
+            "/debug/festa_probe",
             "/debug/table",
             "/debug/push_table",
             "/debug/download_table",
