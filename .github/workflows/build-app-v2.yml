@@ -1,4 +1,4 @@
-name: "Build matsuri AI app v20 (卡册角标)"
+name: "Build matsuri AI app v21 (人头真值+固定签名)"
 on:
   push:
     branches: [main]
@@ -20,6 +20,7 @@ on:
       - ".github/scripts/apply_appfix_097.js"
       - ".github/scripts/apply_appfix_098.js"
       - ".github/scripts/apply_appfix_099.js"
+      - ".github/scripts/apply_appfix_100.js"
       - "app/app/src/main/java/com/ranko/matsuricapture/EngineBridge.kt"
       - "app/app/src/main/java/com/ranko/matsuricapture/FrameAdapter.kt"
   workflow_dispatch:
@@ -80,12 +81,18 @@ jobs:
         with:
           packages: "platforms;android-35 build-tools;35.0.0 platform-tools"
 
-      - name: Stable debug keystore
+      - name: Stable debug keystore (committed in repo)
         run: |
           set -e
           mkdir -p app/ci
+          git config user.name dsh-bot
+          git config user.email dsh-bot@users.noreply.github.com
           if [ ! -f app/ci/debug.keystore ]; then
             keytool -genkeypair -v -keystore app/ci/debug.keystore -storepass android -keypass android -alias androiddebugkey -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Android Debug,O=Android,C=US"
+            git add -f app/ci/debug.keystore
+            git commit -m "chore: 固定 debug keystore（签名稳定，免卸载重装）" || true
+            git pull --rebase --autostash || true
+            git push || true
           fi
           mkdir -p "$HOME/.android"
           cp app/ci/debug.keystore "$HOME/.android/debug.keystore"
@@ -118,6 +125,7 @@ jobs:
           run 097 $K/FrameAdapter.kt
           run 098 app/app/src/main/assets/float.html
           run 099 $K/NativeEngine.kt app/app/src/main/assets/float.html app/app/src/main/assets/index.html
+          run 100 app/app/src/main/assets/float.html app/app/src/main/assets/index.html
           grep -qF '[APP-FIX-089]' app/app/src/main/assets/index.html
           grep -qF '[APP-FIX-090]' $K/FrameAdapter.kt
           grep -qF '[APP-FIX-091]' $K/FrameAdapter.kt
@@ -129,9 +137,10 @@ jobs:
           grep -qF '[APP-FIX-097]' $K/FrameAdapter.kt
           grep -qF '[APP-FIX-098]' app/app/src/main/assets/float.html
           grep -qF '[APP-FIX-099]' $K/NativeEngine.kt
+          grep -qF '[APP-FIX-100]' app/app/src/main/assets/index.html
           grep -qF 'startOne' $K/EngineBridge.kt
-          sed -i 's/versionName = "[^"]*"/versionName = "0.9.18-dsh27"/' app/app/build.gradle.kts
-          sed -i 's/versionCode = [0-9]\+/versionCode = 43/' app/app/build.gradle.kts
+          sed -i 's/versionName = "[^"]*"/versionName = "0.9.19-dsh28"/' app/app/build.gradle.kts
+          sed -i 's/versionCode = [0-9]\+/versionCode = 44/' app/app/build.gradle.kts
           grep -E 'versionCode|versionName' app/app/build.gradle.kts
 
       - uses: gradle/actions/setup-gradle@v4
@@ -150,24 +159,24 @@ jobs:
           set -euo pipefail
           mkdir -p app/dist
           SRC=$(find app/app/build/outputs/apk/release -name "*.apk" | head -1)
-          cp "$SRC" app/dist/matsuri-ai-0.9.18-dsh27.apk
+          cp "$SRC" app/dist/matsuri-ai-0.9.19-dsh28.apk
           cp "$SRC" app/dist/matsuri-ai-latest.apk
           ls -l app/dist/
           git config user.name dsh-bot
           git config user.email dsh-bot@users.noreply.github.com
-          git add -f app/dist/matsuri-ai-0.9.18-dsh27.apk app/dist/matsuri-ai-latest.apk
+          git add -f app/dist/matsuri-ai-0.9.19-dsh28.apk app/dist/matsuri-ai-latest.apk
           git add -f app/app/src/main/java app/app/src/main/assets/index.html app/app/build.gradle.kts 2>/dev/null || true
-          git commit -m "build(app): 0.9.18-dsh27 悬浮窗同源+卡册+帧收" || echo nothing
+          git commit -m "build(app): 0.9.19-dsh28 人头真值+固定签名" || echo nothing
           git pull --rebase --autostash || true
           git push || echo "push failed"
 
       - name: Report (always)
         if: always()
         run: |
-          { echo "job_status=${{ job.status }}"; tail -c 5000 app-capture.txt 2>/dev/null || true; } > ci-last-app-v20.txt
+          { echo "job_status=${{ job.status }}"; tail -c 5000 app-capture.txt 2>/dev/null || true; } > ci-last-app-v21.txt
           git config user.name dsh-bot
           git config user.email dsh-bot@users.noreply.github.com
-          git add ci-last-app-v20.txt || true
-          git commit -m "ci: app v20 log (${{ job.status }})" || echo nothing
+          git add ci-last-app-v21.txt || true
+          git commit -m "ci: app v21 log (${{ job.status }})" || echo nothing
           git pull --rebase --autostash || true
           git push || echo "push failed"
