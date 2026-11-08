@@ -10284,6 +10284,8 @@ extern "C" fn training_hook_handler(
     sub_id: i32,
     result_type: i32,
 ) -> *mut c_void {
+    // [HOOKTRACE-3292] H:train
+    log_predict_step("H:train");
     std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
         unsafe {
             if let Ok(mut state) = ACTION_STATE.lock() {
@@ -11910,6 +11912,8 @@ extern "C" fn event_choice_hook_handler(
     choice_index: i32,
     _param2: *mut c_void,
 ) {
+    // [HOOKTRACE-3292] H:event_choice
+    log_predict_step("H:event_choice");
     let _ = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| unsafe {
         let choices_count = {
             let _lock = EVENT_STATE_MUTEX.lock();
@@ -12116,6 +12120,8 @@ unsafe fn call_fuzzy_string(class: *mut c_void, instance: *const c_void, substr:
 // ARM64: X0=this, X1=param
 // Read StoryChoiceParam fields: LabelText, GainId, NextBlockIndex, LoopExitGainId
 extern "C" fn event_add_choice_hook_handler(this: *mut c_void, param: *mut c_void) {
+    // [HOOKTRACE-3292] H:add_choice
+    log_predict_step("H:add_choice");
     unsafe {
         if param.is_null() {
             return;
@@ -12333,6 +12339,8 @@ unsafe fn call_getter_string(
 // calling getters can crash the game process. We only store story_id (passed as parameter).
 // chara_id is read from summary data via get_CardId instead.
 extern "C" fn story_set_hook_handler(this: *mut c_void, story_id: i32, p2: i64, p3: i64, p4: i64) {
+    // [HOOKTRACE-3292] H:story
+    log_predict_step("H:story");
     unsafe {
         if !this.is_null() {
             let _lock = EVENT_STATE_MUTEX.lock();
@@ -21830,6 +21838,8 @@ static mut ORIG_FAILURE_RATE_PROLOGUE: [u8; 16] = [0; 16];
 static mut FAILURE_RATE_ADDR: usize = 0;
 
 extern "C" fn exec_training_hook(param1: *mut c_void, param2: *mut c_void) {
+    // [HOOKTRACE-3292] H:exec_train
+    log_predict_step("H:exec_train");
     let _ = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| unsafe {
         let trampoline = interceptor_get_trampoline(exec_training_hook as usize);
         if trampoline == 0 {
@@ -21922,6 +21932,8 @@ unsafe fn read_motivation_inner() -> i32 {
 // Hook SingleModeTrainingFailureRateService.GetTrainingFailureRateIgnoreCharaEffect
 // Captures the last failure rate (0-10000 = 0%-100%) for use in training log
 extern "C" fn failure_rate_hook(param1: *mut c_void, param2: *mut c_void) -> i32 {
+    // [HOOKTRACE-3292] H:fail_rate
+    log_predict_step("H:fail_rate");
     std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| unsafe {
         let trampoline = interceptor_get_trampoline(failure_rate_hook as usize);
         if trampoline == 0 {
