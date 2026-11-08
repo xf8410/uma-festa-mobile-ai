@@ -1,0 +1,32 @@
+{
+        "festa": {
+          "acts": [{"actType":1,"gauge":5,"level":6,"needGauge":5,"adviceId":601,"fusionId":101,"outingGainLevel":0}],
+          "maxActLevel": 10, "campRemain": 1, "assistSupportLeft": 1, "fatigueRecovery": false,
+          "checkPoints": [{"scheduleId":1,"resultType":2}],
+          "trainLevelTotal": [3,2,2,2,3], "kensan": [false,false,false,false,true],
+          "persons": [{"targetId":1,"actType":1,"origin":"card"}]
+        },
+        "baseGame": {
+          "scenarioId": 15, "umaId": 105902, "turn": 40, "vital": 77, "maxVital": 108,
+          "motivation": 5,
+          "fiveStatus":[1382,739,902,733,727], "fiveStatusLimit":[3288,2504,2516,2238,2414],
+          "skillPt": 300, "skillScore": 0, "totalHints": 20, "trainLevelCount":[3,1,0,1,2],
+          "ptScoreRate": 1.0, "failureRateBias": 0, "isIll": false, "isQieZhe": false,
+          "isAiJiao": false, "zhongMaBlueCount":[0,0,0,0,0], "isRacing": false,
+          "cardId": [303233,302424,302831,303044,302894,303114],
+          "persons": [{"personType":1,"charaId":9052,"friendship":40},
+                      {"personType":2,"charaId":1129,"friendship":50},
+                      {"personType":2,"charaId":1022,"friendship":30},
+                      {"personType":2,"charaId":1058,"friendship":20},
+                      {"personType":2,"charaId":1138,"friendship":35},
+                      {"personType":2,"charaId":1146,"friendship":10}],
+          "personDistribution": [[0,1,5,1009,-1],[3,1096,-1,-1,-1],[-1,-1,-1,-1,-1],
+                                 [-1,-1,-1,-1,-1],[-1,-1,-1,-1,-1]],
+          "lockedTrainingId": -1, "friendship_noncard_yayoi": 30,
+          "friendship_noncard_reporter": 20, "friend_stage": 2, "friend_outgoingUsed": 1,
+          "playing_state": 1, "source": "command", "isAfterTraining": false,
+          "single_mode_chara_id": 6310, "islegal": true,
+          "training": {"5101": {"failureRate": 0, "lower": [50,0,22,0,0,66,-19],
+                                "upper": [57,10,13,10,10,55,0]}}
+        }
+    }
