@@ -7364,6 +7364,12 @@ unsafe fn read_summary_inner_impl() -> String {
             __out.insert_str(pos, &format!(",\"festa\":{}", fj));
         }
     }
+    // [EVAL-3292] 官方评价分：游戏自己的 GetEvaluation()（0 参、只读计算）
+    //   读不到 / 越界时给 -1，App 退回自算值
+    let evaluation: i32 = {
+        let v = call_getter_int(chara_class, chara_obj, "GetEvaluation");
+        if v > 0 && v < 500000 { v } else { -1 }
+    };
     // [SCORE-3292] 评价分 = 五维查定 + PT×倍率（技能分待接 mdb）
     {
         let five_total = spd + sta + pow_ + gut + wiz;
@@ -7374,8 +7380,8 @@ unsafe fn read_summary_inner_impl() -> String {
             __out.insert_str(
                 pos,
                 &format!(
-                    ",\"score\":{},\"five_score\":{},\"pt_score\":{},\"skill_score\":0",
-                    total_s, five_s, pt_s
+                    ",\"score\":{},\"five_score\":{},\"pt_score\":{},\"skill_score\":0,\"evaluation\":{}",
+                    total_s, five_s, pt_s, evaluation
                 ),
             );
         }
@@ -7386,9 +7392,11 @@ unsafe fn read_summary_inner_impl() -> String {
         if !sm_class.is_null() && !sm_obj.is_null() {
             playing_state = read_obscured_field(sm_obj as *const c_void, sm_class, "_playingState");
         }
-        let mut friend_used = -1i32;
+        // [FRIEND-USED-3292] 默认 0（没出行过），只有列表读失败才留 -1
+        let mut friend_used = 0i32;
         if !chara_class.is_null() && !chara_obj.is_null() {
             let g_list = read_field_value(chara_class, chara_obj, "GuestOutingInfoList");
+            if g_list.is_null() { friend_used = -1; }
             for e in walk_obj_list(g_list) {
                 let ei = e as *const c_void;
                 let eclass = get_class_from_object(ei);
