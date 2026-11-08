@@ -8408,6 +8408,7 @@ fn handle_http(mut stream: std::net::TcpStream) {
             }
         }
     } else if path == "/summary" {
+        unsafe { install_all_hooks_lazy() };
         read_summary()
     } else if path == "/debug/ringlog" {
         unsafe { ringlog_json() }
@@ -9025,11 +9026,27 @@ fn handle_http(mut stream: std::net::TcpStream) {
             key
         )
     } else if path == "/debug/skilltips_probe" {
-        // [SKILLHOOK-3292] 技能提示诊断：getter / 字段 / hook 缓存
-        std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| unsafe {
-            debug_skilltips_probe()
-        }))
-        .unwrap_or_else(|_| r#"{"error":"skilltips_probe_panic"}"#.to_string())
+        // [LAZYHOOKS-3292] 先补装 hook，再在 SIGSEGV 保护下读数据
+        let _lock = READ_MUTEX.lock().unwrap_or_else(|e| e.into_inner());
+        let jmp_result = unsafe { sys_sigsetjmp(SIGSEGV_JMP_BUF.as_mut_ptr(), 1) };
+        if jmp_result != 0 {
+            r#"{"error":"sigsegv_recovered","hint":"/debug/skilltips_probe hit native crash"}"#.to_string()
+        } else {
+            unsafe {
+                SIGSEGV_OWNER_TID.store(
+                    libc::syscall(libc::SYS_gettid) as i32,
+                    std::sync::atomic::Ordering::Relaxed,
+                );
+            }
+            SIGSEGV_RECOVERY.store(true, std::sync::atomic::Ordering::Relaxed);
+            let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| unsafe {
+                install_all_hooks_lazy();
+                debug_skilltips_probe()
+            }))
+            .unwrap_or_else(|_| r#"{"error":"skilltips_probe_panic"}"#.to_string());
+            SIGSEGV_RECOVERY.store(false, std::sync::atomic::Ordering::Relaxed);
+            result
+        }
     } else if path == "/debug/hookdiag" {
         // ★ v3.24.40: per-hook install status
         let items: Vec<String> = match HOOK_STATUS.lock() {
@@ -10939,6 +10956,38 @@ unsafe fn find_method_addr(class: *mut c_void, method_name: &str, _param_count: 
         &format!("find_method_addr: {} NOT FOUND in class", method_name),
     );
     0
+}
+
+// [LAZYHOOKS-3292] 懒安装：on_game_initialized 不触发时，由 HTTP 线程补装全部 hook
+static LAZY_HOOKS_DONE: AtomicBool = AtomicBool::new(false);
+static LAZY_HOOKS_ATTEMPTS: AtomicU64 = AtomicU64::new(0);
+
+unsafe fn install_all_hooks_lazy() {
+    if LAZY_HOOKS_DONE.load(Ordering::Relaxed) || API.is_null() {
+        return;
+    }
+    LAZY_HOOKS_ATTEMPTS.fetch_add(1, Ordering::Relaxed);
+    install_training_hook();
+    install_exec_training_hook();
+    install_failure_rate_hook();
+    install_event_choice_hook();
+    install_skill_tips_hook();
+    install_skill_model_hook();
+    if SKILL_TIPS_HOOK_INSTALLED.load(Ordering::Relaxed)
+        && SKILL_MODEL_HOOK_INSTALLED.load(Ordering::Relaxed)
+    {
+        LAZY_HOOKS_DONE.store(true, Ordering::Relaxed);
+    }
+    ura_log(
+        2,
+        &format!(
+            "lazy hooks: attempt={} tips={} model={} done={}",
+            LAZY_HOOKS_ATTEMPTS.load(Ordering::Relaxed),
+            SKILL_TIPS_HOOK_INSTALLED.load(Ordering::Relaxed),
+            SKILL_MODEL_HOOK_INSTALLED.load(Ordering::Relaxed),
+            LAZY_HOOKS_DONE.load(Ordering::Relaxed)
+        ),
+    );
 }
 
 unsafe fn install_training_hook() {
