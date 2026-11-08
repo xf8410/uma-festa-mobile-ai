@@ -1,0 +1,59 @@
+name: "Engine replay test"
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/engine-replay-test.yml"
+      - ".github/scripts/summary_to_frame.js"
+      - ".github/fixtures/summary_min.json"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  replay:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Generate frame from fixture
+        run: |
+          set -euo pipefail
+          mkdir -p ci-replay/frames
+          node .github/scripts/summary_to_frame.js .github/fixtures/summary_min.json > /tmp/frame.json
+          cp /tmp/frame.json "ci-replay/frames/game102003_turn12.json"
+          echo "--- frame head ---"
+          head -c 400 /tmp/frame.json; echo
+          node -e "JSON.parse(require('fs').readFileSync('/tmp/frame.json','utf8'));console.log('frame JSON ok')"
+
+      - name: Clone upstream and build engine (host)
+        run: |
+          set -euo pipefail
+          rm -rf /tmp/w && mkdir -p /tmp/w
+          git clone --depth 1 https://github.com/umaai-project/umaai-next.git /tmp/w/umaai_next
+          git clone --depth 1 https://github.com/umaai-project/umaai-matsuri.git /tmp/w/umaai-matsuri
+          cd /tmp/w/umaai-matsuri
+          cargo build --release -p matsuri-cli 2>&1 | tail -15
+          ls -l target/release/matsuri
+
+      - name: Run engine replay
+        run: |
+          set -o pipefail
+          cd /tmp/w/umaai-matsuri
+          cp -a "$GITHUB_WORKSPACE/ci-replay/frames" ./ci-frames
+          set +e
+          timeout 180 ./target/release/matsuri online --replay ./ci-frames --json > /tmp/out.json 2> /tmp/err.txt
+          echo "exit=$?" > /tmp/code.txt
+          set -e
+          { echo "=== stdout ==="; head -c 3000 /tmp/out.json || true; echo; echo "=== stderr ==="; head -c 4000 /tmp/err.txt || true; echo; cat /tmp/code.txt; } | tee replay-capture.txt
+
+      - name: Report
+        if: always()
+        run: |
+          { echo "job_status=${{ job.status }}"; head -c 6500 replay-capture.txt 2>/dev/null || true; } > ci-last-replay.txt
+          git config user.name dsh-bot
+          git config user.email dsh-bot@users.noreply.github.com
+          git add ci-last-replay.txt || true
+          git commit -m "ci: engine replay log (${{ job.status }})" || echo nothing
+          git push || echo "push failed"
