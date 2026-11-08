@@ -11,8 +11,8 @@ android {
         applicationId = "com.ranko.matsuricapture"
         minSdk = 24
         targetSdk = 35
-        versionCode = 30
-        versionName = "0.9.5-dsh14"
+        versionCode = 31
+        versionName = "0.9.6-dsh15"
     }
 
     // 18766 接收端改为纯 Kotlin 实现（NativeEngine.kt），不再需要 NDK / .so
@@ -22,6 +22,13 @@ android {
             isMinifyEnabled = false
             // 内置 debug 签名，装得上、不用配 keystore（自用测试包）
             signingConfig = signingConfigs.getByName("debug")
+        }
+    }
+
+    // [APP-FIX-085] 内置引擎是要 exec 的二进制，必须解压到 nativeLibraryDir
+    packaging {
+        jniLibs {
+            useLegacyPackaging = true
         }
     }
 
