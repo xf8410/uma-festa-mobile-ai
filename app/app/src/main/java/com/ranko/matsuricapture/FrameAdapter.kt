@@ -179,6 +179,13 @@ object FrameAdapter {
                 put("origin", p.optString("origin", "card"))
             })
         }
+        // [APP-FIX-091] 稽古掷中标记：acts[].state（SO 的 ActTrainingState）非 0 视为已掷中
+        val kensanArr = JSONArray()
+        for (i in 0 until fa.length()) {
+            val a = fa.optJSONObject(i) ?: continue
+            kensanArr.put(a.optInt("state", 0) != 0)
+        }
+        if (kensanArr.length() != 5) notes.put("kensan_missing_or_partial")
         val festa = JSONObject().apply {
             put("acts", acts)
             put("maxActLevel", 10)
@@ -187,7 +194,7 @@ object FrameAdapter {
             put("fatigueRecovery", false)
             put("checkPoints", if (cpsJ.length() > 0) cpsJ else JSONObject.NULL)
             put("trainLevelTotal", JSONArray(trainLevel.toList()))
-            put("kensan", JSONObject.NULL)
+            put("kensan", if (kensanArr.length() == 5) kensanArr else JSONObject.NULL) // [APP-FIX-091]
             put("persons", fPersons)
         }
         val frame = JSONObject()
