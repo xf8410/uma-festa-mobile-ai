@@ -27,12 +27,21 @@ jobs:
           head -c 400 /tmp/frame.json; echo
           node -e "JSON.parse(require('fs').readFileSync('/tmp/frame.json','utf8'));console.log('frame JSON ok')"
 
+      - name: Cache cargo + engine build
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            /tmp/w
+          key: engine-replay-${{ hashFiles('.github/workflows/engine-replay-test.yml') }}
+
       - name: Clone upstream and build engine (host)
         run: |
           set -euo pipefail
-          rm -rf /tmp/w && mkdir -p /tmp/w
-          git clone --depth 1 https://github.com/umaai-project/umaai-next.git /tmp/w/umaai_next
-          git clone --depth 1 https://github.com/umaai-project/umaai-matsuri.git /tmp/w/umaai-matsuri
+          mkdir -p /tmp/w
+          [ -d /tmp/w/umaai_next/.git ] || git clone --depth 1 https://github.com/umaai-project/umaai-next.git /tmp/w/umaai_next
+          [ -d /tmp/w/umaai-matsuri/.git ] || git clone --depth 1 https://github.com/umaai-project/umaai-matsuri.git /tmp/w/umaai-matsuri
           cd /tmp/w/umaai-matsuri
           cargo build --release -p matsuri-cli 2>&1 | tail -15
           ls -l target/release/matsuri
@@ -41,17 +50,26 @@ jobs:
         run: |
           set -o pipefail
           cd /tmp/w/umaai-matsuri
+          rm -rf ci-frames
           cp -a "$GITHUB_WORKSPACE/ci-replay/frames" ./ci-frames
           set +e
-          timeout 180 ./target/release/matsuri online --replay ./ci-frames --json > /tmp/out.json 2> /tmp/err.txt
-          echo "exit=$?" > /tmp/code.txt
+          timeout 240 ./target/release/matsuri online --replay ./ci-frames --json > /tmp/out.json 2> /tmp/err.txt
+          RC=$?
           set -e
-          { echo "=== stdout ==="; head -c 3000 /tmp/out.json || true; echo; echo "=== stderr ==="; head -c 4000 /tmp/err.txt || true; echo; cat /tmp/code.txt; } | tee replay-capture.txt
+          {
+            echo "exit=$RC"
+            echo "=== stdout ==="
+            head -c 4000 /tmp/out.json || true
+            echo
+            echo "=== stderr ==="
+            head -c 6000 /tmp/err.txt || true
+          } > "$GITHUB_WORKSPACE/replay-capture.txt"
+          cat "$GITHUB_WORKSPACE/replay-capture.txt"
 
       - name: Report
         if: always()
         run: |
-          { echo "job_status=${{ job.status }}"; head -c 6500 replay-capture.txt 2>/dev/null || true; } > ci-last-replay.txt
+          { echo "job_status=${{ job.status }}"; head -c 9000 replay-capture.txt 2>/dev/null || true; } > ci-last-replay.txt
           git config user.name dsh-bot
           git config user.email dsh-bot@users.noreply.github.com
           git add ci-last-replay.txt || true
