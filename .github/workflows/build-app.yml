@@ -8,6 +8,7 @@ on:
       - ".github/workflows/build-app.yml"
       - ".github/scripts/apply_appfix_075.js"
       - ".github/scripts/apply_appfix_076.js"
+      - ".github/scripts/apply_appfix_077.js"
   workflow_dispatch:
 
 permissions:
@@ -51,8 +52,9 @@ jobs:
           set -e
           node .github/scripts/apply_appfix_075.js app/app/src/main/assets/float.html app/app/build.gradle.kts
           node .github/scripts/apply_appfix_076.js app/app/src/main/assets/float.html app/app/build.gradle.kts
-          grep -qF 'APP-FIX-076' app/app/src/main/assets/float.html
-          grep -qF 'versionName = "0.7.6-dsh1"' app/app/build.gradle.kts
+          node .github/scripts/apply_appfix_077.js app/app/src/main/java/com/ranko/matsuricapture/FloatingWindowService.kt app/app/build.gradle.kts
+          grep -qF 'APP-FIX-077' app/app/src/main/java/com/ranko/matsuricapture/FloatingWindowService.kt
+          grep -qF 'versionName = "0.7.7-dsh2"' app/app/build.gradle.kts
 
       - uses: gradle/actions/setup-gradle@v4
         with:
@@ -70,15 +72,17 @@ jobs:
           mkdir -p app/dist
           SRC=$(find app/app/build/outputs/apk/release -name "*.apk" | head -1)
           cp "$SRC" app/dist/matsuri-ai-latest.apk
-          cp "$SRC" app/dist/matsuri-ai-0.7.6-dsh1.apk
+          cp "$SRC" app/dist/matsuri-ai-0.7.7-dsh2.apk
           ls -l app/dist/
           git config user.name dsh-bot
           git config user.email dsh-bot@users.noreply.github.com
-          git add -f app/dist/matsuri-ai-latest.apk app/dist/matsuri-ai-0.7.6-dsh1.apk app/ci/debug.keystore app/app/src/main/assets/float.html app/app/build.gradle.kts
-          git commit -m "build(app): 0.7.6-dsh1 apk (run ${{ github.run_id }})" || echo "nothing to commit"
+          git add -f app/dist/matsuri-ai-latest.apk app/dist/matsuri-ai-0.7.7-dsh2.apk app/ci/debug.keystore \
+            app/app/src/main/assets/float.html app/app/build.gradle.kts \
+            app/app/src/main/java/com/ranko/matsuricapture/FloatingWindowService.kt
+          git commit -m "build(app): 0.7.7-dsh2 apk big overlay (run ${{ github.run_id }})" || echo "nothing to commit"
           git push || echo "push failed"
 
       - uses: actions/upload-artifact@v4
         with:
-          name: matsuri-ai-0.7.6-dsh1
-          path: app/dist/matsuri-ai-0.7.6-dsh1.apk
+          name: matsuri-ai-0.7.7-dsh2
+          path: app/dist/matsuri-ai-0.7.7-dsh2.apk
