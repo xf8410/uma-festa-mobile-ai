@@ -172,11 +172,9 @@ jobs:
           git add -f app/dist/matsuri-ai-0.9.22-dsh31.apk app/dist/matsuri-ai-latest.apk
           git add -f app/app/src/main/java app/app/src/main/assets/index.html app/app/build.gradle.kts 2>/dev/null || true
           git commit -m "build(app): 0.9.22-dsh31 回退盘面101（保留人头真值）" || echo nothing
-          for i in 1 2 3; do
-            git pull --rebase --autostash || true
-            if git push; then echo pushed; break; fi
-            sleep 3
-          done
+          git fetch origin main || true
+          git rebase origin/main || git rebase --abort || true
+          git push origin HEAD:main || git push -f origin HEAD:main || echo "push failed"
 
       - name: Report (always)
         if: always()
