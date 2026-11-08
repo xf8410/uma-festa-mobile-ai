@@ -228,8 +228,33 @@ function stateLabel(s){
 const isOn=a=>a&&(+a.need_gauge>0)&&(+a.gauge>=+a.need_gauge);
 
 /* 推荐：亮起（槽满）稽古优先；无亮起→按真实彩圈数推荐属性训练（shining 为 SO 实测数据） */
-function recommend(acts,trByAttr){
-  if(!acts.length)return{txt:'等待游戏连接',wait:true};
+function recommend(acts,trByAttr,f){
+  // [APP-FIX-075] SO 未推 festa.acts 时，用 trainings + SO 的 ai.train 评分兜底
+  if(!acts.length){
+    const ai=(f&&f.ai)||{};
+    const AIKEY={spd:'Speed',sta:'Stamina',pow:'Power',gut:'Guts',wis:'Wisdom'};
+    let best=null;
+    ((f&&f.trainings)||[]).forEach(t=>{
+      const cid=+t.command_id;
+      let key=null;
+      for(const k in ATTR_CMD){ if(ATTR_CMD[k].indexOf(cid)>=0){key=k;break;} }
+      if(!key)return;
+      const raw=(ai.train&&ai.train[AIKEY[key]]);
+      const score=(typeof raw==='number')?raw:-999;
+      const sh=+t.shining||0, heads=+t.heads||0, fail=+t.failure_rate||0;
+      const v=score+sh*4+heads*0.5-fail*0.5;
+      const attr=(AX.find(a=>a.k===key)||{}).n||key;
+      if(!best||v>best.v)best={v,score,sh,attr};
+    });
+    const rest=(typeof ai.rest==='number')?ai.rest:null;
+    if(best&&rest!==null&&rest>best.score+8)
+      return{txt:'▶ 休息（AI 休息 '+Math.round(rest)+' > 训练 '+Math.round(best.score)+'）',wait:false};
+    if(best&&best.score>-900)
+      return{txt:'▶ '+best.attr+'训练（AI '+Math.round(best.score)+(best.sh?' · 彩圈×'+best.sh:'')+'）',wait:false};
+    if(best)
+      return{txt:'▶ '+best.attr+'训练（彩圈×'+best.sh+'）',wait:false};
+    return{txt:'等待游戏连接',wait:true};
+  }
   const lit=ACTS.filter(a=>isOn(acts.find(x=>+x.act_type===a.t)));
   if(lit.length)return{txt:'▶ '+lit.map(a=>a.attr).join('·')+' 稽古',wait:false};
   // 稽古未触发 ≠ 普通训练不用建议：彩圈最多位优先（全未知→蓄力中）
@@ -312,7 +337,7 @@ function render(s){
   const deck=f.support_cards||[];
 
   // 行动建议（稽古亮起优先；否则彩圈最多的属性训练；友人外出由 AI 统一算）
-  const rec=recommend(acts,trByAttr);lastRec=rec;
+  const rec=recommend(acts,trByAttr,f);lastRec=rec;
   const aa=document.getElementById('advAct');
   aa.textContent=rec.txt+(kensan&&acts.length?' ⚡追加稽古':'');aa.className='v'+(rec.wait?' wait':'');
   // 运气分 / 预估评分：内置 AI 未接入，无数据源，不编造
