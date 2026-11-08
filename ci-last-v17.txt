@@ -1,0 +1,164 @@
+job_status=failure
+ |         let run_query = |sql: &str, mut on_row: &mut dyn FnMut(&[*const u8])| -> i32 {
+     |                                     ----^^^^^^
+     |                                     |
+     |                                     help: remove this `mut`
+
+warning: unused variable: `resp`
+     --> src/lib.rs:10113:13
+      |
+10113 |         let resp = format!(
+      |             ^^^^ help: if this is intentional, prefix it with an underscore: `_resp`
+
+error[E0133]: call to unsafe function is unsafe and requires unsafe function or block
+     --> src/lib.rs:10568:15
+      |
+10568 |     let ret = original(this);
+      |               ^^^^^^^^^^^^^^ call to unsafe function
+      |
+      = note: consult the function's documentation for information on how to avoid undefined behavior
+
+error[E0133]: call to unsafe function is unsafe and requires unsafe function or block
+     --> src/lib.rs:10636:15
+      |
+10636 |     let ret = original(this);
+      |               ^^^^^^^^^^^^^^ call to unsafe function
+      |
+      = note: consult the function's documentation for information on how to avoid undefined behavior
+
+warning: unnecessary `unsafe` block
+     --> src/lib.rs:10637:70
+      |
+10637 |     let _ = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| unsafe {
+      |                                                                      ^^^^^^ unnecessary `unsafe` block
+      |
+      = note: `#[warn(unused_unsafe)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused variable: `api`
+     --> src/lib.rs:12772:9
+      |
+12772 |     let api = &*API;
+      |         ^^^ help: if this is intentional, prefix it with an underscore: `_api`
+
+warning: unused variable: `api`
+     --> src/lib.rs:12796:9
+      |
+12796 |     let api = &*API;
+      |         ^^^ help: if this is intentional, prefix it with an underscore: `_api`
+
+warning: unnecessary `unsafe` block
+     --> src/lib.rs:13073:25
+      |
+13039 |     unsafe {
+      |     ------ because it's nested under this `unsafe` block
+...
+13073 |                         unsafe { get_config() }.http_port
+      |                         ^^^^^^ unnecessary `unsafe` block
+
+warning: unnecessary `unsafe` block
+     --> src/lib.rs:13219:23
+      |
+13039 |     unsafe {
+      |     ------ because it's nested under this `unsafe` block
+...
+13219 |             let cfg = unsafe { get_config() };
+      |                       ^^^^^^ unnecessary `unsafe` block
+
+warning: unnecessary `unsafe` block
+     --> src/lib.rs:13222:13
+      |
+13039 |     unsafe {
+      |     ------ because it's nested under this `unsafe` block
+...
+13222 |             unsafe {
+      |             ^^^^^^ unnecessary `unsafe` block
+
+warning: unnecessary `unsafe` block
+     --> src/lib.rs:13245:37
+      |
+13039 |     unsafe {
+      |     ------ because it's nested under this `unsafe` block
+...
+13245 |                 let changed = f(ui, unsafe { GUI_HOST_BUF.as_mut_ptr() as *mut c_char }, 64);
+      |                                     ^^^^^^ unnecessary `unsafe` block
+
+warning: unnecessary `unsafe` block
+     --> src/lib.rs:13247:21
+      |
+13039 |     unsafe {
+      |     ------ because it's nested under this `unsafe` block
+...
+13247 |                     unsafe {
+      |                     ^^^^^^ unnecessary `unsafe` block
+
+warning: unnecessary `unsafe` block
+     --> src/lib.rs:13272:37
+      |
+13039 |     unsafe {
+      |     ------ because it's nested under this `unsafe` block
+...
+13272 |                 let changed = f(ui, unsafe { GUI_PORT_BUF.as_mut_ptr() as *mut c_char }, 8);
+      |                                     ^^^^^^ unnecessary `unsafe` block
+
+warning: unnecessary `unsafe` block
+     --> src/lib.rs:13274:21
+      |
+13039 |     unsafe {
+      |     ------ because it's nested under this `unsafe` block
+...
+13274 |                     unsafe {
+      |                     ^^^^^^ unnecessary `unsafe` block
+
+warning: variable does not need to be mutable
+     --> src/lib.rs:13935:9
+      |
+13935 |     let mut dream_overflow = false;
+      |         ----^^^^^^^^^^^^^^
+      |         |
+      |         help: remove this `mut`
+
+warning: value assigned to `min_level` is never read
+     --> src/lib.rs:14111:9
+      |
+14111 |         min_level = 0;
+      |         ^^^^^^^^^^^^^
+      |
+      = help: maybe it is overwritten before being read?
+      = note: `#[warn(unused_assignments)]` (part of `#[warn(unused)]`) on by default
+
+warning: variable does not need to be mutable
+     --> src/lib.rs:16635:20
+      |
+16635 |                 Ok(mut stmt) => stmt.column_names().iter().map(|s| s.to_string()).collect(),
+      |                    ----^^^^
+      |                    |
+      |                    help: remove this `mut`
+
+warning: value assigned to `all_events_count` is never read
+     --> src/lib.rs:21589:37
+      |
+21589 |       let mut all_events_count: i32 = 0;
+      |                                       ^ this value is reassigned later and never used
+...
+21628 | /             all_events_count = conn
+21629 | |                 .query_row("SELECT COUNT(*) FROM single_mode_story_data", [], |r| {
+21630 | |                     r.get(0)
+21631 | |                 })
+21632 | |                 .unwrap_or(0);
+      | |_____________________________- `all_events_count` is overwritten here before the previous value is read
+
+warning: unused variable: `ds_class`
+     --> src/lib.rs:22124:9
+      |
+22124 |     let ds_class = get_class_from_object(ds_obj);
+      |         ^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_ds_class`
+
+warning: unused variable: `is_literal`
+     --> src/lib.rs:23150:13
+      |
+23150 |         let is_literal = match field_get_flags {
+      |             ^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_is_literal`
+
+For more information about this error, try `rustc --explain E0133`.
+warning: `hachimi_ura` (lib) generated 27 warnings
+error: could not compile `hachimi_ura` (lib) due to 2 previous errors; 27 warnings emitted
