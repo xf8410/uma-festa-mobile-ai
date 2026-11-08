@@ -1,0 +1,118 @@
+name: Build matsuri AI app (port 18767, UI baseline)
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/build-app-port.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: build-app-port
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Restore 0.7.4 UI baseline
+        run: |
+          set -euo pipefail
+          git checkout 4a0009f3 -- app/app/src/main
+          echo "--- baseline restored"
+
+      - name: Swap app server port 18766 -> 18767
+        run: |
+          set -euo pipefail
+          FILES="app/app/src/main/assets/index.html app/app/src/main/assets/float.html \
+                 app/app/src/main/java/com/ranko/matsuricapture/NativeEngine.kt \
+                 app/app/src/main/java/com/ranko/matsuricapture/FloatingWindowService.kt \
+                 app/app/src/main/java/com/ranko/matsuricapture/MainActivity.kt"
+          for f in $FILES; do
+            sed -i 's/18766/18767/g' "$f"
+          done
+          echo "--- 剩余 18766 引用（应为 0）"
+          grep -c '18766' $FILES || true
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - uses: android-actions/setup-android@v3
+        with:
+          packages: "platforms;android-35 build-tools;35.0.0 platform-tools"
+
+      - name: Stable debug keystore
+        run: |
+          set -e
+          mkdir -p app/ci
+          if [ ! -f app/ci/debug.keystore ]; then
+            keytool -genkeypair -v \
+              -keystore app/ci/debug.keystore \
+              -storepass android -keypass android \
+              -alias androiddebugkey -keyalg RSA -keysize 2048 -validity 10000 \
+              -dname "CN=Android Debug,O=Android,C=US"
+          fi
+          mkdir -p "$HOME/.android"
+          cp app/ci/debug.keystore "$HOME/.android/debug.keystore"
+
+      - name: Apply score wiring + version
+        run: |
+          set -euo pipefail
+          : > app-capture.txt
+          node .github/scripts/apply_appfix_080.js \
+            app/app/src/main/java/com/ranko/matsuricapture/NativeEngine.kt \
+            app/app/src/main/assets/index.html \
+            app/app/build.gradle.kts 2>&1 | tee -a app-capture.txt
+          sed -i 's/versionCode = [0-9]\+/versionCode = 24/; s/versionName = "[^"]*"/versionName = "0.8.1-dsh7"/' app/app/build.gradle.kts
+          grep -E 'versionCode|versionName' app/app/build.gradle.kts
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "8.11.1"
+
+      - name: Assemble release
+        run: |
+          set -o pipefail
+          gradle -p app --no-daemon assembleRelease 2>&1 | tee -a app-capture.txt | tail -40
+          find app/app/build/outputs -name "*.apk" -ls
+
+      - name: Publish APK
+        run: |
+          set -e
+          mkdir -p app/dist
+          SRC=$(find app/app/build/outputs/apk/release -name "*.apk" | head -1)
+          cp "$SRC" app/dist/matsuri-ai-latest.apk
+          cp "$SRC" app/dist/matsuri-ai-0.8.1-dsh7.apk
+          ls -l app/dist/
+          git config user.name dsh-bot
+          git config user.email dsh-bot@users.noreply.github.com
+          git add -f app/dist/matsuri-ai-latest.apk app/dist/matsuri-ai-0.8.1-dsh7.apk app/app/src/main
+          git commit -m "build(app): 0.8.1-dsh7 app port 18767 (free 18766 from DSH), UI baseline" || echo "nothing to commit"
+          git push || echo "push failed"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: matsuri-ai-0.8.1-dsh7
+          path: app/dist/matsuri-ai-0.8.1-dsh7.apk
+
+      - name: Report (always)
+        if: always()
+        run: |
+          {
+            echo "job_status=${{ job.status }}"
+            tail -c 6000 app-capture.txt 2>/dev/null || echo "no capture"
+          } > ci-last-app-port.txt
+          git config user.name dsh-bot
+          git config user.email dsh-bot@users.noreply.github.com
+          git add ci-last-app-port.txt || true
+          git commit -m "ci: port build log (${{ job.status }})" || echo nothing
+          git push || echo "push failed"
