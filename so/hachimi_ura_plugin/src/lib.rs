@@ -4543,80 +4543,23 @@ unsafe fn read_chara_skills(
 unsafe fn read_skill_tips(
     chara_class: *mut c_void,
     chara_obj: *const c_void,
-    image: *const c_void,
+    _image: *const c_void,
 ) -> Vec<(i32, i32, i32)> {
-    let mut tips: Vec<(i32, i32, i32)> = Vec::new();
-
-    // tips element class: Gallop.SkillTips (reference type, fields @ 0x10/0x14/0x18)
-    let tips_elem_class = find_class_by_short_name(image, "SkillTips");
-    let read_tip = |ep: *mut c_void| -> Option<(i32, i32, i32)> {
-        if ep.is_null() {
-            return None;
-        }
-        let base = ep as *const u8;
-        // Getter path: get_GroupId / get_Rarity / get_Level on the tips element class
-        if !tips_elem_class.is_null() {
-            let gid = call_getter_int(tips_elem_class, ep, "get_GroupId");
-            let rar = call_getter_int(tips_elem_class, ep, "get_Rarity");
-            let lvl = call_getter_int(tips_elem_class, ep, "get_Level");
-            if gid > 0 || rar > 0 {
-                return Some((gid, rar, lvl));
-            }
-        }
-        // Fallback: raw field offsets (URA protocol dump: 0x10/0x14/0x18)
-        // // [SKILLTIPS-3292] SkillTips 三个字段都是内联 ObscuredInt
-        let gid = read_obscured_int_at(base as *const c_void, 16);
-        let rar = read_obscured_int_at(base as *const c_void, 36);
-        let lvl = read_obscured_int_at(base as *const c_void, 56);
-        if gid > 0 || rar > 0 {
-            Some((gid, rar, lvl))
-        } else {
-            None
-        }
-    };
-
-    // Approach 1: get_SkillTipsList() -> List<SkillTips>
-    let list = call_getter_on_instance(chara_class, chara_obj, "get_SkillTipsList");
-    if !list.is_null() {
-        // // [SKILLTIPS-3292] List<T>: _size@0x18, _items@0x10 → 元素在数组 +0x20
-        let lb = list as *const u8;
-        let count = std::ptr::read_unaligned::<usize>(lb.add(0x18) as *const usize);
-        let items = std::ptr::read_unaligned::<*mut c_void>(lb.add(0x10) as *const *mut c_void);
-        if count > 0 && count < 500 && !items.is_null() {
-            for i in 0..count {
-                let ep = std::ptr::read_unaligned::<*mut c_void>(
-                    (items as *const u8).add(0x20 + i * 8) as *const *mut c_void,
-                );
-                if let Some(t) = read_tip(ep) {
-                    tips.push(t);
-                }
-            }
-        }
-        if !tips.is_empty() {
-            return tips;
+    // [SKILLHOOK-3292] 元素类型是 List<Gallop.WorkSingleModeCharaData/SkillTips>（嵌套类），
+    // 嵌套类字段布局与 Gallop.SkillTips 不同 → 旧硬偏移 16/36/56 全解码成 0 → 列表"看起来是空的"。
+    // 现在按元素运行时类的字段名取偏移，raw 偏移只兜底。
+    let via_getter = call_getter_on_instance(chara_class, chara_obj, "get_SkillTipsList");
+    for l in [via_getter, read_ptr_at(chara_obj, 696)] {
+        let decoded = decode_skill_tips_list(l);
+        if !decoded.is_empty() {
+            return decoded;
         }
     }
-
-    // Approach 2: skill_tips_array field direct read
-    let field_arr = /* [SKILLTIPS3-3292] 引用字段要 deref，不是取地址 */ read_ptr_at(chara_obj, 696);
-    if !field_arr.is_null() {
-        // // [SKILLTIPS-3292] 同上：字段可能是 List，也可能是数组
-        let ab = field_arr as *const u8;
-        let count = std::ptr::read_unaligned::<usize>(ab.add(0x18) as *const usize);
-        let items = std::ptr::read_unaligned::<*mut c_void>(ab.add(0x10) as *const *mut c_void);
-        if count > 0 && count < 500 && !items.is_null() {
-            for i in 0..count {
-                let ep = std::ptr::read_unaligned::<*mut c_void>(
-                    (items as *const u8).add(0x20 + i * 8) as *const *mut c_void,
-                );
-                if let Some(t) = read_tip(ep) {
-                    tips.push(t);
-                }
-            }
-        }
-    }
-
-    tips
+    // 兜底：游戏自己取过一次（hook 缓存）
+    SKILL_TIPS_GROUPS
+        .lock()
+        .map(|g| g.clone())
+        .unwrap_or_default()
 }
 
 /// Compute skill evaluation from learned skills using MasterDB
@@ -5558,7 +5501,12 @@ unsafe fn read_summary_inner_impl() -> String {
 
     // ★ v3.28.3: Read buyable skill tips (group_id, rarity, level) for skill-score engine
     let tips_json = {
-        let tips = read_skill_tips(chara_class, chara_obj, image);
+        let mut tips = read_skill_tips(chara_class, chara_obj, image);
+        if tips.is_empty() {
+            if let Ok(g) = SKILL_TIPS_GROUPS.lock() {
+                tips = g.clone();
+            }
+        }
         if tips.is_empty() {
             "[]".to_string()
         } else {
@@ -7509,6 +7457,8 @@ fn push_loop() {
                 install_exec_training_hook();
                 install_failure_rate_hook();
                 install_event_choice_hook();
+                install_skill_tips_hook();
+                install_skill_model_hook();
                 rng_consumption_probe::install();
                 // ★ v3.24.40: sniff hooks were missing here — fallback mode
                 // left /api/sniff permanently unhooked.
@@ -9074,6 +9024,12 @@ fn handle_http(mut stream: std::net::TcpStream) {
             key.len() / 2,
             key
         )
+    } else if path == "/debug/skilltips_probe" {
+        // [SKILLHOOK-3292] 技能提示诊断：getter / 字段 / hook 缓存
+        std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| unsafe {
+            debug_skilltips_probe()
+        }))
+        .unwrap_or_else(|_| r#"{"error":"skilltips_probe_panic"}"#.to_string())
     } else if path == "/debug/hookdiag" {
         // ★ v3.24.40: per-hook install status
         let items: Vec<String> = match HOOK_STATUS.lock() {
@@ -9266,6 +9222,8 @@ fn handle_http(mut stream: std::net::TcpStream) {
         unsafe {
             if !EVENT_CHOICE_HOOK_INSTALLED || !STORY_SET_HOOK_INSTALLED {
                 install_event_choice_hook();
+                install_skill_tips_hook();
+                install_skill_model_hook();
                 rng_consumption_probe::install();
             }
         }
@@ -10483,6 +10441,370 @@ unsafe fn write_hook_bytes(target_addr: usize, handler_addr: usize) {
             ::std::arch::asm!("dsb ish", "ic iallu", "dsb ish", "isb", options(nostack),);
         }
     }
+}
+
+// [SKILLHOOK-3292] 技能提示托管 hook —— 见 apply_skillhook_3292.js
+static SKILL_TIPS_HOOK_INSTALLED: AtomicBool = AtomicBool::new(false);
+static SKILL_TIPS_HOOK_HITS: AtomicU64 = AtomicU64::new(0);
+static SKILL_TIPS_GETTER_ADDR: AtomicU64 = AtomicU64::new(0);
+static SKILL_TIPS_LIST_PTR: Mutex<usize> = Mutex::new(0);
+static SKILL_TIPS_GROUPS: Mutex<Vec<(i32, i32, i32)>> = Mutex::new(Vec::new());
+static mut ORIG_SKILL_TIPS_PROLOGUE: [u8; 16] = [0; 16];
+
+/// 读 Il2Cpp List<T> 的元素指针数组（裸内存，不调托管代码）
+unsafe fn walk_obj_list(list: *mut c_void) -> Vec<*mut c_void> {
+    let mut out: Vec<*mut c_void> = Vec::new();
+    if list.is_null() {
+        return out;
+    }
+    let lb = list as *const u8;
+    let count = std::ptr::read_unaligned::<usize>(lb.add(0x18) as *const usize);
+    let items = std::ptr::read_unaligned::<*mut c_void>(lb.add(0x10) as *const *mut c_void);
+    if count == 0 || count > 400 || items.is_null() {
+        return out;
+    }
+    for i in 0..count {
+        let ep = std::ptr::read_unaligned::<*mut c_void>(
+            (items as *const u8).add(0x20 + i * 8) as *const *mut c_void,
+        );
+        if !ep.is_null() {
+            out.push(ep);
+        }
+    }
+    out
+}
+
+unsafe fn list_count_of(list: *mut c_void) -> usize {
+    if list.is_null() {
+        return 0;
+    }
+    let c = std::ptr::read_unaligned::<usize>((list as *const u8).add(0x18) as *const usize);
+    if c > 400 { 0 } else { c }
+}
+
+/// 按「字段名 → 偏移」读内联 ObscuredInt；名字对不上返回 -1
+unsafe fn read_obscured_by_names(ep: *mut c_void, class: *mut c_void, names: &[&str]) -> i32 {
+    for n in names {
+        let v = read_obscured_field(ep, class, n);
+        if v >= 0 {
+            return v;
+        }
+    }
+    -1
+}
+
+/// 读一个 SkillTips 元素（嵌套类）：优先字段名，兜底 raw 偏移
+unsafe fn read_skill_tip_elem(ep: *mut c_void) -> Option<(i32, i32, i32)> {
+    if ep.is_null() {
+        return None;
+    }
+    let eclass = get_class_from_object(ep);
+    let mut gid = -1;
+    let mut rar = -1;
+    let mut lvl = -1;
+    if !eclass.is_null() {
+        gid = read_obscured_by_names(
+            ep,
+            eclass,
+            &["<GroupId>k__BackingField", "groupId", "_groupId", "GroupId"],
+        );
+        rar = read_obscured_by_names(
+            ep,
+            eclass,
+            &["<Rarity>k__BackingField", "rarity", "_rarity", "Rarity"],
+        );
+        lvl = read_obscured_by_names(
+            ep,
+            eclass,
+            &["<Level>k__BackingField", "level", "_level", "Level"],
+        );
+    }
+    if gid <= 0 && rar <= 0 {
+        gid = read_obscured_int_at(ep, 16);
+        rar = read_obscured_int_at(ep, 36);
+        lvl = read_obscured_int_at(ep, 56);
+    }
+    if gid > 0 || rar > 0 {
+        Some((gid.max(0), rar.max(0), lvl.max(0)))
+    } else {
+        None
+    }
+}
+
+unsafe fn decode_skill_tips_list(list: *mut c_void) -> Vec<(i32, i32, i32)> {
+    walk_obj_list(list)
+        .into_iter()
+        .filter_map(|e| read_skill_tip_elem(e))
+        .collect()
+}
+
+unsafe fn tips_list_json(list: *mut c_void) -> String {
+    if list.is_null() {
+        return r#"{"ptr":"0x0","count":0,"decoded":0,"tips":[]}"#.to_string();
+    }
+    let count = list_count_of(list);
+    let tips = decode_skill_tips_list(list);
+    let tj: Vec<String> = tips
+        .iter()
+        .map(|(g, r, l)| format!(r#"{{"group_id":{},"rarity":{},"level":{}}}"#, g, r, l))
+        .collect();
+    format!(
+        r#"{{"ptr":"0x{:x}","count":{},"decoded":{},"tips":[{}]}}"#,
+        list as usize,
+        count,
+        tips.len(),
+        tj.join(",")
+    )
+}
+
+/// 托管 hook 回调：只做裸内存读，不 invoke 托管方法（避免 MT 崩溃）
+extern "C" fn skill_tips_getter_hook(this: *mut c_void) -> *mut c_void {
+    let trampoline = unsafe { interceptor_get_trampoline(skill_tips_getter_hook as usize) };
+    if trampoline == 0 {
+        return ptr::null_mut();
+    }
+    type FnGet = unsafe extern "C" fn(*mut c_void) -> *mut c_void;
+    let original: FnGet = unsafe { std::mem::transmute(trampoline) };
+// [SKILLHOOK2-3292] original 是 unsafe fn，必须显式 unsafe 块
+    let ret = unsafe { original(this) };
+    let _ = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| unsafe {
+        SKILL_TIPS_HOOK_HITS.fetch_add(1, Ordering::Relaxed);
+        if !ret.is_null() {
+            if let Ok(mut p) = SKILL_TIPS_LIST_PTR.try_lock() {
+                *p = ret as usize;
+            }
+            if let Ok(mut c) = SKILL_TIPS_GROUPS.try_lock() {
+                let v = decode_skill_tips_list(ret);
+                if !v.is_empty() {
+                    *c = v;
+                }
+            }
+        }
+    }));
+    ret
+}
+
+unsafe fn install_skill_tips_hook() {
+    if SKILL_TIPS_HOOK_INSTALLED.load(Ordering::Relaxed) || API.is_null() {
+        return;
+    }
+    let image = match get_image() {
+        img if !img.is_null() => img,
+        _ => return,
+    };
+    let class = find_class(
+        image,
+        to_cstr("Gallop").as_ptr(),
+        to_cstr("WorkSingleModeCharaData").as_ptr(),
+    );
+    if class.is_null() {
+        set_hook_status("skill.tips", "failed: class_not_found");
+        return;
+    }
+    let addr = find_method_addr(class, "get_SkillTipsList", 0);
+    if addr == 0 {
+        set_hook_status("skill.tips", "failed: method_not_found");
+        return;
+    }
+    SKILL_TIPS_GETTER_ADDR.store(addr as u64, Ordering::Relaxed);
+    if install_hook_safe(
+        "SkillTipsList",
+        addr,
+        skill_tips_getter_hook as usize,
+        &mut ORIG_SKILL_TIPS_PROLOGUE,
+    ) {
+        SKILL_TIPS_HOOK_INSTALLED.store(true, Ordering::Relaxed);
+        set_hook_status("skill.tips", &format!("resolved@0x{:x}", addr));
+        ura_log(2, &format!("skill tips hook installed @0x{:x}", addr));
+    } else {
+        set_hook_status("skill.tips", "failed: hook_rejected");
+    }
+}
+
+static SKILL_MODEL_HOOK_INSTALLED: AtomicBool = AtomicBool::new(false);
+static SKILL_MODEL_HOOK_HITS: AtomicU64 = AtomicU64::new(0);
+static SKILL_MODEL_LIST_PTR: Mutex<usize> = Mutex::new(0);
+static mut ORIG_SKILL_MODEL_PROLOGUE: [u8; 16] = [0; 16];
+
+/// 技能页模型 hook：get_SkillInfoList —— 只存 List 指针，解析放到 HTTP 线程
+extern "C" fn skill_model_list_hook(this: *mut c_void) -> *mut c_void {
+    let trampoline = unsafe { interceptor_get_trampoline(skill_model_list_hook as usize) };
+    if trampoline == 0 {
+        return ptr::null_mut();
+    }
+    type FnGet = unsafe extern "C" fn(*mut c_void) -> *mut c_void;
+    let original: FnGet = unsafe { std::mem::transmute(trampoline) };
+// [SKILLHOOK2-3292] original 是 unsafe fn，必须显式 unsafe 块
+    let ret = unsafe { original(this) };
+    let _ = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| unsafe {
+        SKILL_MODEL_HOOK_HITS.fetch_add(1, Ordering::Relaxed);
+        if !ret.is_null() {
+            if let Ok(mut p) = SKILL_MODEL_LIST_PTR.try_lock() {
+                *p = ret as usize;
+            }
+        }
+    }));
+    ret
+}
+
+unsafe fn install_skill_model_hook() {
+    if SKILL_MODEL_HOOK_INSTALLED.load(Ordering::Relaxed) || API.is_null() {
+        return;
+    }
+    let image = match get_image() {
+        img if !img.is_null() => img,
+        _ => return,
+    };
+    let class = find_class(
+        image,
+        to_cstr("Gallop").as_ptr(),
+        to_cstr("SingleModeSkillLearningModel").as_ptr(),
+    );
+    if class.is_null() {
+        set_hook_status("skill.model", "failed: class_not_found");
+        return;
+    }
+    let addr = find_method_addr(class, "get_SkillInfoList", 0);
+    if addr == 0 {
+        set_hook_status("skill.model", "failed: method_not_found");
+        return;
+    }
+    if install_hook_safe(
+        "SkillInfoList",
+        addr,
+        skill_model_list_hook as usize,
+        &mut ORIG_SKILL_MODEL_PROLOGUE,
+    ) {
+        SKILL_MODEL_HOOK_INSTALLED.store(true, Ordering::Relaxed);
+        set_hook_status("skill.model", &format!("resolved@0x{:x}", addr));
+    } else {
+        set_hook_status("skill.model", "failed: hook_rejected");
+    }
+}
+
+/// 技能页模型 List 解析（HTTP 线程，允许 invoke）
+unsafe fn skill_model_json() -> String {
+    let p = SKILL_MODEL_LIST_PTR.lock().map(|v| *v).unwrap_or(0) as *mut c_void;
+    if p.is_null() {
+        return format!(
+            r#"{{"hook_hits":{},"installed":{},"ptr":"0x0","count":0,"items":[]}}"#,
+            SKILL_MODEL_HOOK_HITS.load(Ordering::Relaxed),
+            SKILL_MODEL_HOOK_INSTALLED.load(Ordering::Relaxed)
+        );
+    }
+    let elems = walk_obj_list(p);
+    let mut items: Vec<String> = Vec::new();
+    for e in elems.iter().take(60) {
+        let ec = get_class_from_object(*e);
+        if ec.is_null() {
+            continue;
+        }
+        let gid = call_getter_int(ec, *e as *const c_void, "GetFirstSkillGroupId");
+        let hl = call_getter_int(ec, *e as *const c_void, "GetHintLv");
+        let np = call_getter_int(ec, *e as *const c_void, "GetNeedSkillPoint");
+        items.push(format!(
+            r#"{{"group_id":{},"hint_lv":{},"need_point":{}}}"#,
+            gid, hl, np
+        ));
+    }
+    let _ = elems;
+    format!(
+        r#"{{"hook_hits":{},"installed":{},"ptr":"0x{:x}","count":{},"items":[{}]}}"#,
+        SKILL_MODEL_HOOK_HITS.load(Ordering::Relaxed),
+        SKILL_MODEL_HOOK_INSTALLED.load(Ordering::Relaxed),
+        p as usize,
+        elems.len(),
+        items.join(",")
+    )
+}
+
+/// /debug/skilltips_probe —— 三条路对比 + 元素类字段表
+unsafe fn debug_skilltips_probe() -> String {
+    if API.is_null() {
+        return r#"{"error":"api_null"}"#.to_string();
+    }
+    let image = get_image();
+    if image.is_null() {
+        return r#"{"error":"image_null"}"#.to_string();
+    }
+    let wdm_class = find_class(
+        image,
+        to_cstr("Gallop").as_ptr(),
+        to_cstr("WorkDataManager").as_ptr(),
+    );
+    if wdm_class.is_null() {
+        return r#"{"error":"no_wdm"}"#.to_string();
+    }
+    let wdm_inst = get_singleton(wdm_class);
+    if wdm_inst.is_null() {
+        return r#"{"error":"no_wdm_inst"}"#.to_string();
+    }
+    let sm_class = find_class(
+        image,
+        to_cstr("Gallop").as_ptr(),
+        to_cstr("WorkSingleModeData").as_ptr(),
+    );
+    if sm_class.is_null() {
+        return r#"{"error":"no_sm_class"}"#.to_string();
+    }
+    let sm_obj = call_getter_ref(wdm_class, wdm_inst, "get_SingleMode");
+    if sm_obj.is_null() {
+        return r#"{"error":"no_sm"}"#.to_string();
+    }
+    let chara_class = find_class(
+        image,
+        to_cstr("Gallop").as_ptr(),
+        to_cstr("WorkSingleModeCharaData").as_ptr(),
+    );
+    if chara_class.is_null() {
+        return r#"{"error":"no_chara_class"}"#.to_string();
+    }
+    let chara_obj = call_getter_ref(sm_class, sm_obj, "get_Character");
+    if chara_obj.is_null() {
+        return r#"{"error":"no_chara"}"#.to_string();
+    }
+
+    let via_getter = call_getter_on_instance(chara_class, chara_obj, "get_SkillTipsList");
+    let via_field = read_ptr_at(chara_obj, 696);
+    let acquired = read_ptr_at(chara_obj, 680);
+
+    let mut elem_class_json = String::from("null");
+    let mut elem_hex = String::from("");
+    for l in [via_getter, via_field] {
+        let elems = walk_obj_list(l);
+        if let Some(e) = elems.first() {
+            let ec = get_class_from_object(*e);
+            if !ec.is_null() {
+                elem_class_json = enumerate_class_fields(ec);
+                let mut hx = String::new();
+                for k in 0..16 {
+                    hx.push_str(&format!(
+                        "{:02x}",
+                        std::ptr::read_unaligned::<u8>((*e as *const u8).add(k))
+                    ));
+                }
+                elem_hex = hx;
+                break;
+            }
+        }
+    }
+
+    let cache_len = SKILL_TIPS_GROUPS.lock().map(|g| g.len()).unwrap_or(0);
+    format!(
+        r#"{{"hook_installed":{},"hook_hits":{},"getter_addr":"0x{:x}","hook_list_ptr":"0x{:x}","hook_cache_len":{},"via_getter":{},"via_field":{},"acquired_list":{{"ptr":"0x{:x}","count":{}}},"elem_class_fields":{},"elem_hex":"{}","skill_model":{}}}"#,
+        SKILL_TIPS_HOOK_INSTALLED.load(Ordering::Relaxed),
+        SKILL_TIPS_HOOK_HITS.load(Ordering::Relaxed),
+        SKILL_TIPS_GETTER_ADDR.load(Ordering::Relaxed),
+        SKILL_TIPS_LIST_PTR.lock().map(|p| *p).unwrap_or(0),
+        cache_len,
+        tips_list_json(via_getter),
+        tips_list_json(via_field),
+        acquired as usize,
+        list_count_of(acquired),
+        elem_class_json,
+        elem_hex,
+        skill_model_json()
+    )
 }
 
 // ★ v3.24.9: Training result hook — rewritten to use interceptor API
@@ -12706,6 +13028,8 @@ extern "C" fn on_game_initialized(_userdata: *mut c_void) {
         install_failure_rate_hook();
         install_api_sniff_hooks();
         install_event_choice_hook();
+                install_skill_tips_hook();
+                install_skill_model_hook();
                 rng_consumption_probe::install();
         // v3.22.51: Pre-cache all IL2CPP metadata on game thread
         precache_metadata();
