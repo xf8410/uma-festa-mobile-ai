@@ -1096,7 +1096,44 @@ function applyFrame(f){
 
   // 悬浮窗
   document.getElementById('f-hero').textContent=f?`骏大祭 T${n(f.turn)}/77`:'等待游戏连接';
-  document.getElementById('f-score').textContent=f?fmt(n(f.skill_point)):'—';
+  // [APP-FIX-080] 预估评分 = SO 的 score（五维查定 + PT），原来错填成技能点
+  document.getElementById('f-score').textContent=f?n(f.score):'—';
+  // [APP-FIX-081] 运气分/本局分/期望分/评级（口径照抄上游 umaai record.rs/luck.rs/output.rs）
+  try{
+    if(f){
+      const RS=[0,300,600,900,1300,1800,2300,2900,3500,4900,6500,8200,10000,12100,14500,15900,17500,19200,19600,20000,20400,20800,21200,21600,22100,22500,23000,23400,23900,24300,24800,25300,25800,26300,26800,27300,27800,28300,28800,29400,29900,30400,31000,31500,32100,32700,33200,33800,34400,35000,35600,36200,36800,37500,38100,38700,39400,40000,40700,41300,42000,42700,43400,44000,44700,45400,46200,46900,47600,48300,49000,49800,50500,51300,52000,52800,53600,54400,55200,55900,56700,57500,58400,59200,60000,60800,61700,62500,63400,64200,65100,66400,67700,69000,70300,71600,72900,74400,76000,76600,77200,77800,78500,79100,79700,80400,81000,81700,82300,83000,83600,84300,84900,85600,86200,86700,87300,87900,88500,89100,89700,90300,90900,91400,92000,92600,93200,93800,94400,95000,95600,96300,96900,97500,98000,98500,99000,99600,100100,100600,101100,101700,102200,102700,103200,103800,104300,104800,105400,105900,106400,106900,107500,108000,108500,109100,109600,110100,110700,111200,111800,112300,112800,113400,113900,114400,115000,115500,116100,116600,117100,117700,118200,118800,119300,119900,120400,121000,121500,122000,122600,123100,123700,124200,124800,125300,125900,126400,127000,127500,128100,128700,129200,129800,130300,130900,131400,132000,132500,133100,133700,134200,134800,135300,135900,136500,137000,137600,138100,138700,139300,139800,140400,141000,141500,142100,142700,143200,143800,144400,144900,145500,146100,146600,147200,147800,148400,148900,149500,150100,150700,151200,151800,152400,153000,153500,154100,154700,155300,155900,156400,157000,157600,158200,158800,159300,159900,160500,161100,161700,162300,162900,163400,164000,164600,165200,165800,166400,167000,167600,168200,168700,169300,169900,170500,171100,171700,172300,172900,173500,174100,174700,175300,175900,176500,177100,177700,178300,178900,179500,180100,180700,181300,181900,182500,183100,183700,184300,184900,185500,186200,186800,187400,188000,188600,189200,189800,190400];
+      const RN=["G","G+","F","F+","E","E+","D","D+","C","C+","B","B+","A","A+","S","S+","SS","SS+","UG","UG1","UG2","UG3","UG4","UG5","UG6","UG7","UG8","UG9","UF","UF1","UF2","UF3","UF4","UF5","UF6","UF7","UF8","UF9","UE","UE1","UE2","UE3","UE4","UE5","UE6","UE7","UE8","UE9","UD","UD1","UD2","UD3","UD4","UD5","UD6","UD7","UD8","UD9","UC","UC1","UC2","UC3","UC4","UC5","UC6","UC7","UC8","UC9","UB","UB1","UB2","UB3","UB4","UB5","UB6","UB7","UB8","UB9","UA","UA1","UA2","UA3","UA4","UA5","UA6","UA7","UA8","UA9","US","US1","US2","US3","US4","US5","US6","US7","US8","US9","LG","LG1","LG2","LG3","LG4","LG5","LG6","LG7","LG8","LG9","LG10","LG11","LG12","LG13","LG14","LG15","LG16","LG17","LG18","LG19","LG20","LG21","LG22","LG23","LG24","LF","LF1","LF2","LF3","LF4","LF5","LF6","LF7","LF8","LF9","LF10","LF11","LF12","LF13","LF14","LF15","LF16","LF17","LF18","LF19","LF20","LF21","LF22","LF23","LF24","LE","LE1","LE2","LE3","LE4","LE5","LE6","LE7","LE8","LE9","LE10","LE11","LE12","LE13","LE14","LE15","LE16","LE17","LE18","LE19","LE20","LE21","LE22","LE23","LE24","LD","LD1","LD2","LD3","LD4","LD5","LD6","LD7","LD8","LD9","LD10","LD11","LD12","LD13","LD14","LD15","LD16","LD17","LD18","LD19","LD20","LD21","LD22","LD23","LD24","LC","LC1","LC2","LC3","LC4","LC5","LC6","LC7","LC8","LC9","LC10","LC11","LC12","LC13","LC14","LC15","LC16","LC17","LC18","LC19","LC20","LC21","LC22","LC23","LC24","LB","LB1","LB2","LB3","LB4","LB5","LB6","LB7","LB8","LB9","LB10","LB11","LB12","LB13","LB14","LB15","LB16","LB17","LB18","LB19","LB20","LB21","LB22","LB23","LB24","LA","LA1","LA2","LA3","LA4","LA5","LA6","LA7","LA8","LA9","LA10","LA11","LA12","LA13","LA14","LA15","LA16","LA17","LA18","LA19","LA20","LA21","LA22","LA23","LA24","LS","LS1","LS2","LS3","LS4","LS5","LS6","LS7","LS8","LS9","LS10","LS11","LS12","LS13","LS14","LS15","LS16","LS17","LS18","LS19","LS20","LS21","LS22","LS23","LS24"];
+      const BONUS=100, MAXT=77;
+      const mon=n(f.month)||1, half=n(f.half)||1;
+      let t=(mon-1)*2+(half-1); if(t<0)t=0; if(t>MAXT)t=MAXT;
+      const raw=n(f.score)||0;
+      const disp=raw+(MAXT-t)*BONUS;
+      const epoch=String(n(f.chara_id)||0);
+      let L=window.__luck;
+      if(!L||L.epoch!==epoch||t<L.turn){
+        L={epoch:epoch,turn:t,init:raw+MAXT*BONUS,last:disp,total:0,delta:null};
+        window.__luck=L;
+      } else if(t>L.turn){
+        L.delta=disp-L.last; L.total=disp-L.init; L.last=disp; L.turn=t;
+      } else {
+        L.last=disp; L.total=disp-L.init;
+      }
+      let rank='';
+      if(RN.length){
+        let lo=0,hi=RS.length-1,idx=0; const sc=Math.round(disp);
+        while(lo<=hi){const mid=(lo+hi)>>1; if(RS[mid]<=sc){idx=mid;lo=mid+1;} else {hi=mid-1;}}
+        rank=RN[idx];
+      }
+      const cell=document.getElementById('f-score')&&document.getElementById('f-score').parentElement;
+      if(cell){
+        let nt=cell.querySelector('.lucknote');
+        if(!nt){nt=document.createElement('span');nt.className='lucknote';nt.style.cssText='display:block;font-size:9px;line-height:1.12;color:#b9c6bf;margin-top:1px;';cell.appendChild(nt);}
+        const sg=function(v){return (v>=0?'+':'')+Math.round(v);};
+        nt.innerHTML='期望 '+fmt(disp)+(rank?(' <b style="color:#d8f0dd">'+rank+'</b>'):'')+
+          '<br>本局 '+sg(L.total)+' · 本轮 '+(L.delta===null?'--':sg(L.delta));
+      }
+    }
+  }catch(e){}
   document.getElementById('f-progress').textContent=`${gaugeSum}/${needSum}`;
   document.getElementById('f-gain').textContent=n(f.act_training_step);
   document.getElementById('f-vital').textContent=`${n(f.vital)}/${n(f.max_vital)}`;
@@ -1120,6 +1157,36 @@ function applyFrame(f){
     ? '建议对应最新有效局面 · 演目五维与教诲按真实帧对齐。'
     : '等待当前盘面的建议。';
   document.getElementById('a-advice').textContent=f?`本回合教诲：暂无転成；稽古步数 ${n(f.act_training_step)}`:'等待当前盘面的建议';
+  // [APP-FIX-087] PC 同款决策区：问引擎 /engine，渲染 期望(±S,档) + 首选Δ + Top3Δ
+  try {
+    if (!window.__engTimer) {
+      window.__engTimer = setInterval(async function(){
+        try {
+          const r = await fetch('/engine', {cache:'no-store'});
+          const j = await r.json();
+          const d = j && j.decision;
+          const box = document.getElementById('a-advice');
+          if (!box) return;
+          if (!d) { box.textContent = '引擎：' + (j && j.status ? j.status : '未就绪'); return; }
+          const scores = Array.isArray(d.scores) ? d.scores.slice() : [];
+          const descs = Array.isArray(d.descriptions) ? d.descriptions.slice() : [];
+          if (!scores.length) { box.textContent = '引擎：无候选分'; return; }
+          const mean = scores.reduce(function(a,b){return a+b;},0)/scores.length;
+          const delta = function(v){ const x = Math.round(v-mean); return (x>=0?'+':'')+x; };
+          const idx = [];
+          for (let i=0;i<scores.length;i++) idx.push(i);
+          idx.sort(function(a,b){return scores[b]-scores[a];});
+          const ch = (typeof d.action_index === 'number') ? d.action_index : idx[0];
+          const head = '期望 ' + n(d.expected_score) + '（±' + n(d.expected_stdev) + '，' + (d.expected_rank||'—') + '）';
+          const top = '首选：' + (descs[ch]||('#'+ch)) + ' ' + delta(scores[ch]);
+          const rest = [];
+          let rank = 2;
+          for (const i of idx) { if (i===ch) continue; if (rank>3) break; rest.push('#'+rank+' '+ (descs[i]||('#'+i)) +' '+delta(scores[i])); rank++; }
+          box.innerHTML = '<b style="color:#2a7ad1">'+head+'</b><br>'+top+'<br><span style="font-size:12px">'+rest.join('　')+'</span>';
+        } catch (e) { }
+      }, 2000);
+    }
+  } catch (e) { }
   document.getElementById('a-advice').className=f?'hint':'empty';
 }
 

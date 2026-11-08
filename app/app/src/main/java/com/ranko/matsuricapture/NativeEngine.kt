@@ -68,20 +68,36 @@ object NativeEngine {
      *  若手机端高频无条件拉，会把 SO「事件驱动 + 15s 兜底」降频后的真读频率又拉回高频，
      *  导致游戏卡顿/崩溃。因此主动拉取只在 SO 推送静默超过本阈值时兜底接管。 */
     private const val PULL_STALE_MS = 20000L
+    // [APP-FIX-083] 实际绑定到的接收端口（0 = 没绑上，只靠 pull 收帧）
+    @Volatile var boundPort: Int = 0
     private val FIVE_KEYS = arrayOf("speed", "stamina", "power", "guts", "wiz")
 
     fun start(bind: String, dir: String, ctx: Context? = null): Boolean {
         if (ctx != null) appContext = ctx.applicationContext
+        // [ENGINE-ANDROID] 拉起内置 umaai 引擎（App 进程内，别放游戏里算）
+        if (ctx != null) EngineBridge.init(ctx.applicationContext)
         if (running.get()) return true
         return try {
             val i = bind.lastIndexOf(':')
             val host = if (i > 0) bind.substring(0, i) else "127.0.0.1"
             val port = if (i > 0) bind.substring(i + 1).toInt() else 18766
-            val server = ServerSocket(port, 32, InetAddress.getByName(host))
+            // [APP-FIX-083] 18766 可能被 DSH 之类占用：换端口绑；绑不上也继续（走 pullLoop）
+            var server: ServerSocket? = null
+            for (p in intArrayOf(port, 18764, 18772, 18773)) {
+                try {
+                    server = ServerSocket(p, 32, InetAddress.getByName(host))
+                    boundPort = p
+                    break
+                } catch (ignored: Exception) {
+                }
+            }
             sessionDir = File(dir).apply { mkdirs() }
             restoreFromArchive()
             running.set(true)
-            Thread({ loop(server) }, "matsuri-18766").apply { isDaemon = true }.start()
+            val srv = server
+            if (srv != null) {
+                Thread({ loop(srv) }, "matsuri-recv").apply { isDaemon = true }.start()
+            }
             Thread({ probeLoop() }, "matsuri-so-probe").apply { isDaemon = true }.start()
             Thread({ pullLoop() }, "matsuri-so-pull").apply { isDaemon = true }.start()
             true
@@ -260,6 +276,7 @@ object NativeEngine {
         if (method == "OPTIONS") return json("{}")
         return when {
             method == "POST" && p == "/data" -> { ingest(body, "push"); json("{\"ok\":true}") }
+            p == "/engine" -> json(EngineBridge.statusJson()) // [ENGINE-ANDROID]
             p == "/api/health" -> json(healthJson().toString())
             p == "/api/snapshot" -> json(snapshot().toString())
             p == "/api/frames" -> json(framesJson(path).toString())
@@ -488,12 +505,19 @@ object NativeEngine {
             .put("missing", missing)
             .put("has_festa", festa != null)
             .put("fields_ok", stats != null)
+            // [APP-FIX-080] SO 算好的评价分（五维查定 + PT×倍率）
+            .put("score", iv(summary, "score"))
+            .put("five_score", iv(summary, "five_score"))
+            .put("pt_score", iv(summary, "pt_score"))
+            .put("skill_score", iv(summary, "skill_score"))
             .put("raw", summary)
     }
 
     private fun ingest(body: String, source: String) {
         if (body.isBlank()) return
         val raw = try { JSONObject(body) } catch (ignored: Exception) { return }
+        // [ENGINE-ANDROID] 落一份帧文件给内置引擎
+        appContext?.let { EngineBridge.onSummary(it, raw) }
         // 已是归一化帧（matsuri-capture 格式）就直接用；SO 原始 /summary 才需要映射
         val frame = if (raw.has("five")) raw else normalize(raw, null, source)
         if (source == "push") pushRecv++
