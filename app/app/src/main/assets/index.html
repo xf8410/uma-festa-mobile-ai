@@ -286,8 +286,8 @@ h1.big{font-size:33px;line-height:1.3;font-weight:700;margin:0 0 6px;letter-spac
   <b>UmaAI · 骏大祭（祭典杯）</b><br>
   手机版 UI 原型 · 照旧版四 tab 视觉重做<br>
   数据口径对齐 <b>matsuri-capture</b> 电脑版面板<br>
-  SO 推 /data → 本机 18767 收；本机后台持续主动拉 SO 18765 /summary（双通道）<br><br>
-  默认演示数据；设置页可切「实时 18767」<br>
+  SO 推 /data → 本机 18766 收；本机后台持续主动拉 SO 18765 /summary（双通道）<br><br>
+  默认演示数据；设置页可切「实时 18766」<br>
   点「建议」页顶部的悬浮窗按钮看浮层
 </div>
 
@@ -306,7 +306,7 @@ h1.big{font-size:33px;line-height:1.3;font-weight:700;margin:0 0 6px;letter-spac
       <div class="card" style="background:var(--green-tint);border-color:#d9eadf">
         <button class="btn" id="btn-connect" onclick="toggleConnect()">开始连接</button>
         <div class="hint" style="text-align:center;margin-top:10px">
-          SO 推 /summary → 本机 18767 收；本机后台持续主动拉 18765（推送静默时兜底）。暂停仅停止页面轮询，接收、主动拉取与归档继续。
+          SO 推 /summary → 本机 18766 收；本机后台持续主动拉 18765（推送静默时兜底）。暂停仅停止页面轮询，接收、主动拉取与归档继续。
         </div>
       </div>
 
@@ -314,22 +314,22 @@ h1.big{font-size:33px;line-height:1.3;font-weight:700;margin:0 0 6px;letter-spac
         <h2>连接状态 <span class="badge" id="link-badge">检测中…</span></h2>
         <div class="row"><span class="k">接收服务</span><span class="v" id="v-service">检测中…</span></div>
         <div class="row"><span class="k">游戏采集</span><span class="v" id="v-capture">等待游戏数据</span></div>
-        <div class="row"><span class="k">数据入口</span><span class="v mono" id="v-inport">本机 · 127.0.0.1:18767</span></div>
+        <div class="row"><span class="k">数据入口</span><span class="v mono" id="v-inport">本机 · 127.0.0.1:18766</span></div>
         <div class="row"><span class="k">SO HTTP（拉取用）</span><span class="v mono" id="v-soport">127.0.0.1:18765</span></div>
         <div class="row"><span class="k">已接收</span><span class="v" id="v-frames">0 个数据包</span></div>
         <div class="row"><span class="k">最近接收</span><span class="v" id="v-last">等待游戏数据</span></div>
         <div class="row"><span class="k">最近心跳</span><span class="v" id="v-beat">尚未连接</span></div>
         <div class="row"><span class="k">盘面同步</span><span class="v" id="v-sync">等待育成同步</span></div>
         <div class="row"><span class="k">接线诊断</span><span class="v" id="v-linkdiag">—</span></div>
-        <div class="hint">双通道持续接线：① SO 数据变化即把 /summary 以 POST /data 推到 18767；② 本机后台持续监控，一旦推送静默超过 20 秒（大于 SO 的 15 秒兜底心跳，避免把降频后的全量读拉回高频）就主动向 18765 拉 /summary 兜底。18767 只接收/拉取、绝不往外推。冷启动还会从 frames.jsonl 读回上次会话末帧（标注「归档」）。缺值一律显式 −1，「没有」和「是 0」长得不一样。</div>
+        <div class="hint">双通道持续接线：① SO 数据变化即把 /summary 以 POST /data 推到 18766；② 本机后台持续监控，一旦推送静默超过 20 秒（大于 SO 的 15 秒兜底心跳，避免把降频后的全量读拉回高频）就主动向 18765 拉 /summary 兜底。18766 只接收/拉取、绝不往外推。冷启动还会从 frames.jsonl 读回上次会话末帧（标注「归档」）。缺值一律显式 −1，「没有」和「是 0」长得不一样。</div>
       </div>
 
       <div class="card">
-        <h2>链路 <span class="badge">SO → 18767</span></h2>
+        <h2>链路 <span class="badge">SO → 18766</span></h2>
         <div class="quote">
           游戏进程内 <b>libhachimi_ura.so</b> 在 18765 起 HTTP，<br>
-          <b>push_to_app()</b> 把 <b>/summary</b> 的 JSON 以 <b>POST /data</b> 推到 18767；<br>
-          接收端监听 18767 收推送，并在推送静默时后台主动 GET 18765 /summary 兜底；<br>
+          <b>push_to_app()</b> 把 <b>/summary</b> 的 JSON 以 <b>POST /data</b> 推到 18766；<br>
+          接收端监听 18766 收推送，并在推送静默时后台主动 GET 18765 /summary 兜底；<br>
           两条通道都把 /summary 归一化成育成属性帧，同源提供本面板。
         </div>
         <div class="row"><span class="k">剧本</span><span class="v ok">festa · scenarioId 15</span></div>
@@ -340,12 +340,12 @@ h1.big{font-size:33px;line-height:1.3;font-weight:700;margin:0 0 6px;letter-spac
       <div class="card">
         <h2>两条链路 <span class="badge">别弄混</span></h2>
         <div class="quote">
-          本 App 走 <b>手机线</b>：SO 在 18765 提供 HTTP（本机后台持续主动拉），并主动 <b>POST /data</b> 把 /summary 推到本机 <b>18767</b> 收；18767 只收不推。<br>
+          本 App 走 <b>手机线</b>：SO 在 18765 提供 HTTP（本机后台持续主动拉），并主动 <b>POST /data</b> 把 /summary 推到本机 <b>18766</b> 收；18766 只收不推。<br>
           电脑版 URA 是<b>另一条独立链路</b>：Hachimi-Edge V3 把原始 MessagePack 以 POST /notify/response 送到 <b>127.0.0.1:4693</b>，由 FestaScenarioAnalyzer / SendGameStatusPlugin / AIRedirector 解析与喂 AI。
         </div>
-        <div class="row"><span class="k">手机线端口</span><span class="v mono">18765 / 18767</span></div>
+        <div class="row"><span class="k">手机线端口</span><span class="v mono">18765 / 18766</span></div>
         <div class="row"><span class="k">电脑版端口</span><span class="v mono">4693（不共用）</span></div>
-        <div class="hint">上游官方仓（EtherealAO 项目组 / umaai-project）里只有 4693，没有 18765/18767——手机 SO 这套是你自己分支线的实现，字段口径两边一致但代码各自独立。</div>
+        <div class="hint">上游官方仓（EtherealAO 项目组 / umaai-project）里只有 4693，没有 18765/18766——手机 SO 这套是你自己分支线的实现，字段口径两边一致但代码各自独立。</div>
       </div>
 
       <div class="card">
@@ -460,17 +460,17 @@ h1.big{font-size:33px;line-height:1.3;font-weight:700;margin:0 0 6px;letter-spac
       <div class="card">
         <h2>连接与协议</h2>
         <div class="field"><label>接收端口（本机监听）</label>
-          <input id="s-port-in" value="18767" inputmode="numeric">
+          <input id="s-port-in" value="18766" inputmode="numeric">
           <div class="tip">SO 的 push_to_app 打的是 POST /data → 这个端口</div></div>
         <div class="field"><label>推送方 SO 端口</label>
           <input id="s-port-so" value="18765" inputmode="numeric">
           <div class="tip">/summary、/debug/festa_probe、/action/latest 都在这里</div></div>
         <div class="field"><label>面板数据源</label>
-          <select id="s-source"><option value="live" selected>实时 18767 · /api/snapshot（默认）</option>
+          <select id="s-source"><option value="live" selected>实时 18766 · /api/snapshot（默认）</option>
           <option value="demo">布局预览 · 非游戏数据</option></select>
           <div class="tip">默认只用真实帧；「布局预览」仅供离线看版式，不会冒充游戏盘面</div></div>
         <div class="field"><label>实时 BASE（APK WebView 用）</label>
-          <input id="s-base" value="http://127.0.0.1:18767"></div>
+          <input id="s-base" value="http://127.0.0.1:18766"></div>
       </div>
 
       <div class="card">
@@ -879,8 +879,8 @@ const n=v=>(v===U||v===null||v===undefined)?'—':v;
 const esc=s=>String(s??'').replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
 const fmt=v=>typeof v==='number'?v.toLocaleString('zh-CN'):String(v);
 
-/* 所有数值都来自 18767 真实接口；DEMO 仅在用户显式点「布局预览」时使用，且明确标注非游戏数据 */
-let state={polling:true, source:"live", base:"http://127.0.0.1:18767", frame:null, frames:0,
+/* 所有数值都来自 18766 真实接口；DEMO 仅在用户显式点「布局预览」时使用，且明确标注非游戏数据 */
+let state={polling:true, source:"live", base:"http://127.0.0.1:18766", frame:null, frames:0,
            service:false, soAlive:false, latestSource:"none", archiveCount:0, ageMs:0,
            probeOk:null, overlayOk:false, overlayRunning:false,
            timer:null, lastPullAt:0, pullBusy:false, lastPull:null,
@@ -890,7 +890,7 @@ let state={polling:true, source:"live", base:"http://127.0.0.1:18767", frame:nul
 // 20s 阈值大于 SO 的 15s 兜底心跳，避免把降频后的全量读拉回高频。
 const STALE_MS=20000, PULL_MIN_MS=5000;
 
-/* 连接页 UI：全部按 18767 真实状态渲染，无数据就显式显示「未接收」 */
+/* 连接页 UI：全部按 18766 真实状态渲染，无数据就显式显示「未接收」 */
 function syncConnectUI(){
   const q=id=>document.getElementById(id);
   const svc=state.service, so=state.soAlive, f=state.frame;
@@ -901,7 +901,7 @@ function syncConnectUI(){
   if(!svc){ badge.textContent='接收端未启动'; badge.className='badge off'; }
   else if(!so){ badge.textContent='SO 未响应'; badge.className='badge warn'; }
   else { badge.textContent='SO 在线'; badge.className='badge'; }
-  q('v-service').textContent=svc?'运行中 · 18767':'未启动';
+  q('v-service').textContent=svc?'运行中 · 18766':'未启动';
   q('v-service').className='v '+(svc?'ok':'off');
   q('v-capture').textContent=f?(f.has_festa?'骏大祭 · festa':'剧本未识别'):'等待游戏数据';
   q('v-capture').className='v '+(f?'':'off');
@@ -1096,8 +1096,7 @@ function applyFrame(f){
 
   // 悬浮窗
   document.getElementById('f-hero').textContent=f?`骏大祭 T${n(f.turn)}/77`:'等待游戏连接';
-  // [APP-FIX-080] 预估评分 = SO 的 score（五维查定 + PT），原来错填成技能点
-  document.getElementById('f-score').textContent=f?n(f.score):'—';
+  document.getElementById('f-score').textContent=f?fmt(n(f.skill_point)):'—';
   document.getElementById('f-progress').textContent=`${gaugeSum}/${needSum}`;
   document.getElementById('f-gain').textContent=n(f.act_training_step);
   document.getElementById('f-vital').textContent=`${n(f.vital)}/${n(f.max_vital)}`;

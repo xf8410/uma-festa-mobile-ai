@@ -31,7 +31,7 @@ import java.io.File
  * 真正的 Android 系统级悬浮窗（TYPE_APPLICATION_OVERLAY）。
  *
  * 由前台服务持有，App 退到后台 / 游戏在前台时仍可盖在游戏上方。
- * 内容是一个同源 WebView，轮询 18767 的 /api/snapshot 显示实时盘面；
+ * 内容是一个同源 WebView，轮询 18766 的 /api/snapshot 显示实时盘面；
  * 断线重连逻辑与主页一致（NativeEngine 的 /api/pull 会主动向 SO 拉当前帧）。
  */
 class FloatingWindowService : Service() {
@@ -265,7 +265,7 @@ class FloatingWindowService : Service() {
         const val ACTION_STOP = "com.ranko.matsuricapture.FLOAT_STOP"
         private const val CHANNEL = "festa_float"
         private const val NOTIFY_ID = 2
-        private const val FLOAT_URL = "http://127.0.0.1:18767/float"
+        private const val FLOAT_URL = "http://127.0.0.1:18766/float"
         private val SCALES = floatArrayOf(1.0f, 0.70f, 0.45f)
         @Volatile private var running = false
         fun isRunning(): Boolean = running

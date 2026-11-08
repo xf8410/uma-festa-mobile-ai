@@ -20,7 +20,7 @@ import java.net.URL
 /**
  * 祭典杯手机版：单页 WebView 壳。
  *
- * 先在本进程拉起 18767 接收端，再从同源 http://127.0.0.1:18767/ 加载面板。
+ * 先在本进程拉起 18766 接收端，再从同源 http://127.0.0.1:18766/ 加载面板。
  * 页面所有数值来自 /api/snapshot（真实帧），断线/回前台自动 /api/pull 向 SO 拉当前盘面。
  *
  * 悬浮窗：声明 SYSTEM_ALERT_WINDOW，主动引导到系统的「显示在其他应用上层」设置页，
@@ -37,7 +37,7 @@ class MainActivity : AppCompatActivity() {
             settings.javaScriptEnabled = true
             settings.domStorageEnabled = true
             settings.allowFileAccess = true
-            // file:// 兜底时也能访问本机 18767 的 /api/*
+            // file:// 兜底时也能访问本机 18766 的 /api/*
             settings.allowUniversalAccessFromFileURLs = true
             setBackgroundColor(0xFFF0F2F5.toInt())
         }
@@ -151,8 +151,8 @@ class MainActivity : AppCompatActivity() {
     }
 
     companion object {
-        const val BIND = "127.0.0.1:18767"
-        const val LOCAL = "http://127.0.0.1:18767/"
+        const val BIND = "127.0.0.1:18766"
+        const val LOCAL = "http://127.0.0.1:18766/"
         const val FALLBACK = "file:///android_asset/index.html"
     }
 }
