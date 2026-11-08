@@ -786,8 +786,26 @@ extern "C" fn crash_signal_handler(sig: i32) {
     let r: &[u8] = if armed { &b" ARMED"[..] } else { &b" NOT-ARMED"[..] };
     msg[len..len + r.len()].copy_from_slice(r);
     len += r.len();
-    let mt = MAIN_TID.load(std::sync::atomic::Ordering::Relaxed);
-    if mt != 0 && cur_tid == mt {
+    // [CRASH-DIAG3-3292] 主线程 tid == 进程 pid
+    let is_main = cur_tid == unsafe { libc::getpid() };
+    // 把 tid 写成十六进制，方便和日志里的线程对照
+    let mut __t = cur_tid as u32;
+    let mut __started = false;
+    msg[len] = b' ';
+    len += 1;
+    msg[len] = b't';
+    len += 1;
+    msg[len] = b'=';
+    len += 1;
+    for i in (0..8).rev() {
+        let d = ((__t >> (i * 4)) & 0xF) as u8;
+        if d != 0 || __started || i == 0 {
+            msg[len] = if d < 10 { b'0' + d } else { b'a' + d - 10 };
+            len += 1;
+            __started = true;
+        }
+    }
+    if is_main {
         let m = b" MT";
         msg[len..len + m.len()].copy_from_slice(m);
         len += m.len();
@@ -4899,6 +4917,11 @@ unsafe fn query_next_turn_race_entry(next_turn: i32) -> bool {
 }
 
 fn read_summary() -> String {
+    // [CRASH-DIAG3-3292] read_tid
+    {
+        let tid = unsafe { libc::syscall(libc::SYS_gettid) } as u32;
+        log_predict_step(&format!("S:read_tid={:x}", tid));
+    }
     // ★ v3.22.35: SIGSEGV cooldown — if we recently recovered from a crash, skip reads
     let now = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
