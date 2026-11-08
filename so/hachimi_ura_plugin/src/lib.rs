@@ -7464,30 +7464,48 @@ fn simple_hash(s: &str) -> u64 {
 
 fn push_to_app(json: &str) {
     use std::io::{Read, Write};
+    // [PUSHFALLBACK-3292] 18766 常被别的进程占用（例如 DSH 自己的服务）→
+    // 先试配置端口，再依次试 App 的兜底端口 18764/18772/18773。
     let cfg = unsafe { get_config() };
     if !cfg.push_enabled {
         return;
     }
-    let addr_str = cfg.push_addr();
-    let addr: std::net::SocketAddr = match addr_str.parse() {
-        Ok(a) => a,
-        Err(_) => return,
-    };
-    let mut stream =
-        match std::net::TcpStream::connect_timeout(&addr, std::time::Duration::from_secs(2)) {
-            Ok(s) => s,
-            Err(_) => return, // App not running, that's fine
-        };
+    let host = cfg.push_host.clone();
+    let mut ports: Vec<u16> = vec![cfg.push_port];
+    for p in [18764u16, 18772, 18773] {
+        if !ports.contains(&p) {
+            ports.push(p);
+        }
+    }
     let body = json.as_bytes();
-    let req = format!(
-        "POST /data HTTP/1.1\r\nHost: {}\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
-        addr_str, body.len()
-    );
-    let _ = stream.write_all(req.as_bytes());
-    let _ = stream.write_all(body);
-    let _ = stream.flush();
-    let mut buf = [0u8; 256];
-    let _ = stream.read(&mut buf);
+    for port in ports {
+        let addr_str = format!("{}:{}", host, port);
+        let addr: std::net::SocketAddr = match addr_str.parse() {
+            Ok(a) => a,
+            Err(_) => continue,
+        };
+        let mut stream = match std::net::TcpStream::connect_timeout(
+            &addr,
+            std::time::Duration::from_millis(800),
+        ) {
+            Ok(s) => s,
+            Err(_) => continue, // 这个端口没人听，试下一个
+        };
+        let req = format!(
+            "POST /data HTTP/1.1\r\nHost: {}\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
+            addr_str, body.len()
+        );
+        let mut ok = stream.write_all(req.as_bytes()).is_ok();
+        if ok {
+            ok = stream.write_all(body).is_ok();
+        }
+        let _ = stream.flush();
+        let mut buf = [0u8; 256];
+        let _ = stream.read(&mut buf);
+        if ok {
+            return;
+        }
+    }
 }
 
 fn push_loop() {
