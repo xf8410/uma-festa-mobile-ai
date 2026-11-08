@@ -5,6 +5,7 @@ on:
     paths:
       - ".github/workflows/build-ura-3292-v17.yml"
       - ".github/scripts/apply_skillhook_3292.js"
+      - ".github/scripts/apply_skillhook2_3292.js"
   workflow_dispatch:
 
 permissions:
@@ -26,7 +27,9 @@ jobs:
             node ".github/scripts/$f.js" so/hachimi_ura_plugin/src/lib.rs 2>&1 | tee -a ci-capture.txt || true
           done
           node .github/scripts/apply_skillhook_3292.js so/hachimi_ura_plugin/src/lib.rs 2>&1 | tee -a ci-capture.txt
+          node .github/scripts/apply_skillhook2_3292.js so/hachimi_ura_plugin/src/lib.rs 2>&1 | tee -a ci-capture.txt
           grep -qF '[SKILLHOOK-3292]' so/hachimi_ura_plugin/src/lib.rs
+          grep -qF 'let ret = unsafe { original(this) };' so/hachimi_ura_plugin/src/lib.rs
           grep -qF 'install_skill_tips_hook();' so/hachimi_ura_plugin/src/lib.rs
           grep -qF 'install_skill_model_hook();' so/hachimi_ura_plugin/src/lib.rs
           grep -qF '/debug/skilltips_probe' so/hachimi_ura_plugin/src/lib.rs
