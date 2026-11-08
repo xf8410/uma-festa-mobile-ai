@@ -970,9 +970,23 @@ function v5RenderBoard(f){
     const it=byT[a.t]||{},g=+it.gauge||0,nd=+it.need_gauge||0;
     const lit=nd>0&&g>=nd;if(lit)on++;gS+=g>0?g:0;nS+=nd>0?nd:0;
     const kb=lit?`<span class="v5-kb">稽古·${esc(a.name)}</span>`:'<span class="v5-kb none">普通训练</span>';
-    let heads=lit?(v5Head('link',a.guest+'（担当锁定）',false)+v5Head('card','担当支援卡 ×N',false))
-                 :v5Head('card','支援卡人头（占位）',false);
-    heads+=v5Head('npc','一般 NPC（随机角标）',false)+v5Head('social','理事长 / 记者',true)+v5Head('guest','友人·吾妻（必补位）',true);
+    // [APP-FIX-093] 人头用真数据：trainings[command_id].partners
+    const cmdId=5101+idx;
+    const tr=(f.trainings||[]).find(function(t){return +t.command_id===cmdId;})||{};
+    const ppl=(tr.partners||[]).slice(0,5);
+    let heads='';
+    if(ppl.length){
+      heads=ppl.map(function(p){
+        const nm=esc(p.name||('#'+p.partner_id));
+        const bd=(p.current_bond!=null)?(' ·'+p.current_bond):'';
+        const typ=p.support_card_id?'card':'npc';
+        return v5Head(typ, nm+bd, !p.is_unique_active);
+      }).join('');
+    } else {
+      heads=v5Head('card','人头未推('+(tr.heads||0)+'人)',false);
+    }
+    // [APP-FIX-093] 末尾补位说明只在没真数据时提示
+    if(!ppl.length) heads+=v5Head('npc','一般 NPC（随机角标）',false)+v5Head('social','理事长 / 记者',true);
     const gain=gg.length?n((gg.find(x=>+x.command_type===idx)||{}).predict_len):'—';
     const ap=ci.length?n((ci.find(x=>+x.command_type===idx)||{}).params_len):'—';
     return `<div class="col ${V5_KEYS[idx]}${lit?' on':''}"><div class="h">${a.attr}</div>
@@ -1407,10 +1421,15 @@ clearFrame();
 refreshOverlayState();
 if(state.source==='live') startPolling();
 
+// [APP-FIX-093] 页面级缩放：悬浮窗的 ⤢ 按钮改窗口宽度 + CSS zoom，这里让 zoom 真正生效
+window.setZoom = function(z){
+  const v = Math.max(.35, Math.min(2.0, +z || 1));
+  document.documentElement.style.zoom = v;
+};
 /* ===== 电脑版原样盘面（1:1 复刻视图） ===== */
 let boardZ = 0.42;
 function setBoardZoom(z){
-  boardZ = Math.max(.25, Math.min(1.4, +z.toFixed(3)));
+  boardZ = Math.max(.1, Math.min(3.0, +z.toFixed(3))); // [APP-FIX-093] 随时可拉伸
   document.getElementById('board-root').style.zoom = boardZ;
 }
 function fitBoard(){
@@ -1418,7 +1437,7 @@ function fitBoard(){
   root.style.zoom = 1;
   const nat = root.scrollWidth || 900;
   const w = (document.getElementById('boScroll').clientWidth || 370) - 20;
-  setBoardZoom(Math.max(.25, Math.min(1, w / nat)));
+  setBoardZoom(Math.max(.1, Math.min(3.0, w / nat))); // [APP-FIX-093] 适配也能放大
 }
 function boardZoom(d){ setBoardZoom(boardZ + d * .08); }
 function showBoard(){

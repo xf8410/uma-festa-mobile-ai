@@ -42,6 +42,11 @@ class FloatingWindowService : Service() {
     private var web: WebView? = null
     private var collapsed = false
     private var scaleIdx = 0
+    // [APP-FIX-094] 拖拽缩放的起点
+    private var resStartW = 0
+    private var resStartH = 0
+    private var resStartX = 0f
+    private var resStartY = 0f
 
     override fun onCreate() {
         super.onCreate()
@@ -106,8 +111,10 @@ class FloatingWindowService : Service() {
             addJavascriptInterface(FloatBridge(), "Android")
             // 紧凑一屏面板：宽约屏宽 94%，高度由页面 reportHeight 回执收紧（WebView
             // 的 WRAP_CONTENT 不按内容收缩）。折叠时高度压成迷你条。
-            val w = (0.94 * resources.displayMetrics.widthPixels).toInt()
-            layoutParams = LinearLayout.LayoutParams(w, dp(320))
+            // [APP-FIX-094] 撑满窗口，窗口尺寸由外面的拖拽条决定
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f
+            )
         }
 
         val container = LinearLayout(this).apply {
@@ -116,6 +123,37 @@ class FloatingWindowService : Service() {
             addView(header, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT))
             addView(web)
         }
+        // [APP-FIX-094] 底部自由缩放拖拽条
+        val resizer = TextView(this).apply {
+            text = "⇳ 拖拽缩放"
+            textSize = 11f
+            gravity = Gravity.CENTER
+            setTextColor(0xFF4A5C50.toInt())
+            setBackgroundColor(0xAAFFFFFF.toInt())
+            setPadding(0, dp(4), 0, dp(4))
+        }
+        container.addView(resizer, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dp(26)))
+        resizer.setOnTouchListener { _, ev ->
+            val params = lp ?: return@setOnTouchListener false
+            when (ev.actionMasked) {
+                MotionEvent.ACTION_DOWN -> {
+                    resStartW = params.width
+                    resStartH = params.height
+                    resStartX = ev.rawX
+                    resStartY = ev.rawY
+                    true
+                }
+                MotionEvent.ACTION_MOVE -> {
+                    val mw = resources.displayMetrics.widthPixels
+                    val mh = (0.95 * resources.displayMetrics.heightPixels).toInt()
+                    params.width = (resStartW + (ev.rawX - resStartX)).toInt().coerceIn(dp(140).coerceAtMost(mw), mw)
+                    params.height = (resStartH + (ev.rawY - resStartY)).toInt().coerceIn(dp(90).coerceAtMost(mh), mh)
+                    try { wm?.updateViewLayout(container, params) } catch (e: Throwable) { }
+                    true
+                }
+                else -> false
+            }
+        }
         root = container
 
         val type = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O)
@@ -123,9 +161,11 @@ class FloatingWindowService : Service() {
         else
             WindowManager.LayoutParams.TYPE_PHONE
 
+        val initW = (0.94 * resources.displayMetrics.widthPixels).toInt()
+        val initH = (0.42 * resources.displayMetrics.heightPixels).toInt()
         lp = WindowManager.LayoutParams(
-            WindowManager.LayoutParams.WRAP_CONTENT,
-            WindowManager.LayoutParams.WRAP_CONTENT,
+            initW,
+            initH,
             type,
             WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,
             PixelFormat.TRANSLUCENT
@@ -144,14 +184,14 @@ class FloatingWindowService : Service() {
                 if (collapsed) {
                     // 折叠 = 迷你条：页面切到「运气分 ± ｜ 推荐训练」单行，高度压成一条；
                     // 标题栏隐藏，迷你条自身可拖动（见下方 web 触摸逻辑）
-                    wlp.height = dp(30)
-                    w.layoutParams = wlp
+                    lp?.height = dp(34) // [APP-FIX-094] 折叠 = 迷你条窗口高度
+                    wm?.updateViewLayout(container, lp)
                     header.visibility = View.GONE
                     w.evaluateJavascript("window.setMini&&setMini(true)", null)
                 } else {
                     // 展开：高度先给一屏内的默认值，页面下一次 render 的 reportHeight 会收紧
-                    wlp.height = dp(320)
-                    w.layoutParams = wlp
+                    lp?.height = (0.42 * resources.displayMetrics.heightPixels).toInt() // [APP-FIX-094]
+                    wm?.updateViewLayout(container, lp)
                     header.visibility = View.VISIBLE
                     w.evaluateJavascript("window.setMini&&setMini(false)", null)
                 }
