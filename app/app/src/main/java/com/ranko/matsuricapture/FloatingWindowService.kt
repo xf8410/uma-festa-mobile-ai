@@ -57,7 +57,7 @@ class FloatingWindowService : Service() {
             stopSelf()
             return START_NOT_STICKY
         }
-        if (root == null) addOverlay() else web?.loadUrl(FLOAT_URL)
+        if (root == null) addOverlay() else web?.loadUrl(floatUrlOf())
         return START_STICKY
     }
 
@@ -135,7 +135,7 @@ class FloatingWindowService : Service() {
             y = dp(120)
         }
         wm?.addView(container, lp)
-        web?.loadUrl(FLOAT_URL)
+        web?.loadUrl(floatUrlOf())
 
         minBtn.setOnClickListener {
             collapsed = !collapsed
@@ -266,6 +266,11 @@ class FloatingWindowService : Service() {
         private const val CHANNEL = "festa_float"
         private const val NOTIFY_ID = 2
         private const val FLOAT_URL = "http://127.0.0.1:18766/float"
+        // [APP-FIX-084] 实际绑定端口（18766 被占时是 18764）
+        private fun floatUrlOf(): String {
+            val p = NativeEngine.boundPort
+            return "http://127.0.0.1:" + (if (p > 0) p else 18766) + "/float"
+        }
         private val SCALES = floatArrayOf(1.0f, 0.70f, 0.45f)
         @Volatile private var running = false
         fun isRunning(): Boolean = running
