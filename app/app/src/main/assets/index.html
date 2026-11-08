@@ -1116,7 +1116,8 @@ function applyFrame(f){
 
   // 悬浮窗
   document.getElementById('f-hero').textContent=f?`骏大祭 T${n(f.turn)}/77`:'等待游戏连接';
-  document.getElementById('f-score').textContent=f?fmt(n(f.skill_point)):'—';
+  // [APP-FIX-080] 预估评分 = SO 的 score（五维查定 + PT），原来错填成技能点
+  document.getElementById('f-score').textContent=f?n(f.score):'—';
   document.getElementById('f-progress').textContent=`${gaugeSum}/${needSum}`;
   document.getElementById('f-gain').textContent=n(f.act_training_step);
   document.getElementById('f-vital').textContent=`${n(f.vital)}/${n(f.max_vital)}`;

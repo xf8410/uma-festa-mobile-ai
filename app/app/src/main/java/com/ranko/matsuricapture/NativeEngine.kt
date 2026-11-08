@@ -488,6 +488,11 @@ object NativeEngine {
             .put("missing", missing)
             .put("has_festa", festa != null)
             .put("fields_ok", stats != null)
+            // [APP-FIX-080] SO 算好的评价分（五维查定 + PT×倍率）
+            .put("score", iv(summary, "score"))
+            .put("five_score", iv(summary, "five_score"))
+            .put("pt_score", iv(summary, "pt_score"))
+            .put("skill_score", iv(summary, "skill_score"))
             .put("raw", summary)
     }
 
