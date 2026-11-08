@@ -18,7 +18,8 @@ Node.js v22.23.4
 already applied
 already applied
 already applied
-app-fix-079 applied, bytes=84061
+already applied
+app-fix-080 applied
 To honour the JVM settings for this build a single-use Daemon process will be forked. For more on this, please refer to https://docs.gradle.org/8.11.1/userguide/gradle_daemon.html#sec:disabling_the_daemon in the Gradle documentation.
 Daemon will be stopped at the end of the build 
 > Task :app:buildKotlinToolingMetadata
@@ -36,8 +37,8 @@ Daemon will be stopped at the end of the build
 > Task :app:parseReleaseLocalResources
 > Task :app:processReleaseMainManifest
 > Task :app:processReleaseManifest
-> Task :app:javaPreCompileRelease
 > Task :app:processReleaseManifestForPackage
+> Task :app:javaPreCompileRelease
 > Task :app:extractProguardFiles
 > Task :app:mergeReleaseJniLibFolders
 > Task :app:mergeReleaseNativeLibs NO-SOURCE
@@ -58,8 +59,8 @@ Daemon will be stopped at the end of the build
 > Task :app:collectReleaseDependencies
 > Task :app:sdkReleaseDependencyData
 > Task :app:validateSigningRelease
-> Task :app:optimizeReleaseResources
 > Task :app:writeReleaseAppMetadata
+> Task :app:optimizeReleaseResources
 > Task :app:writeReleaseSigningConfigVersions
 > Task :app:mergeExtDexRelease
 
@@ -82,7 +83,7 @@ w: file:///home/runner/work/uma-festa-mobile-ai/uma-festa-mobile-ai/app/app/src/
 > Task :app:lintVitalReportRelease
 > Task :app:lintVitalRelease
 > Task :app:assembleRelease
-gradle/actions: Writing build results to /home/runner/work/_temp/.gradle-actions/build-results/__run_3-1794109024509.json
+gradle/actions: Writing build results to /home/runner/work/_temp/.gradle-actions/build-results/__run_3-1794127683498.json
 
-BUILD SUCCESSFUL in 50s
+BUILD SUCCESSFUL in 47s
 45 actionable tasks: 45 executed
