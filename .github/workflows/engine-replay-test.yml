@@ -16,6 +16,8 @@ jobs:
     runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Cache cargo + engine build
         uses: actions/cache@v4
@@ -24,45 +26,47 @@ jobs:
             ~/.cargo/registry
             ~/.cargo/git
             /tmp/w
-          key: engine-replay-v3
+          key: engine-replay-v4
 
-      - name: Build + replay + commit log (one shell)
+      - name: Build + replay (print + save log)
         run: |
           set -o pipefail
           OUT="$GITHUB_WORKSPACE/ci-last-replay.txt"
           : > "$OUT"
           say() { echo "$@" | tee -a "$OUT"; }
           mkdir -p /tmp/w
-          say "step=clone"
           [ -d /tmp/w/umaai_next/.git ] || git clone --depth 1 https://github.com/umaai-project/umaai-next.git /tmp/w/umaai_next > /dev/null 2>&1
           [ -d /tmp/w/umaai-matsuri/.git ] || git clone --depth 1 https://github.com/umaai-project/umaai-matsuri.git /tmp/w/umaai-matsuri > /dev/null 2>&1
           cd /tmp/w/umaai-matsuri
-          say "step=build"
-          cargo build --release -p matsuri-cli 2>&1 | tail -6 | tee -a "$OUT"
-          ls -l target/release/matsuri | tee -a "$OUT"
-          say "step=frame"
+          cargo build --release -p matsuri-cli 2>&1 | tail -4 | tee -a "$OUT"
           node "$GITHUB_WORKSPACE/.github/scripts/summary_to_frame.js" "$GITHUB_WORKSPACE/.github/fixtures/summary_min.json" > /tmp/frame.json
           say "frame_bytes=$(wc -c < /tmp/frame.json)"
           rm -rf ci-frames && mkdir -p ci-frames
           cp /tmp/frame.json ci-frames/game102003_turn12.json
-          say "step=run"
           set +e
           timeout 240 ./target/release/matsuri online --replay ./ci-frames --json > /tmp/out.json 2> /tmp/err.txt
           RC=$?
           set -e
           say "exit=$RC"
-          say "stdout_bytes=$(wc -c < /tmp/out.json) stderr_bytes=$(wc -c < /tmp/err.txt)"
           say "---- stdout ----"
-          head -c 4000 /tmp/out.json >> "$OUT"
+          head -c 3000 /tmp/out.json >> "$OUT"
           say "---- stderr ----"
-          head -c 6000 /tmp/err.txt >> "$OUT"
+          head -c 4000 /tmp/err.txt >> "$OUT"
           say "---- end ----"
-          cd "$GITHUB_WORKSPACE"
-          cp /tmp/frame.json /tmp/frame-out.json 2>/dev/null || true
+          echo "::warning::REPLAY_LOG_START"
+          cat "$OUT"
+          echo "::warning::REPLAY_LOG_END"
+
+      - name: Push log to ci-log branch
+        if: always()
+        run: |
+          set -e
           git config user.name dsh-bot
           git config user.email dsh-bot@users.noreply.github.com
-          git add -f ci-last-replay.txt /tmp/frame-out.json 2>/dev/null || true
+          git stash -u >/dev/null 2>&1 || true
+          git checkout -B ci-log
+          cp ci-last-replay.txt /tmp/x.txt 2>/dev/null || true
+          if [ -f /tmp/x.txt ]; then cp /tmp/x.txt ci-last-replay.txt; fi
           git add -f ci-last-replay.txt
-          git commit -m "ci: replay log (exit=$RC)" || echo nothing
-          git pull --rebase --autostash || true
-          git push || (sleep 5 && git pull --rebase --autostash && git push) || echo "push failed"
+          git commit -m "ci: replay log" || echo nothing
+          git push -f origin ci-log || echo "push failed"
