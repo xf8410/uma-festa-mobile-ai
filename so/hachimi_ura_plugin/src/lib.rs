@@ -724,6 +724,8 @@ static mut SIGSEGV_JMP_BUF: [u8; 200] = [0u8; 200];
 static SIGSEGV_RECOVERY: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
 // [CRASH-DIAG-3292]
 static SIGSEGV_OWNER_TID: std::sync::atomic::AtomicI32 = std::sync::atomic::AtomicI32::new(0);
+// [CRASH-DIAG2-3292]
+static MAIN_TID: std::sync::atomic::AtomicI32 = std::sync::atomic::AtomicI32::new(0);
 // Cooldown: after SIGSEGV recovery, skip reads for N seconds
 static SIGSEGV_COOLDOWN_UNTIL: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
 
@@ -740,7 +742,7 @@ extern "C" fn crash_signal_handler(sig: i32) {
     let cur_tid = unsafe { libc::syscall(libc::SYS_gettid) } as i32;
     let owner_tid = SIGSEGV_OWNER_TID.load(std::sync::atomic::Ordering::Relaxed);
     let cross = SIGSEGV_RECOVERY.load(std::sync::atomic::Ordering::Relaxed) && cur_tid != owner_tid;
-    let p: &[u8] = if cross { &b"CRASH-OTHER at step "[..] } else { &b"CRASH at step "[..] };
+    let p: &[u8] = if cross { &b"X-CRASH at step "[..] } else { &b"CRASH at step "[..] };
     msg[..p.len()].copy_from_slice(p);
     let mut len = p.len();
     let mut n = step;
@@ -780,9 +782,16 @@ extern "C" fn crash_signal_handler(sig: i32) {
             len += 1;
         }
     }
-    let r = b" RECOVERED";
+    let armed = SIGSEGV_RECOVERY.load(std::sync::atomic::Ordering::Relaxed);
+    let r: &[u8] = if armed { &b" ARMED"[..] } else { &b" NOT-ARMED"[..] };
     msg[len..len + r.len()].copy_from_slice(r);
     len += r.len();
+    let mt = MAIN_TID.load(std::sync::atomic::Ordering::Relaxed);
+    if mt != 0 && cur_tid == mt {
+        let m = b" MT";
+        msg[len..len + m.len()].copy_from_slice(m);
+        len += m.len();
+    }
     msg[len] = b'\n';
     len += 1;
     let path = b"/sdcard/Android/media/jp.co.cygames.umamusume/hachimi/uma_predict.log\0";
@@ -814,6 +823,10 @@ extern "C" fn crash_signal_handler(sig: i32) {
 }
 
 fn init_crash_handler() {
+    // // [CRASH-DIAG2-3292]
+    unsafe {
+        MAIN_TID.store(libc::syscall(libc::SYS_gettid) as i32, std::sync::atomic::Ordering::Relaxed);
+    }
     unsafe {
         let handler = crash_signal_handler as usize;
         sys_signal(11, handler); // SIGSEGV
