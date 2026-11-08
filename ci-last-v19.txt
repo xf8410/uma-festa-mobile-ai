@@ -1,0 +1,165 @@
+job_status=failure
+
+warning: unused variable: `next_turn_race`
+    --> src/lib.rs:4205:5
+     |
+4205 |     next_turn_race: bool, // 下回合是否比赛回合 [MDB single_mode_turn]
+     |     ^^^^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_next_turn_race`
+
+warning: unused variable: `chara_class`
+    --> src/lib.rs:4969:9
+     |
+4969 |     let chara_class = find_class(image, to_cstr("Gallop").as_ptr(), to_cstr("WorkSingleModeCharaData").as_ptr());
+     |         ^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_chara_class`
+
+warning: variable does not need to be mutable
+    --> src/lib.rs:7998:37
+     |
+7998 |         let run_query = |sql: &str, mut on_row: &mut dyn FnMut(&[*const u8])| -> i32 {
+     |                                     ----^^^^^^
+     |                                     |
+     |                                     help: remove this `mut`
+     |
+     = note: `#[warn(unused_mut)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused variable: `resp`
+     --> src/lib.rs:10180:13
+      |
+10180 |         let resp = format!(
+      |             ^^^^ help: if this is intentional, prefix it with an underscore: `_resp`
+
+warning: unnecessary `unsafe` block
+     --> src/lib.rs:10706:70
+      |
+10706 |     let _ = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| unsafe {
+      |                                                                      ^^^^^^ unnecessary `unsafe` block
+      |
+      = note: `#[warn(unused_unsafe)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused variable: `api`
+     --> src/lib.rs:12873:9
+      |
+12873 |     let api = &*API;
+      |         ^^^ help: if this is intentional, prefix it with an underscore: `_api`
+
+warning: unused variable: `api`
+     --> src/lib.rs:12897:9
+      |
+12897 |     let api = &*API;
+      |         ^^^ help: if this is intentional, prefix it with an underscore: `_api`
+
+warning: unnecessary `unsafe` block
+     --> src/lib.rs:13174:25
+      |
+13140 |     unsafe {
+      |     ------ because it's nested under this `unsafe` block
+...
+13174 |                         unsafe { get_config() }.http_port
+      |                         ^^^^^^ unnecessary `unsafe` block
+
+warning: unnecessary `unsafe` block
+     --> src/lib.rs:13320:23
+      |
+13140 |     unsafe {
+      |     ------ because it's nested under this `unsafe` block
+...
+13320 |             let cfg = unsafe { get_config() };
+      |                       ^^^^^^ unnecessary `unsafe` block
+
+warning: unnecessary `unsafe` block
+     --> src/lib.rs:13323:13
+      |
+13140 |     unsafe {
+      |     ------ because it's nested under this `unsafe` block
+...
+13323 |             unsafe {
+      |             ^^^^^^ unnecessary `unsafe` block
+
+warning: unnecessary `unsafe` block
+     --> src/lib.rs:13346:37
+      |
+13140 |     unsafe {
+      |     ------ because it's nested under this `unsafe` block
+...
+13346 |                 let changed = f(ui, unsafe { GUI_HOST_BUF.as_mut_ptr() as *mut c_char }, 64);
+      |                                     ^^^^^^ unnecessary `unsafe` block
+
+warning: unnecessary `unsafe` block
+     --> src/lib.rs:13348:21
+      |
+13140 |     unsafe {
+      |     ------ because it's nested under this `unsafe` block
+...
+13348 |                     unsafe {
+      |                     ^^^^^^ unnecessary `unsafe` block
+
+warning: unnecessary `unsafe` block
+     --> src/lib.rs:13373:37
+      |
+13140 |     unsafe {
+      |     ------ because it's nested under this `unsafe` block
+...
+13373 |                 let changed = f(ui, unsafe { GUI_PORT_BUF.as_mut_ptr() as *mut c_char }, 8);
+      |                                     ^^^^^^ unnecessary `unsafe` block
+
+warning: unnecessary `unsafe` block
+     --> src/lib.rs:13375:21
+      |
+13140 |     unsafe {
+      |     ------ because it's nested under this `unsafe` block
+...
+13375 |                     unsafe {
+      |                     ^^^^^^ unnecessary `unsafe` block
+
+warning: variable does not need to be mutable
+     --> src/lib.rs:14036:9
+      |
+14036 |     let mut dream_overflow = false;
+      |         ----^^^^^^^^^^^^^^
+      |         |
+      |         help: remove this `mut`
+
+warning: value assigned to `min_level` is never read
+     --> src/lib.rs:14212:9
+      |
+14212 |         min_level = 0;
+      |         ^^^^^^^^^^^^^
+      |
+      = help: maybe it is overwritten before being read?
+      = note: `#[warn(unused_assignments)]` (part of `#[warn(unused)]`) on by default
+
+warning: variable does not need to be mutable
+     --> src/lib.rs:16736:20
+      |
+16736 |                 Ok(mut stmt) => stmt.column_names().iter().map(|s| s.to_string()).collect(),
+      |                    ----^^^^
+      |                    |
+      |                    help: remove this `mut`
+
+warning: value assigned to `all_events_count` is never read
+     --> src/lib.rs:21690:37
+      |
+21690 |       let mut all_events_count: i32 = 0;
+      |                                       ^ this value is reassigned later and never used
+...
+21729 | /             all_events_count = conn
+21730 | |                 .query_row("SELECT COUNT(*) FROM single_mode_story_data", [], |r| {
+21731 | |                     r.get(0)
+21732 | |                 })
+21733 | |                 .unwrap_or(0);
+      | |_____________________________- `all_events_count` is overwritten here before the previous value is read
+
+warning: unused variable: `ds_class`
+     --> src/lib.rs:22225:9
+      |
+22225 |     let ds_class = get_class_from_object(ds_obj);
+      |         ^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_ds_class`
+
+warning: unused variable: `is_literal`
+     --> src/lib.rs:23251:13
+      |
+23251 |         let is_literal = match field_get_flags {
+      |             ^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_is_literal`
+
+warning: `hachimi_ura` (lib) generated 24 warnings
+error: could not compile `hachimi_ura` (lib) due to 2 previous errors; 24 warnings emitted
