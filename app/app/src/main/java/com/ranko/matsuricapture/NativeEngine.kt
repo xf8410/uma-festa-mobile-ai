@@ -72,6 +72,8 @@ object NativeEngine {
 
     fun start(bind: String, dir: String, ctx: Context? = null): Boolean {
         if (ctx != null) appContext = ctx.applicationContext
+        // [ENGINE-ANDROID] 拉起内置 umaai 引擎（App 进程内，别放游戏里算）
+        if (ctx != null) EngineBridge.init(ctx.applicationContext)
         if (running.get()) return true
         return try {
             val i = bind.lastIndexOf(':')
@@ -260,6 +262,7 @@ object NativeEngine {
         if (method == "OPTIONS") return json("{}")
         return when {
             method == "POST" && p == "/data" -> { ingest(body, "push"); json("{\"ok\":true}") }
+            p == "/engine" -> json(EngineBridge.statusJson()) // [ENGINE-ANDROID]
             p == "/api/health" -> json(healthJson().toString())
             p == "/api/snapshot" -> json(snapshot().toString())
             p == "/api/frames" -> json(framesJson(path).toString())
@@ -499,6 +502,8 @@ object NativeEngine {
     private fun ingest(body: String, source: String) {
         if (body.isBlank()) return
         val raw = try { JSONObject(body) } catch (ignored: Exception) { return }
+        // [ENGINE-ANDROID] 落一份帧文件给内置引擎
+        appContext?.let { EngineBridge.onSummary(it, raw) }
         // 已是归一化帧（matsuri-capture 格式）就直接用；SO 原始 /summary 才需要映射
         val frame = if (raw.has("five")) raw else normalize(raw, null, source)
         if (source == "push") pushRecv++
