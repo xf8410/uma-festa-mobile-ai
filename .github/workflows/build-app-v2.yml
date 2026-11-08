@@ -1,4 +1,4 @@
-name: "Build matsuri AI app v2 (期望分与评级)"
+name: "Build matsuri AI app v2 (运气分与评级)"
 on:
   push:
     branches: [main]
@@ -78,20 +78,20 @@ jobs:
           set -euo pipefail
           mkdir -p app/dist
           SRC=$(find app/app/build/outputs/apk/release -name "*.apk" | head -1)
-          cp "$SRC" app/dist/matsuri-ai-0.9.1-dsh10.apk
+          cp "$SRC" app/dist/matsuri-ai-0.9.2-dsh11.apk
           cp "$SRC" app/dist/matsuri-ai-latest.apk
           ls -l app/dist/
           git config user.name dsh-bot
           git config user.email dsh-bot@users.noreply.github.com
-          git add -f app/dist/matsuri-ai-0.9.1-dsh10.apk app/dist/matsuri-ai-latest.apk app/app/src/main
-          git commit -m "build(app): 0.9.1-dsh10 期望分/运气投影/评级" || echo nothing
+          git add -f app/dist/matsuri-ai-0.9.2-dsh11.apk app/dist/matsuri-ai-latest.apk app/app/src/main
+          git commit -m "build(app): 0.9.2-dsh11 运气分每回合推进 + 期望/评级" || echo nothing
           git push || echo "push failed"
 
       - uses: actions/upload-artifact@v4
         if: success()
         with:
-          name: matsuri-ai-0.9.1-dsh10
-          path: app/dist/matsuri-ai-0.9.1-dsh10.apk
+          name: matsuri-ai-0.9.2-dsh11
+          path: app/dist/matsuri-ai-0.9.2-dsh11.apk
 
       - name: Report (always)
         if: always()
