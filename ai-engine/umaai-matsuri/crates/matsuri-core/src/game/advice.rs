@@ -10,8 +10,8 @@
 use anyhow::{Result, bail};
 use umasim::game::Game;
 
-use crate::config::FusionPair;
 use crate::data::{AdviceEffect, FusionEffectKind};
+use crate::deck_config::FusionPair;
 use crate::diag;
 use crate::game::MatsuriGame;
 
@@ -107,6 +107,115 @@ impl AdviceAssignment {
     pub fn slots(self) -> [usize; 5] {
         self.0.map(usize::from)
     }
+
+    /// 完整映射：`速←特化 耐←体力 ...`（在线输出用，不带 id）
+    #[must_use]
+    pub fn describe(&self, slots: &[i32; 5], fused: &[i32; 5]) -> String {
+        const ACT_SHORT: [&str; 5] = ["速", "耐", "力", "根", "智"];
+        self.0
+            .iter()
+            .enumerate()
+            .map(|(act, slot)| {
+                let slot = usize::from(*slot);
+                let id = fused.get(slot).copied().unwrap_or(0);
+                let id = if id == 0 {
+                    slots.get(slot).copied().unwrap_or(0)
+                } else {
+                    id
+                };
+                format!(
+                    "{}←{}",
+                    ACT_SHORT.get(act).copied().unwrap_or("演目"),
+                    advice_display_name(id)
+                )
+            })
+            .collect::<Vec<_>>()
+            .join(" ")
+    }
+}
+
+/// 教诲展示名（不带 id）
+#[must_use]
+pub fn advice_display_name(id: i32) -> &'static str {
+    const NAMES: [(i32, &str); 10] = [
+        (101, "牵绊"),
+        (201, "擅长率"),
+        (301, "灵感"),
+        (401, "助力"),
+        (501, "体力"),
+        (601, "特化"),
+        (701, "研习"),
+        (801, "协助"),
+        (901, "不屈"),
+        (1001, "兼修"),
+    ];
+    NAMES
+        .iter()
+        .find(|(known, _)| *known == id)
+        .map_or("未分配", |(_, name)| *name)
+}
+
+impl MatsuriGame {
+    /// 当前槽位的有效教诲布局：`速←特化 耐←体力 ...`
+    #[must_use]
+    pub fn advice_layout(&self) -> String {
+        const AXES: [&str; 5] = ["速", "耐", "力", "根", "智"];
+        (0..5)
+            .map(|act| {
+                let id = if self.advice.fused[act] != 0 {
+                    self.advice.fused[act]
+                } else {
+                    self.advice.slots[act]
+                };
+                format!("{}←{}", AXES[act], advice_display_name(id))
+            })
+            .collect::<Vec<_>>()
+            .join(" ")
+    }
+
+    /// 当前窗口的预设落位（`AdvicePreset` 基础 id）映射为**融合后 id**
+    ///
+    /// `AdvicePreset` 是 act→基础 id；先按当前槽找到该基础 id，再取融合目标（无则基础）。
+    #[must_use]
+    pub fn preset_advice_ids(&self, window: usize) -> Option<[i32; 5]> {
+        let preset = self.config.deck.advice.window(window)?;
+        let mut out = [0i32; 5];
+        for act in 0..5 {
+            let slot = (0..5).find(|slot| self.advice.slots[*slot] == preset[act])?;
+            out[act] = if self.advice.fused[slot] != 0 {
+                self.advice.fused[slot]
+            } else {
+                preset[act]
+            };
+        }
+        Some(out)
+    }
+
+    /// 候选方案应用后的有效 id（融合后优先，否则基础 id）
+    #[must_use]
+    pub fn effective_advice_ids(&self, assign: &AdviceAssignment) -> [i32; 5] {
+        let mut applied = self.clone();
+        if applied.apply_assignment(assign).is_err() {
+            return [0; 5];
+        }
+        std::array::from_fn(|act| {
+            if applied.advice.fused[act] != 0 {
+                applied.advice.fused[act]
+            } else {
+                applied.advice.slots[act]
+            }
+        })
+    }
+
+    /// 候选方案应用后的有效布局（包含 401+801 硬约束）；用于在线展示
+    #[must_use]
+    pub fn effective_advice_layout(&self, assign: &AdviceAssignment) -> String {
+        let mut applied = self.clone();
+        applied.apply_assignment(assign).map_or_else(
+            |_| assign.describe(&self.advice.slots, &self.advice.fused),
+            |()| applied.advice_layout(),
+        )
+    }
 }
 
 impl std::fmt::Display for AdviceAssignment {
@@ -201,7 +310,7 @@ impl MatsuriGame {
     /// 融合（転成）就地生效：把 `base` 所在槽的教诲换成 `target`，保留基础 id 供升级效果查表
     ///
     /// 先整批校验再写入：任一配对失败时不留下半套融合状态。
-    pub(crate) fn apply_fusion_pairs(&mut self, pairs: &[FusionPair]) -> Result<()> {
+    pub fn apply_fusion_pairs(&mut self, pairs: &[FusionPair]) -> Result<()> {
         if !self.advice.acquired {
             bail!("尚未获得教诲，不能融合");
         }
@@ -243,13 +352,7 @@ impl MatsuriGame {
         let Some(source) = (0..5).find(|act| self.advice.fused[*act] == 801) else {
             return;
         };
-        let counts: [usize; 5] = std::array::from_fn(|act| {
-            self.persons
-                .iter()
-                .filter(|person| person.act == Some(act))
-                .count()
-        });
-        let Some(target) = (0..5).max_by_key(|act| (counts[*act], usize::MAX - *act)) else {
+        let Some(target) = self.advice_constraint_target() else {
             return;
         };
         if target != source {
@@ -261,20 +364,92 @@ impl MatsuriGame {
         }
     }
 
+    /// 401+801 硬约束的目标演目：担当人数最多者（并列取下标小者）
+    ///
+    /// 抽出来给局部模拟复用（[`Self::effective_assignment`]），避免每次重扫人头。
+    fn advice_constraint_target(&self) -> Option<usize> {
+        let counts: [usize; 5] = std::array::from_fn(|act| {
+            self.persons
+                .iter()
+                .filter(|person| person.act == Some(act))
+                .count()
+        });
+        (0..5).max_by_key(|act| (counts[*act], usize::MAX - *act))
+    }
+
     /// 交换两个演目的教诲槽（槽内容 = base + fused 成对移动）
     fn swap_advice_slots(&mut self, a: usize, b: usize) {
         self.advice.slots.swap(a, b);
         self.advice.fused.swap(a, b);
     }
 
-    /// 枚举当前 5 个教诲槽在 5 个演目上的**全排列**（5! = 120；首个 = 保持现状）
+    /// 枚举 5 个教诲槽在 5 个演目上的全排列，**应用 401+801 硬约束后按有效布局去重**
     ///
-    /// 决策接口：每个窗口把这 120 个候选交给 `Trainer`（合并一次决策）。
+    /// 无 801 的窗口（T2/T11/T23/T35）仍为 120；T47/T59 有 801 时，
+    /// 120 个原始排列会折叠为 5! / 5 = 24 个有效布局。去重后再交给剪枝 / 搜索。
     pub(crate) fn assignment_candidates(&self) -> Vec<AdviceAssignment> {
-        let mut out = Vec::with_capacity(120);
+        let mut raw = Vec::with_capacity(120);
         let mut order = [0usize, 1, 2, 3, 4];
-        permute(&mut order, 0, &mut out);
-        out
+        permute(&mut order, 0, &mut raw);
+        // 801 目标演目与本候选无关，整轮只算一次
+        let target = self.advice_constraint_target();
+        let mut seen = std::collections::HashSet::with_capacity(raw.len());
+        raw.into_iter()
+            .filter_map(|assign| self.effective_assignment(assign, target))
+            .filter(|assign| seen.insert(assign.0))
+            .collect()
+    }
+
+    /// 原始排列应用一次分配（含硬约束）后的有效排列：`有效[act] = 源槽下标`
+    ///
+    /// 只对教诲两排做**局部模拟**：早期版本每个候选 `self.clone()` 整局，120 个候选
+    /// × 数千 rollout 把机制成本抬高十几倍（`bench allocs` 单回合 End 段 600+ 次分配）。
+    fn effective_assignment(
+        &self,
+        assign: AdviceAssignment,
+        target: Option<usize>,
+    ) -> Option<AdviceAssignment> {
+        let mut seen = [false; 5];
+        for source in assign.slots() {
+            if source >= 5 || std::mem::replace(&mut seen[source], true) {
+                return None;
+            }
+        }
+        let slots = self.advice.slots;
+        let fused = self.advice.fused;
+        let mut placed_slots = [0i32; 5];
+        let mut placed_fused = [0i32; 5];
+        for (act, source) in assign.slots().into_iter().enumerate() {
+            placed_slots[act] = slots[source];
+            placed_fused[act] = fused[source];
+        }
+        // 硬约束同 [`Self::enforce_advice_constraints`]：801 换到担当最多的演目
+        if let Some(source) = (0..5).find(|act| placed_fused[*act] == 801)
+            && let Some(target) = target
+            && target != source
+        {
+            placed_slots.swap(source, target);
+            placed_fused.swap(source, target);
+        }
+        let mut out = [0u8; 5];
+        for act in 0..5 {
+            let source = (0..5).find(|source| {
+                slots[*source] == placed_slots[act] && fused[*source] == placed_fused[act]
+            })?;
+            out[act] = source as u8;
+        }
+        Some(AdviceAssignment(out))
+    }
+
+    /// 在线决策接口：当前局面的 120 个分配候选（`Action::AssignAdvice`）
+    ///
+    /// 与 [`decide_advice_assignment`] 用同一套枚举；调用方负责先补初始槽 / 应用融合。
+    #[must_use]
+    pub fn advice_actions(&self) -> Vec<super::Action> {
+        self.assignment_candidates()
+            .into_iter()
+            .map(super::Action::AssignAdvice)
+            .collect()
     }
 
     /// 应用一个分配方案（`assign[act]` = 当前第几号教诲槽；必须是 0–4 的排列）
@@ -710,5 +885,97 @@ mod microbench {
             }),
         );
         println!("distribution[0] = {persons} 人");
+    }
+}
+
+#[cfg(test)]
+mod label_tests {
+    use super::AdviceAssignment;
+
+    #[test]
+    fn assignment_candidates_dedupe_after_801() {
+        let mut game = crate::testing::sample_game();
+        game.advice.acquired = true;
+        game.advice.slots = [101, 201, 301, 401, 501];
+        game.advice.fused = [0, 0, 0, 0, 801];
+        let candidates = game.assignment_candidates();
+        assert_eq!(
+            candidates.len(),
+            24,
+            "801 固定在担当最多的演目，其余 4! 排列"
+        );
+        let counts: Vec<usize> = (0..5)
+            .map(|act| {
+                game.persons
+                    .iter()
+                    .filter(|person| person.act == Some(act))
+                    .count()
+            })
+            .collect();
+        let target = (0..5)
+            .max_by_key(|act| (counts[*act], usize::MAX - *act))
+            .unwrap();
+        for assign in &candidates {
+            assert_eq!(
+                assign.slots()[target],
+                4,
+                "801 的源槽必须固定在担当最多的演目（target={target}）"
+            );
+        }
+    }
+
+    #[test]
+    fn effective_layout_applies_801_constraint() {
+        let mut game = crate::testing::sample_game();
+        game.advice.acquired = true;
+        game.advice.slots = [101, 201, 301, 401, 501];
+        game.advice.fused = [0, 0, 0, 0, 801];
+        let raw = AdviceAssignment([0, 1, 2, 3, 4]);
+        let raw_text = raw.describe(&game.advice.slots, &game.advice.fused);
+        assert!(raw_text.contains("智←协助"), "{raw_text}");
+        let effective = game.effective_advice_layout(&raw);
+        let counts: Vec<usize> = (0..5)
+            .map(|act| {
+                game.persons
+                    .iter()
+                    .filter(|person| person.act == Some(act))
+                    .count()
+            })
+            .collect();
+        let target = (0..5)
+            .max_by_key(|act| (counts[*act], usize::MAX - *act))
+            .unwrap();
+        let axes = ["速", "耐", "力", "根", "智"];
+        assert!(
+            effective.contains(&format!("{}←协助", axes[target])),
+            "{effective}（target={target}）"
+        );
+        if target != 4 {
+            assert_ne!(effective, raw_text, "硬约束应改变 801 落位");
+        }
+    }
+
+    #[test]
+    fn advice_actions_are_120_assignments() {
+        let mut game = crate::testing::sample_game();
+        game.advice.acquired = true;
+        game.advice.slots = [101, 201, 301, 401, 501];
+        game.advice.fused = [0; 5];
+        let actions = game.advice_actions();
+        assert_eq!(actions.len(), 120);
+        assert!(
+            actions
+                .iter()
+                .all(|action| matches!(action, crate::game::Action::AssignAdvice(_)))
+        );
+    }
+
+    #[test]
+    fn describe_maps_slots_and_fusion() {
+        let assign = AdviceAssignment([0, 1, 2, 3, 4]);
+        let slots = [101, 201, 301, 401, 501];
+        let fused = [601, 0, 0, 0, 901];
+        let text = assign.describe(&slots, &fused);
+        assert_eq!(text, "速←特化 耐←擅长率 力←灵感 根←助力 智←不屈");
     }
 }

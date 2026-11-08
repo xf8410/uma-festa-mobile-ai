@@ -12,22 +12,25 @@
 
 pub mod config;
 pub mod data;
+pub mod deck_config;
 pub mod game;
 pub mod search;
 pub mod testing;
 pub mod trainer;
 mod value;
 
-pub use config::MatsuriConfig;
+pub use config::{MatsuriConfig, Qie};
 pub use data::MatsuriData;
+pub use deck_config::{AdvicePreset, DeckParams, DeckTable, deck_comp};
 pub use game::{
-    ActLedger, Action, AdviceLedger, BoardView, CampState, CampView, CheckPointNeed, DeckError,
-    DeckReport, DeckWarning, EVENT_LOG_CAPACITY, EventRecord, FriendView, MatsuriGame,
-    MatsuriPerson, MatsuriView, MatsuriYear, MemberView, PersonOrigin, PersonView, ResourcePreview,
-    ResourceView, SCENARIO_START_TURN, ScheduleView, SelfRace, Stage, TrainingPreview, TurnPlan,
-    TurnView, URA_START_TURN, UmaView, build_game,
+    ActLedger, Action, AdviceLedger, BoardView, CampState, CampView, CheckPointNeed,
+    DISPLAY_HALF_FROM_STATUS, DeckError, DeckReport, DeckWarning, EVENT_LOG_CAPACITY, EventRecord,
+    FriendView, MatsuriGame, MatsuriPerson, MatsuriView, MatsuriYear, MemberView, PersonOrigin,
+    PersonView, ResourcePreview, ResourceView, SCENARIO_START_TURN, ScheduleView, SelfRace, Stage,
+    TrainingBreakdown, TrainingLayers, TrainingPreview, TurnPlan, TurnView, URA_START_TURN,
+    UmaView, build_game, restore_displayed_gain,
 };
-pub use search::{LeafEvaluator, MatsuriSearchTrainer, ScoreLeaf};
+pub use search::{LeafEvaluator, MatsuriSearchTrainer, ScoreLeaf, SearchCandidate, SearchSummary};
 pub use trainer::{ActionExplanation, MatsuriTrainer};
 
 /// 诊断日志宏（引擎 `umaai_core::diag!` 的统一入口）

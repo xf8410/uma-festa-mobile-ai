@@ -51,7 +51,7 @@
 
 | 子命令 | 用途 | 输出 |
 |---|---|---|
-| `bench game --games N --seed S [--search-n M]` | 整局耗时 + 终局 CSV（缺省取配置，默认 12288） | `seed,score,pt,turn,elapsed_us` + 均值行 |
+| `bench game --games N --seed S [--search-n M]` | 整局耗时 + 终局 CSV（缺省取配置，默认 8192） | `seed,score,pt,turn,elapsed_us` + 均值行 |
 | `bench micro --turn T --iters N` | 固定回合的决策链分段 | 各段 ns/op（克隆 / 训练预览 / 资源预览 / 整决策 / 搜索分）|
 | `bench trace --turn T` | rollout 内逐决策耗时 | `turn,actions,us,advice` |
 | `bench root --turn T --search-n M --repeat R` | 固定根搜索 | 每轮耗时、planned / failed、ns/rollout、best |
@@ -350,7 +350,7 @@ Distribute 阶段 486 → 8 次、AfterTrain 1898 → 929 次（剩余大头在�
 
 - `cargo fmt --all --check`、`cargo clippy --workspace --all-targets --offline -- -D warnings`、
   `cargo test --workspace --release --offline`、`cargo doc --workspace --no-deps --offline` 全绿。
-- 测试 221 通过 + 2 手动档（1024 整局复现、教诲微基准）。
+- 测试 225 通过 + 2 手动档（1024 整局复现、教诲微基准）。
 - 新增：`rollout_fork_skips_event_log_without_changing_game`（记录开关不改变评分 / PT；
   `fork_for_rollout` 后事件日志为空）、`microbench_participant_advice`（`#[ignore]`，给出
   `participant_advice` 20 ns/op、`advice_slot_effect` 10 ns/op、`shining_count` 1.2 ns/op，
@@ -486,7 +486,7 @@ Distribute 阶段 486 → 8 次、AfterTrain 1898 → 929 次（剩余大头在�
 
 - 30 种子整局 CSV 的 `seed/score/pt/turn` 逐位一致（均值 79132.5 / PT 11191.6）；固定根 N=256 的
   best=5、8 个候选均值（95848.6）一致；整局 N=256（85544 / 12360）与 N=1024（85566 / 12371）一致。
-- 剧本仓 221 通过 + 2 手动档；引擎仓全量 release 测试通过（含 diag 5 例）。
+- 剧本仓 225 通过 + 2 手动档；引擎仓全量 release 测试通过（含 diag 5 例）。
 
 ### 13.6 结论修正
 
@@ -520,7 +520,7 @@ Distribute 阶段 486 → 8 次、AfterTrain 1898 → 929 次（剩余大头在�
   （`calc_training_value_inner` + `calc_training_effect` + `default_calc_training_buff` ≈ 11%）、
   值模型（`Model::new` + `train_value` + `resource_value` ≈ 10%）。按本文纪律先补 microbench。
 - 预算：24T 单局 N=8192 = 19.3 s（85700 / 12438）、N=12288 = 24.3 s（85804 / 12490），
-  分数仍随预算上升。默认档 `[search].search_n` 已定为 **12288**（`0` 显式切回手写档）。
+  分数仍随预算上升。默认档 `[search].search_n` 已定为 **8192**（`0` 显式切回手写档）。
 
 ### 13.8 复现
 
@@ -537,3 +537,47 @@ RAYON_NUM_THREADS=24 ./target/release/bench prof game --games 1 --seed 61444 \
 perf stat -e task-clock,cycles,instructions,cache-references,cache-misses,context-switches \
   ./target/release/bench flat --turn 32 --rollouts 120000 --threads 16
 ```
+
+## 14. 第五轮（2026-11-07 夜）：教诲候选整局克隆回归与修复
+
+**现象**：`cargo run --release --bin matsuri -- matsuri` 一回合从秒级退化到十几秒；真机在线也同步变慢。
+
+**定位**（同一台机器、同一引擎 HEAD，逐提交建 worktree 对照；`bench root --turn 32 --search-n 1024`）：
+
+| 版本 | 单次 rollout | 其中机制（空训练员） |
+|---|---:|---:|
+| `57c646d`（11-05 性能快照） | 285 μs | 122 μs |
+| `5570633`（11-06） | 187 μs | 61 μs |
+| `a393018`（11-07，慢化前最后一点） | 194 μs | 65 μs |
+| `309692e`（11-07，未修） | 1577 μs | **1361 μs** |
+| 修复后（本节） | 214 μs | **70 μs** |
+
+**元凶**：`dcaabdb`（在线教诲路由）为 801 硬约束去重引入的
+`assignment_candidates → effective_assignment`，**每个候选 `self.clone()` 整局**：
+一次枚举 120 个候选 = 120 次整局克隆（约 2.8 μs/次）。每次 rollout 要跨 T35 / T47 / T59
+三个教诲窗口，搜索剪枝侧也在调 `advice_actions()`，机制成本因此被抬高约 20 倍。
+
+**分配证据**（`bench allocs --turn 32`）：
+
+| 指标 | 修前 | 修后 | 11-05 基线 |
+|---|---:|---:|---:|
+| 单次 rollout 分配数 | 31,019 | **1,019** | 2,085 |
+| 单次 rollout 分配字节 | 2.65 MB | **56 KB** | 85.5 KB |
+| End 段分配 / 回合 | 652 | 4.5 | — |
+| 24 线程并行吞吐 | 2.4× | 恢复正常 | 12.6× |
+
+并行倍率塌到 2.4× 也是同一原因（堆锁竞争）；「4 个单线程进程」能线性扩展，说明不是全局锁。
+
+**修法**：`effective_assignment` 改为**只在教诲两排（`slots` / `fused`）上局部模拟**——
+校验排列 → 按排列重排两排 → 套用同一硬约束（801 与「担当最多」演目交换；目标演目抽成
+`advice_constraint_target` 供两处复用）→ 回算源槽下标。不再克隆局面。
+
+**等价性**：`bench root` 8 个候选均值与修前逐位相同（cand 4–7 =
+97734.8 / 97779.2 / 97751.5 / 97868.8）、`best_indices` 仍 `[2]`；
+`bench game --search-n 1024` 终局 88545 / PT 12255 不变；`cargo test --workspace --release` 全绿。
+
+**端到端**：整局 N=1024 **185.7 s → 9.94 s（18.7×）**；默认 N=8192 **26.2 s**（87532 / 11716）。
+
+> 教训：候选枚举里出现 `self.clone()` 就是红线——整局克隆 2.8 μs 单看很便宜，
+> 乘上「120 候选 × 数千 rollout × 每局数个窗口」就是数量级的坑。新增候选枚举前先看
+> `bench allocs` 的单回合分配数（正常应在个位数）。

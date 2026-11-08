@@ -14,11 +14,14 @@ path = "src/main.rs"
 
 [dependencies]
 matsuri-core.workspace = true
+matsuri-ai.workspace = true
 umaai-core.workspace = true
 umasim.workspace = true
 umaai.workspace = true
 umaai-cli.workspace = true
+clap.workspace = true
 anyhow.workspace = true
 log.workspace = true
 rand.workspace = true
 inquire = "0.9.4"
+serde_json.workspace = true
