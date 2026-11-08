@@ -228,17 +228,8 @@ function stateLabel(s){
 const isOn=a=>a&&(+a.need_gauge>0)&&(+a.gauge>=+a.need_gauge);
 
 /* 推荐：亮起（槽满）稽古优先；无亮起→按真实彩圈数推荐属性训练（shining 为 SO 实测数据） */
-function recommend(acts,trByAttr,f){
-  // [APP-FIX-076] 祭典杯的最优训练取决于演目/稽古槽，SO 没推 festa.acts 就无从计算——
-  // 这里如实报告缺数据，不再用 trainings 的彩圈瞎推荐（0.7.5 那版是错的）。
-  if(!acts.length){
-    const miss=(f&&f.missing)||[];
-    if(f&&f.has_festa===false)
-      return{txt:'缺 festa 数据 · SO 未推 acts',wait:true};
-    if(miss.indexOf('festa')>=0)
-      return{txt:'缺 festa 数据 · 剧本 15 未识别',wait:true};
-    return{txt:'等待游戏连接',wait:true};
-  }
+function recommend(acts,trByAttr){
+  if(!acts.length)return{txt:'等待游戏连接',wait:true};
   const lit=ACTS.filter(a=>isOn(acts.find(x=>+x.act_type===a.t)));
   if(lit.length)return{txt:'▶ '+lit.map(a=>a.attr).join('·')+' 稽古',wait:false};
   // 稽古未触发 ≠ 普通训练不用建议：彩圈最多位优先（全未知→蓄力中）
@@ -321,7 +312,7 @@ function render(s){
   const deck=f.support_cards||[];
 
   // 行动建议（稽古亮起优先；否则彩圈最多的属性训练；友人外出由 AI 统一算）
-  const rec=recommend(acts,trByAttr,f);lastRec=rec;
+  const rec=recommend(acts,trByAttr);lastRec=rec;
   const aa=document.getElementById('advAct');
   aa.textContent=rec.txt+(kensan&&acts.length?' ⚡追加稽古':'');aa.className='v'+(rec.wait?' wait':'');
   // 运气分 / 预估评分：内置 AI 未接入，无数据源，不编造

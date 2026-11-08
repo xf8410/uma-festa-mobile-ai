@@ -41,8 +41,6 @@ class FloatingWindowService : Service() {
     private var lp: WindowManager.LayoutParams? = null
     private var web: WebView? = null
     private var collapsed = false
-    // [APP-FIX-078] 紧凑模式（大屏 / 紧凑 二选一）
-    private var compactMode = false
     private var scaleIdx = 0
 
     override fun onCreate() {
@@ -109,9 +107,7 @@ class FloatingWindowService : Service() {
             // 紧凑一屏面板：宽约屏宽 94%，高度由页面 reportHeight 回执收紧（WebView
             // 的 WRAP_CONTENT 不按内容收缩）。折叠时高度压成迷你条。
             val w = (0.94 * resources.displayMetrics.widthPixels).toInt()
-            // [APP-FIX-077] 初始就给大框高度（约 60% 屏高），不再靠页面回执收成小条
-            val bigH = (0.78 * resources.displayMetrics.heightPixels).toInt() // [APP-FIX-079] 一屏
-            layoutParams = LinearLayout.LayoutParams(w, bigH)
+            layoutParams = LinearLayout.LayoutParams(w, dp(320))
         }
 
         val container = LinearLayout(this).apply {
@@ -153,35 +149,28 @@ class FloatingWindowService : Service() {
                     header.visibility = View.GONE
                     w.evaluateJavascript("window.setMini&&setMini(true)", null)
                 } else {
-                    // [APP-FIX-078] 展开：一定回到大屏 + 主面板，杜绝回不去
-                    compactMode = false
-                    wlp.height = (0.78 * resources.displayMetrics.heightPixels).toInt()
+                    // 展开：高度先给一屏内的默认值，页面下一次 render 的 reportHeight 会收紧
+                    wlp.height = dp(320)
                     w.layoutParams = wlp
                     header.visibility = View.VISIBLE
-                    w.loadUrl(FLOAT_URL)
+                    w.evaluateJavascript("window.setMini&&setMini(false)", null)
                 }
             }
             minBtn.text = if (collapsed) "□" else "—"
             wm?.updateViewLayout(container, lp)
         }
         closeBtn.setOnClickListener { stopSelf() }
-        // [APP-FIX-078] ⤢ = 大屏 ⇄ 紧凑，两档互相可逆
+        // 缩放：100% → 70% → 45% 循环，页面整体 zoom，窗口宽度同步缩（露出游戏画面）
         scaleBtn.setOnClickListener {
-            compactMode = !compactMode
+            scaleIdx = (scaleIdx + 1) % SCALES.size
+            val sc = SCALES[scaleIdx]
             web?.let { w ->
                 val wlp = w.layoutParams as LinearLayout.LayoutParams
-                wlp.width = (0.94 * resources.displayMetrics.widthPixels).toInt()
-                if (compactMode) {
-                    wlp.height = dp(360)
-                    w.layoutParams = wlp
-                    w.loadUrl(SMALL_URL)
-                } else {
-                    wlp.height = (0.78 * resources.displayMetrics.heightPixels).toInt()
-                    w.layoutParams = wlp
-                    w.loadUrl(FLOAT_URL)
-                }
+                wlp.width = ((0.94 * resources.displayMetrics.widthPixels) * sc).toInt()
+                w.layoutParams = wlp
+                w.evaluateJavascript("window.setZoom&&setZoom($sc)", null)
             }
-            scaleBtn.text = if (compactMode) "▣" else "⤢"
+            scaleBtn.text = if (sc >= 1f) "⤢" else "${(sc * 100).toInt()}"
             wm?.updateViewLayout(container, lp)
         }
 
@@ -203,25 +192,6 @@ class FloatingWindowService : Service() {
         // 折叠态（标题栏已隐藏）：迷你条自身可拖动；展开时不拦截 WebView 触摸
         web?.setOnTouchListener { _, ev ->
             if (!collapsed) return@setOnTouchListener false
-            // [APP-FIX-078] 迷你条轻点=回到大屏
-            if (ev.action == MotionEvent.ACTION_UP) {
-                val dx = Math.abs(ev.rawX - tx)
-                val dy = Math.abs(ev.rawY - ty)
-                if (dx < dp(8) && dy < dp(8)) {
-                    collapsed = false
-                    compactMode = false
-                    minBtn.text = "—"
-                    web?.let { w ->
-                        val wlp = w.layoutParams as LinearLayout.LayoutParams
-                        wlp.height = (0.78 * resources.displayMetrics.heightPixels).toInt()
-                        w.layoutParams = wlp
-                        w.loadUrl(FLOAT_URL)
-                    }
-                    header.visibility = View.VISIBLE
-                    wm?.updateViewLayout(container, lp)
-                    return@setOnTouchListener true
-                }
-            }
             when (ev.action) {
                 MotionEvent.ACTION_DOWN -> {
                     ix = lp!!.x; iy = lp!!.y; tx = ev.rawX; ty = ev.rawY; true
@@ -295,10 +265,7 @@ class FloatingWindowService : Service() {
         const val ACTION_STOP = "com.ranko.matsuricapture.FLOAT_STOP"
         private const val CHANNEL = "festa_float"
         private const val NOTIFY_ID = 2
-        // [APP-FIX-077] 大面板：加载主面板页
-        private const val FLOAT_URL = "http://127.0.0.1:18766/"
-        // [APP-FIX-078] 紧凑页
-        private const val SMALL_URL = "http://127.0.0.1:18766/float"
+        private const val FLOAT_URL = "http://127.0.0.1:18766/float"
         private val SCALES = floatArrayOf(1.0f, 0.70f, 0.45f)
         @Volatile private var running = false
         fun isRunning(): Boolean = running
