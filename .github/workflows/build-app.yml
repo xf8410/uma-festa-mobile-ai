@@ -50,9 +50,10 @@ jobs:
       - name: Apply app patches
         run: |
           set -e
-          node .github/scripts/apply_appfix_075.js app/app/src/main/assets/float.html app/app/build.gradle.kts
-          node .github/scripts/apply_appfix_076.js app/app/src/main/assets/float.html app/app/build.gradle.kts
-          node .github/scripts/apply_appfix_077.js app/app/src/main/java/com/ranko/matsuricapture/FloatingWindowService.kt app/app/build.gradle.kts
+          : > app-capture.txt
+          node .github/scripts/apply_appfix_075.js app/app/src/main/assets/float.html app/app/build.gradle.kts 2>&1 | tee -a app-capture.txt
+          node .github/scripts/apply_appfix_076.js app/app/src/main/assets/float.html app/app/build.gradle.kts 2>&1 | tee -a app-capture.txt
+          node .github/scripts/apply_appfix_077.js app/app/src/main/java/com/ranko/matsuricapture/FloatingWindowService.kt app/app/build.gradle.kts 2>&1 | tee -a app-capture.txt
           grep -qF 'APP-FIX-077' app/app/src/main/java/com/ranko/matsuricapture/FloatingWindowService.kt
           grep -qF 'versionName = "0.7.7-dsh2"' app/app/build.gradle.kts
 
@@ -62,8 +63,8 @@ jobs:
 
       - name: Assemble release
         run: |
-          set -e
-          gradle -p app --no-daemon assembleRelease
+          set -o pipefail
+          gradle -p app --no-daemon assembleRelease 2>&1 | tee -a app-capture.txt | tail -50
           find app/app/build/outputs -name "*.apk" -ls
 
       - name: Publish APK
@@ -86,3 +87,16 @@ jobs:
         with:
           name: matsuri-ai-0.7.7-dsh2
           path: app/dist/matsuri-ai-0.7.7-dsh2.apk
+
+      - name: Report (always)
+        if: always()
+        run: |
+          {
+            echo "job_status=${{ job.status }}"
+            tail -c 6000 app-capture.txt 2>/dev/null || echo "no capture"
+          } > ci-last-app.txt
+          git config user.name dsh-bot
+          git config user.email dsh-bot@users.noreply.github.com
+          git add ci-last-app.txt || true
+          git commit -m "ci: app build log (${{ job.status }})" || echo nothing
+          git push || echo "push failed"
