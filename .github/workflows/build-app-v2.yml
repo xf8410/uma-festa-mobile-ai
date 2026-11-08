@@ -1,4 +1,4 @@
-name: "Build matsuri AI app v23 (master 代理)"
+name: "Build matsuri AI app v23b (master 代理)"
 on:
   push:
     branches: [main]
@@ -175,8 +175,11 @@ jobs:
           git add -f app/dist/matsuri-ai-0.9.21-dsh30.apk app/dist/matsuri-ai-latest.apk
           git add -f app/app/src/main/java app/app/src/main/assets/index.html app/app/build.gradle.kts 2>/dev/null || true
           git commit -m "build(app): 0.9.21-dsh30 master 代理" || echo nothing
-          git pull --rebase --autostash || true
-          git push || echo "push failed"
+          for i in 1 2 3; do
+            git pull --rebase --autostash || true
+            if git push; then echo pushed; break; fi
+            sleep 3
+          done
 
       - name: Report (always)
         if: always()
@@ -185,6 +188,6 @@ jobs:
           git config user.name dsh-bot
           git config user.email dsh-bot@users.noreply.github.com
           git add ci-last-app-v23.txt || true
-          git commit -m "ci: app v23 log (${{ job.status }})" || echo nothing
+          git commit -m "ci: app v23b log (${{ job.status }})" || echo nothing
           git pull --rebase --autostash || true
           git push || echo "push failed"
