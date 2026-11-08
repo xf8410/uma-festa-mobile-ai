@@ -1,4 +1,4 @@
-name: "Build matsuri AI app v21 (人头真值+固定签名)"
+name: "Build matsuri AI app v22 (引擎盘面)"
 on:
   push:
     branches: [main]
@@ -21,6 +21,8 @@ on:
       - ".github/scripts/apply_appfix_098.js"
       - ".github/scripts/apply_appfix_099.js"
       - ".github/scripts/apply_appfix_100.js"
+      - ".github/scripts/apply_appfix_101.js"
+      - ".github/scripts/apply_engine_json_view.js"
       - "app/app/src/main/java/com/ranko/matsuricapture/EngineBridge.kt"
       - "app/app/src/main/java/com/ranko/matsuricapture/FrameAdapter.kt"
   workflow_dispatch:
@@ -45,13 +47,14 @@ jobs:
           set -euo pipefail
           git checkout 4a0009f3 -- app/app/src/main
 
-      - name: Clone upstream + patch engine (panel json) + cross-build arm64
+      - name: Clone upstream + patch engine (panel json + view) + cross-build arm64
         run: |
           set -euo pipefail
           mkdir -p /tmp/w
           [ -d /tmp/w/umaai_next/.git ] || git clone --depth 1 https://github.com/umaai-project/umaai-next.git /tmp/w/umaai_next
           [ -d /tmp/w/umaai-matsuri/.git ] || git clone --depth 1 https://github.com/umaai-project/umaai-matsuri.git /tmp/w/umaai-matsuri
           node .github/scripts/apply_engine_json_panel.js /tmp/w/umaai-matsuri/crates/matsuri-ai/src/output.rs
+          node .github/scripts/apply_engine_json_view.js /tmp/w/umaai-matsuri/crates/matsuri-ai/src/output.rs
           rustup target add aarch64-linux-android
           NDK="${ANDROID_NDK_HOME:-${ANDROID_NDK_LATEST_HOME:-}}"
           if [ -z "${NDK:-}" ] || [ ! -d "$NDK" ]; then NDK=$(ls -d /usr/local/lib/android/sdk/ndk/* 2>/dev/null | sort -V | tail -1 || true); fi
@@ -76,6 +79,10 @@ jobs:
         with:
           distribution: temurin
           java-version: "17"
+
+      - uses: actions/actions-android@v3
+        if: false
+        run: echo skip
 
       - uses: android-actions/setup-android@v3
         with:
@@ -126,6 +133,7 @@ jobs:
           run 098 app/app/src/main/assets/float.html
           run 099 $K/NativeEngine.kt app/app/src/main/assets/float.html app/app/src/main/assets/index.html
           run 100 app/app/src/main/assets/float.html app/app/src/main/assets/index.html
+          run 101 app/app/src/main/assets/index.html
           grep -qF '[APP-FIX-089]' app/app/src/main/assets/index.html
           grep -qF '[APP-FIX-090]' $K/FrameAdapter.kt
           grep -qF '[APP-FIX-091]' $K/FrameAdapter.kt
@@ -138,9 +146,10 @@ jobs:
           grep -qF '[APP-FIX-098]' app/app/src/main/assets/float.html
           grep -qF '[APP-FIX-099]' $K/NativeEngine.kt
           grep -qF '[APP-FIX-100]' app/app/src/main/assets/index.html
+          grep -qF '[APP-FIX-101]' app/app/src/main/assets/index.html
           grep -qF 'startOne' $K/EngineBridge.kt
-          sed -i 's/versionName = "[^"]*"/versionName = "0.9.19-dsh28"/' app/app/build.gradle.kts
-          sed -i 's/versionCode = [0-9]\+/versionCode = 44/' app/app/build.gradle.kts
+          sed -i 's/versionName = "[^"]*"/versionName = "0.9.20-dsh29"/' app/app/build.gradle.kts
+          sed -i 's/versionCode = [0-9]\+/versionCode = 45/' app/app/build.gradle.kts
           grep -E 'versionCode|versionName' app/app/build.gradle.kts
 
       - uses: gradle/actions/setup-gradle@v4
@@ -159,24 +168,24 @@ jobs:
           set -euo pipefail
           mkdir -p app/dist
           SRC=$(find app/app/build/outputs/apk/release -name "*.apk" | head -1)
-          cp "$SRC" app/dist/matsuri-ai-0.9.19-dsh28.apk
+          cp "$SRC" app/dist/matsuri-ai-0.9.20-dsh29.apk
           cp "$SRC" app/dist/matsuri-ai-latest.apk
           ls -l app/dist/
           git config user.name dsh-bot
           git config user.email dsh-bot@users.noreply.github.com
-          git add -f app/dist/matsuri-ai-0.9.19-dsh28.apk app/dist/matsuri-ai-latest.apk
+          git add -f app/dist/matsuri-ai-0.9.20-dsh29.apk app/dist/matsuri-ai-latest.apk
           git add -f app/app/src/main/java app/app/src/main/assets/index.html app/app/build.gradle.kts 2>/dev/null || true
-          git commit -m "build(app): 0.9.19-dsh28 人头真值+固定签名" || echo nothing
+          git commit -m "build(app): 0.9.20-dsh29 引擎盘面" || echo nothing
           git pull --rebase --autostash || true
           git push || echo "push failed"
 
       - name: Report (always)
         if: always()
         run: |
-          { echo "job_status=${{ job.status }}"; tail -c 5000 app-capture.txt 2>/dev/null || true; } > ci-last-app-v21.txt
+          { echo "job_status=${{ job.status }}"; tail -c 5000 app-capture.txt 2>/dev/null || true; } > ci-last-app-v22.txt
           git config user.name dsh-bot
           git config user.email dsh-bot@users.noreply.github.com
-          git add ci-last-app-v21.txt || true
-          git commit -m "ci: app v21 log (${{ job.status }})" || echo nothing
+          git add ci-last-app-v22.txt || true
+          git commit -m "ci: app v22 log (${{ job.status }})" || echo nothing
           git pull --rebase --autostash || true
           git push || echo "push failed"
