@@ -26,7 +26,7 @@ jobs:
             ~/.cargo/registry
             ~/.cargo/git
             /tmp/w
-          key: engine-replay-v5
+          key: engine-replay-v6
 
       - name: Build + replay + push log
         run: |
@@ -39,6 +39,7 @@ jobs:
           [ -d /tmp/w/umaai-matsuri/.git ] || git clone --depth 1 https://github.com/umaai-project/umaai-matsuri.git /tmp/w/umaai-matsuri > /dev/null 2>&1
           cd /tmp/w/umaai-matsuri
           cargo build --release -p matsuri-cli 2>&1 | tail -3 | tee -a "$OUT"
+          export CARD_DB=/tmp/w/umaai-matsuri/data/cardDB.json
           node "$GITHUB_WORKSPACE/.github/scripts/summary_to_frame.js" "$GITHUB_WORKSPACE/.github/fixtures/summary_min.json" > /tmp/frame.json
           say "frame_bytes=$(wc -c < /tmp/frame.json)"
           rm -rf ci-frames && mkdir -p ci-frames
