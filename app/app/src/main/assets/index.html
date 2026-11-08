@@ -896,15 +896,20 @@ const STALE_MS=20000, PULL_MIN_MS=5000;
 
 /* 连接页 UI：全部按 18766 真实状态渲染，无数据就显式显示「未接收」 */
 function syncConnectUI(){
-  const q=id=>document.getElementById(id);
+  // [APP-FIX-103] 找不到元素也不中断（以前任一 id 缺失会让整段 UI 停在初始态）
+  const DUMMY={style:{},classList:{toggle:function(){},add:function(){},remove:function(){}},
+    set textContent(v){},get textContent(){return "";},set innerHTML(v){},get innerHTML(){return "";},
+    set className(v){},get className(){return "";}};
+  const q=id=>document.getElementById(id)||DUMMY;
   const svc=state.service, so=state.soAlive, f=state.frame;
   if(state.source==='live') q('demo-banner').style.display='none';
-  q('btn-connect').textContent=state.polling?'暂停轮询':'恢复轮询';
+  q('btn-connect').textContent=state.polling?'暂停连接':'开始连接'; // [APP-FIX-103]
   q('btn-connect').classList.toggle('on',state.polling);
   const badge=q('link-badge');
   if(!svc){ badge.textContent='接收端未启动'; badge.className='badge off'; }
   else if(!so){ badge.textContent='SO 未响应'; badge.className='badge warn'; }
-  else { badge.textContent='SO 在线'; badge.className='badge'; }
+  else if(!f){ badge.textContent='已连接 · 等育成帧'; badge.className='badge warn'; }
+  else { badge.textContent='已连接 · SO 在线'; badge.className='badge ok'; } // [APP-FIX-103]
   q('v-service').textContent=svc?'运行中 · 18766':'未启动';
   q('v-service').className='v '+(svc?'ok':'off');
   q('v-capture').textContent=f?(f.has_festa?'骏大祭 · festa':'剧本未识别'):'等待游戏数据';
