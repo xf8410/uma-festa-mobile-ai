@@ -28,6 +28,9 @@ object EngineBridge {
         private set
     @Volatile var frames: Int = 0
         private set
+    // [ENGINE-ADAPTER] 最近一条引擎决策（期望分/σ/档/候选分）
+    @Volatile var lastDecision: String = ""
+        private set
 
     fun rootDir(ctx: Context): File = File(ctx.filesDir, "engine").also { it.mkdirs() }
     fun framesDir(ctx: Context): File = File(rootDir(ctx), "frames").also { it.mkdirs() }
@@ -72,6 +75,8 @@ object EngineBridge {
         if (!engine.canExecute()) engine.setExecutable(true)
         status = "extracting_data"
         copyAssetDir(ctx, "engine/data", dataDir(ctx))
+        // [ENGINE-ADAPTER] persons.charaId 要查卡册
+        FrameAdapter.loadCardDb(File(dataDir(ctx), "cardDB.json"))
         val marker = File(rootDir(ctx), ".portable")
         if (!marker.exists()) marker.writeText("")
         status = "starting"
@@ -89,12 +94,35 @@ object EngineBridge {
         val p = pb.start()
         proc = p
         status = "running"
-        Thread { drain(p.inputStream) { s -> lastLine = s; lines++ } }.start()
+        Thread { drain(p.inputStream) { s -> lastLine = s; lines++; onEngineLine(s) } }.start()
         Thread { drain(p.errorStream) { s -> lastError = s } }.start()
         Thread {
             val code = try { p.waitFor() } catch (e: Throwable) { -1 }
             if (status.startsWith("running")) status = "exited: " + code
         }.start()
+    }
+
+    /// [ENGINE-ADAPTER] 解析引擎 stdout 的决策行（type=decision）
+    private fun onEngineLine(line: String) {
+        try {
+            if (!line.contains("type")) return
+            val o = org.json.JSONObject(line)
+            if (o.optString("type") != "decision") return
+            val ex = o.optJSONObject("scenario_extra")
+            val d = StringBuilder()
+            d.append("{")
+            d.append("\"turn\":").append(o.optInt("turn", 0)).append(",")
+            d.append("\"score\":").append(o.optDouble("score", 0.0)).append(",")
+            d.append("\"action_index\":").append(o.optInt("action_index", 0)).append(",")
+            d.append("\"expected_score\":").append(ex?.optInt("expected_score", 0) ?: 0).append(",")
+            d.append("\"expected_stdev\":").append(ex?.optInt("expected_stdev", 0) ?: 0).append(",")
+            d.append("\"expected_rank\":\"").append(ex?.optString("expected_rank", "") ?: "").append("\",")
+            d.append("\"descriptions\":").append(o.optJSONArray("candidate_descriptions")?.toString() ?: "[]").append(",")
+            d.append("\"scores\":").append(o.optJSONArray("candidate_scores")?.toString() ?: "[]")
+            d.append("}")
+            lastDecision = d.toString()
+        } catch (e: Throwable) {
+        }
     }
 
     private fun drain(input: InputStream, onLine: (String) -> Unit) {
@@ -116,7 +144,7 @@ object EngineBridge {
             val turn = raw.optInt("turn", 0)
             val chara = raw.optInt("chara_id", 0)
             val f = File(framesDir(ctx), "game" + chara + "_turn" + turn + ".json")
-            f.writeText(raw.toString())
+            f.writeText(FrameAdapter.toFrame(raw).toString()) // [ENGINE-ADAPTER]
             frames++
         } catch (e: Throwable) {
             lastError = "frame_write_failed: " + (e.message ?: "")
@@ -130,7 +158,8 @@ object EngineBridge {
         sb.append("\"frames\":").append(frames).append(",")
         sb.append("\"lines\":").append(lines).append(",")
         sb.append("\"last_line\":").append(q(trim(lastLine))).append(",")
-        sb.append("\"last_error\":").append(q(trim(lastError)))
+        sb.append("\"last_error\":").append(q(trim(lastError))).append(",")
+        sb.append("\"decision\":").append(if (lastDecision.isEmpty()) "null" else lastDecision)
         sb.append("}")
         return sb.toString()
     }
