@@ -1,4 +1,4 @@
-name: Build matsuri AI app (v2: 期望分/评级)
+name: "Build matsuri AI app v2 (期望分与评级)"
 on:
   push:
     branches: [main]
@@ -51,7 +51,7 @@ jobs:
         run: |
           set -euo pipefail
           curl -sSL "https://raw.githubusercontent.com/umaai-project/umaai-matsuri/4bc0e653aebe5eca99e00abf4accff07a6cdf6bc/data/constants.json" -o /tmp/consts.json
-          node -e "const fs=require('fs');const c=JSON.parse(fs.readFileSync('/tmp/consts.json','utf8'));fs.writeFileSync('.github/scripts/rank_table.json',JSON.stringify({rank_scores:c.rank_scores,rank_names:c.rank_names}));console.log('rank table',c.rank_scores.length,'档');"
+          node -e "const fs=require('fs');const c=JSON.parse(fs.readFileSync('/tmp/consts.json','utf8'));fs.writeFileSync('.github/scripts/rank_table.json',JSON.stringify({rank_scores:c.rank_scores,rank_names:c.rank_names}));console.log('rank table',c.rank_scores.length);"
 
       - name: Apply app fixes
         run: |
