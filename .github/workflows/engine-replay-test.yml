@@ -5,8 +5,8 @@ on:
     paths:
       - ".github/workflows/engine-replay-test.yml"
       - ".github/scripts/summary_to_frame.js"
+      - ".github/scripts/apply_engine_json_panel.js"
       - ".github/fixtures/summary_real.b64"
-      - ".github/fixtures/upstream_frame_turn40.json"
   workflow_dispatch:
 
 permissions:
@@ -20,49 +20,46 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Cache cargo + engine build
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.cargo/registry
-            ~/.cargo/git
-            /tmp/w
-          key: engine-replay-v9
+      - name: Clone upstream
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/w
+          [ -d /tmp/w/umaai_next/.git ] || git clone --depth 1 https://github.com/umaai-project/umaai-next.git /tmp/w/umaai_next
+          [ -d /tmp/w/umaai-matsuri/.git ] || git clone --depth 1 https://github.com/umaai-project/umaai-matsuri.git /tmp/w/umaai-matsuri
 
-      - name: Build + replay (our frame vs upstream fixture) + push log
+      - name: Patch engine JSON to carry panel fields
+        run: |
+          set -euo pipefail
+          node .github/scripts/apply_engine_json_panel.js /tmp/w/umaai-matsuri/crates/matsuri-ai/src/output.rs
+
+      - name: Build engine
+        working-directory: /tmp/w/umaai-matsuri
+        run: |
+          set -euo pipefail
+          cargo build --release -p matsuri-cli 2>&1 | tail -5
+
+      - name: Replay our real frame (search) and dump JSON
         run: |
           set -o pipefail
-          OUT="/tmp/replay-log.txt"
+          OUT="$GITHUB_WORKSPACE/ci-last-replay.txt"
           : > "$OUT"
           say() { echo "$@" | tee -a "$OUT"; }
-          mkdir -p /tmp/w
-          [ -d /tmp/w/umaai_next/.git ] || git clone --depth 1 https://github.com/umaai-project/umaai-next.git /tmp/w/umaai_next > /dev/null 2>&1
-          [ -d /tmp/w/umaai-matsuri/.git ] || git clone --depth 1 https://github.com/umaai-project/umaai-matsuri.git /tmp/w/umaai-matsuri > /dev/null 2>&1
           cd /tmp/w/umaai-matsuri
-          cargo build --release -p matsuri-cli 2>&1 | tail -2 | tee -a "$OUT"
           export CARD_DB=/tmp/w/umaai-matsuri/data/cardDB.json
-          run_one() {
-            local NAME="$1"; local TR="$2"; local SRCFILE="$3"
-            rm -rf ci-frames && mkdir -p ci-frames
-            cp "$SRCFILE" "ci-frames/game6310_turn40.json"
-            set +e
-            timeout 300 ./target/release/matsuri online --replay ./ci-frames --trainer "$TR" --json > "/tmp/o.json" 2> "/tmp/e.txt"
-            local RC=$?
-            set -e
-            say "==== $NAME trainer=$TR exit=$RC ===="
-            head -c 1200 /tmp/o.json >> "$OUT"
-            head -c 400 /tmp/e.txt >> "$OUT"
-            echo "" >> "$OUT"
-          }
-          # A) 上游自带的真机夹具（标尺）
-          run_one "UPSTREAM-FIXTURE" search "$GITHUB_WORKSPACE/.github/fixtures/upstream_frame_turn40.json"
-          # B) 我们的真机 /summary 转换帧
           base64 -d "$GITHUB_WORKSPACE/.github/fixtures/summary_real.b64" | gunzip > /tmp/summary_real.json
-          node "$GITHUB_WORKSPACE/.github/scripts/summary_to_frame.js" /tmp/summary_real.json > /tmp/frame_ours.json
-          say "our_frame_bytes=$(wc -c < /tmp/frame_ours.json)"
-          run_one "OUR-REAL-FRAME" search /tmp/frame_ours.json
-          run_one "OUR-REAL-FRAME" matsuri /tmp/frame_ours.json
-          say "==== end ===="
+          node "$GITHUB_WORKSPACE/.github/scripts/summary_to_frame.js" /tmp/summary_real.json > /tmp/frame.json
+          rm -rf ci-frames && mkdir -p ci-frames
+          cp /tmp/frame.json ci-frames/game102003_turn12.json
+          set +e
+          timeout 300 ./target/release/matsuri online --replay ./ci-frames --trainer search --json > /tmp/out.json 2> /tmp/err.txt
+          RC=$?
+          set -e
+          say "exit=$RC"
+          say "---- decision json ----"
+          head -c 4000 /tmp/out.json >> "$OUT"
+          say "---- stderr ----"
+          head -c 1000 /tmp/err.txt >> "$OUT"
+          say "---- end ----"
           cat "$OUT"
           cd "$GITHUB_WORKSPACE"
           cp "$OUT" ./ci-last-replay.txt
@@ -70,5 +67,5 @@ jobs:
           git config user.email dsh-bot@users.noreply.github.com
           git checkout -B ci-log > /dev/null 2>&1
           git add -f ci-last-replay.txt
-          git commit -m "ci: replay log (fixture vs ours)" || echo "nothing to commit"
+          git commit -m "ci: replay log (panel json)" || echo nothing
           git push -f "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git" HEAD:refs/heads/ci-log || echo "push failed"
