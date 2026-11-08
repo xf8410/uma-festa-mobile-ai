@@ -124,7 +124,7 @@ object FrameAdapter {
         base.put("skillPt", st.optInt("skill_point", 0))
         val skills = src.optJSONObject("skills")
         base.put("skillScore", skills?.optInt("eval", 0) ?: 0)
-        base.put("totalHints", 0)
+        base.put("totalHints", src.optInt("total_hints", 0)) // [APP-FIX-090]
         base.put("trainLevelCount", JSONArray(trainLevel.toList()))
         base.put("ptScoreRate", 1.0)
         base.put("failureRateBias", 0)
@@ -140,8 +140,8 @@ object FrameAdapter {
         base.put("friendship_noncard_yayoi", 0)
         base.put("friendship_noncard_reporter", 0)
         base.put("friend_stage", 0)
-        base.put("friend_outgoingUsed", 0)
-        base.put("playing_state", 1)
+        base.put("friend_outgoingUsed", src.optInt("friend_outgoing_used", 0)) // [APP-FIX-090]
+        base.put("playing_state", if (src.has("playing_state")) src.optInt("playing_state", 1) else 1) // [APP-FIX-090]
         base.put("source", "command")
         base.put("isAfterTraining", false)
         base.put("single_mode_chara_id", src.optInt("chara_id", 0))
