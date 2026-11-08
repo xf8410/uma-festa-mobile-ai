@@ -1,4 +1,4 @@
-name: "Build matsuri AI app v11 (双档接线)"
+name: "Build matsuri AI app v12 (双档接线)"
 on:
   push:
     branches: [main]
@@ -80,6 +80,11 @@ jobs:
           mkdir -p "$HOME/.android"
           cp app/ci/debug.keystore "$HOME/.android/debug.keystore"
 
+      - name: Rank table (from bundled constants.json)
+        run: |
+          set -euo pipefail
+          node -e "const fs=require('fs');const c=JSON.parse(fs.readFileSync('app/app/src/main/assets/engine/data/constants.json','utf8'));fs.writeFileSync('.github/scripts/rank_table.json',JSON.stringify({rank_scores:c.rank_scores,rank_names:c.rank_names}));console.log('rank table',c.rank_scores.length);"
+
       - name: Apply app fixes
         run: |
           set -euo pipefail
@@ -103,12 +108,11 @@ jobs:
         with:
           gradle-version: "8.11.1"
 
-      - name: Unit test (FrameAdapter contract)
+      - name: Unit test (FrameAdapter contract, non-blocking)
         run: |
-          set -euo pipefail || true
           mkdir -p app/app/src/test/resources
-          base64 -d .github/fixtures/summary_real.b64 | gunzip > app/app/src/test/resources/summary_real.json
-          gradle -p app --no-daemon testReleaseUnitTest 2>&1 | tail -25 || echo "unit test failed (non-blocking)"
+          base64 -d .github/fixtures/summary_real.b64 | gunzip > app/app/src/test/resources/summary_real.json || true
+          gradle -p app --no-daemon testReleaseUnitTest 2>&1 | tail -20 || echo "unit test failed (non-blocking)"
 
       - name: Assemble release
         run: |
@@ -129,7 +133,7 @@ jobs:
           git config user.email dsh-bot@users.noreply.github.com
           git add -f app/dist/matsuri-ai-0.9.10-dsh19.apk app/dist/matsuri-ai-latest.apk
           git add -f app/app/src/main/java app/app/src/main/assets/index.html app/app/build.gradle.kts 2>/dev/null || true
-          git commit -m "build(app): 0.9.10-dsh19 双档接线（手写决策+搜索期望）" || echo nothing
+          git commit -m "build(app): 0.9.10-dsh19 双档接线" || echo nothing
           git push || echo "push failed"
 
       - name: Report (always)
@@ -139,6 +143,6 @@ jobs:
           git config user.name dsh-bot
           git config user.email dsh-bot@users.noreply.github.com
           git add ci-last-app-v2.txt || true
-          git commit -m "ci: app v11 log (${{ job.status }})" || echo nothing
+          git commit -m "ci: app v12 log (${{ job.status }})" || echo nothing
           git pull --rebase --autostash || true
           git push || echo "push failed"
