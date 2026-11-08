@@ -14,7 +14,7 @@ const fiveLimit = [lim.speed || 0, lim.stamina || 0, lim.power || 0, lim.guts ||
 const turn = Math.max(0, Math.min(77, (Math.max(1, src.month || 1) - 1) * 2 + (Math.max(1, src.half || 1) - 1)));
 const lv = Array.isArray(src.training_levels) ? src.training_levels : [];
 const trainLevelCount = [0, 1, 2, 3, 4].map(i => Number(lv[i] || 0));
-// cardId = 卡 ID × 10 + 突破等级（合并值）
+// 协议 cardId 是「卡 ID × 10 + 突破等级」的合并值（上游 docs/issues.md 明确）
 const cards = (src.support_cards || []).map(c => {
   const id = Number(c.support_card_id || c.id || 0);
   const lb = Number(c.limit_break_count || c.limit_break || 0);
@@ -23,19 +23,21 @@ const cards = (src.support_cards || []).map(c => {
 const effects = (src.chara_effect_ids || []).map(Number);
 const isAijiao = effects.includes(8);
 if (!effects.length) notes.push('chara_effect_ids empty');
-const persons = [];
-const seen = new Set();
-(src.trainings || []).forEach(t => {
-  (t.partners || []).forEach(p => {
-    const pid = Number(p.partner_id || 0);
-    if (!pid || seen.has(pid)) return;
-    seen.add(pid);
-    persons.push({
-      personType: Number(p.partner_type || 0),
-      charaId: pid,
-      friendship: Number(p.current_bond || 0)
-    });
-  });
+// 人头：引擎要求 persons 数量 == 卡组张数；friend 卡（30323/10149）personType=1，其余 2
+const FRIEND_CARDS = [30323, 10149];
+const partnerByCard = {};
+(src.trainings || []).forEach(t => (t.partners || []).forEach(p => {
+  const cid = Number(p.support_card_id || 0);
+  if (cid && !partnerByCard[cid]) partnerByCard[cid] = p;
+}));
+const persons = (src.support_cards || []).map(c => {
+  const cid = Number(c.support_card_id || c.id || 0);
+  const p = partnerByCard[cid] || {};
+  return {
+    personType: FRIEND_CARDS.includes(cid) ? 1 : 2,
+    charaId: Number(p.partner_id || 0),
+    friendship: Number(p.current_bond || 0)
+  };
 });
 const festaSrc = src.festa || {};
 const acts = (festaSrc.acts || []).map(a => ({
