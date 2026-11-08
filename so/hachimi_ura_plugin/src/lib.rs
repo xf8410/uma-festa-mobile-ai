@@ -4031,8 +4031,22 @@ fn support_card_command_id_to_training_id(command_id: i32) -> Option<i32> {
 
 /// Normalize normal and scenario-specific training IDs to the same
 /// five standard training IDs.
+// [FESTA-CMD-3292] 祭典杯（Festa）训练命令 → legacy 训练命令
+//   5101 速 / 5102 耐 / 5103 力 / 5104 根 / 5105 智（实测反推）
+const CMD_FESTA_SPEED: i32 = 5101;
+const CMD_FESTA_STAMINA: i32 = 5102;
+const CMD_FESTA_POWER: i32 = 5103;
+const CMD_FESTA_GUTS: i32 = 5104;
+const CMD_FESTA_WISDOM: i32 = 5105;
+
 fn normalize_training_command_id(command_id: i32) -> Option<i32> {
     match command_id {
+        // [FESTA-CMD-3292] Festa 稽古命令先折到 legacy 训练 id
+        CMD_FESTA_SPEED => Some(CMD_SPEED),
+        CMD_FESTA_STAMINA => Some(CMD_STAMINA),
+        CMD_FESTA_POWER => Some(CMD_POWER),
+        CMD_FESTA_GUTS => Some(CMD_GUTS),
+        CMD_FESTA_WISDOM => Some(CMD_WISDOM),
         CMD_SPEED | CMD_URA_SPEED => Some(CMD_SPEED),
         CMD_STAMINA | CMD_URA_STAMINA => Some(CMD_STAMINA),
         CMD_POWER | CMD_URA_POWER => Some(CMD_POWER),
@@ -4042,6 +4056,18 @@ fn normalize_training_command_id(command_id: i32) -> Option<i32> {
     }
 }
 
+
+// [SHINING-RULE-3292] 训练命令 → 训练下标（速0 耐1 力2 根3 智4；未知 -1）
+fn train_index_of_cmd(command_id: i32) -> i32 {
+    match command_id {
+        5101 | 101 | 601 => 0,
+        5102 | 105 | 602 => 1,
+        5103 | 102 | 603 => 2,
+        5104 | 103 | 604 => 3,
+        5105 | 106 | 605 => 4,
+        _ => -1,
+    }
+}
 // URA turn thresholds for max vital equivalent calculation
 const URA_LAST_TURN: i32 = 76; // URA finals: no vital needed
 const URA_PRE_FINAL_TURN: i32 = 71; // just before URA: minimal vital
@@ -6531,71 +6557,22 @@ unsafe fn read_summary_inner_impl() -> String {
                                         .unwrap_or(999999);
 
                                     let is_shining: Option<bool> = if is_support_card {
-                                        match sc_type {
-                                            // 普通卡: bond >= threshold && training match
-                                            Some(1) => {
-                                                match (
-                                                    current_bond,
-                                                    support_command_by_position
-                                                        .get(&partner_id)
-                                                        .copied(),
-                                                    normalize_training_command_id(cid),
-                                                ) {
-                                                    (
-                                                        Some(bond),
-                                                        Some(support_command_id),
-                                                        Some(current_training),
-                                                    ) => {
-                                                        match support_card_command_id_to_training_id(
-                                                            support_command_id,
-                                                        ) {
-                                                            Some(card_training) => Some(
-                                                                bond >= bond_threshold
-                                                                    && card_training
-                                                                        == current_training,
-                                                            ),
-                                                            None => None,
-                                                        }
-                                                    }
-                                                    _ => None,
-                                                }
-                                            }
-                                            // 友人卡: 永远不彩圈
-                                            Some(2) => Some(false),
-                                            // 团体卡: 启示事件触发就彩圈
-                                            Some(3) => Some(tips_partner_ids.contains(&partner_id)),
-                                            // 未知类型: 保守 null
-                                            _ => {
-                                                // Fallback to old logic for untyped cards
-                                                match (
-                                                    current_bond,
-                                                    support_command_by_position
-                                                        .get(&partner_id)
-                                                        .copied(),
-                                                    normalize_training_command_id(cid),
-                                                ) {
-                                                    (
-                                                        Some(bond),
-                                                        Some(support_command_id),
-                                                        Some(current_training),
-                                                    ) => {
-                                                        match support_card_command_id_to_training_id(
-                                                            support_command_id,
-                                                        ) {
-                                                            Some(card_training) => Some(
-                                                                bond >= bond_threshold
-                                                                    && card_training
-                                                                        == current_training,
-                                                            ),
-                                                            None => None,
-                                                        }
-                                                    }
-                                                    _ => None,
-                                                }
-                                            }
+                                        // [SHINING-RULE-3292] 引擎同款：卡位 && 得意训练==当前训练 && 羁绊>=80
+                                        let card_idx = support_command_by_position
+                                            .get(&partner_id)
+                                            .copied()
+                                            .map(train_index_of_cmd)
+                                            .unwrap_or(-1);
+                                        let cur_idx = train_index_of_cmd(cid);
+                                        if card_idx >= 0 && cur_idx >= 0 {
+                                            Some(
+                                                card_idx == cur_idx
+                                                    && current_bond.map_or(false, |b| b >= 80),
+                                            )
+                                        } else {
+                                            None
                                         }
                                     } else {
-                                        // NPC and scenario partners are not equipped support cards.
                                         None
                                     };
 
@@ -6665,7 +6642,7 @@ unsafe fn read_summary_inner_impl() -> String {
                                     };
 
                                     partners_json.push(format!(
-                                        r#"{{"partner_id":{},"support_position":{},"support_card_id":{},"current_bond":{},"is_shining":{},"is_unique_active":{},"bond_threshold":{},"support_card_type":{},"is_tips_event":{},"partner_type":{},"name":"{}","bond_gain":null}}"#,
+                                        r#"{{"partner_id":{},"support_position":{},"support_card_id":{},"current_bond":{},"is_shining":{},"is_unique_active":{},"bond_threshold":{},"support_card_type":{},"is_tips_event":{},"partner_type":{},"name":"{}","train_type":{},"bond_gain":null}}"#,
                                         partner_id,
                                         support_position,
                                         support_card_id_json,
@@ -6677,6 +6654,7 @@ unsafe fn read_summary_inner_impl() -> String {
                                         is_tips_event,
                                         partner_type,
                                         json_escape(&partner_name),
+                                        support_command_by_position.get(&partner_id).copied().map(train_index_of_cmd).unwrap_or(-1)
                                     ));
                                 }
                             }
