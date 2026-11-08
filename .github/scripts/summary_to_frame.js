@@ -2,6 +2,7 @@
 // [/summary → 引擎帧] 把 SO 的 /summary 转成上游引擎要的 thisTurn.json（Envelope{festa, baseGame}）
 // 依据：matsuri-ai/src/frame.rs（Envelope）+ umaai/src/protocol/base.rs（BaseStatus）
 //      + 上游 docs/issues.md：协议 cardId 是「卡 ID × 10 + 突破等级」的合并值
+//      + 帧内 persons[i].charaId 必须等于 cardId[i] 那张卡的 charaId（顺序一致）
 // 原则：源数据没有的字段不编造，填保守值并写进 _adapter_notes（引擎忽略未知键）
 const fs = require('fs');
 const src = JSON.parse(fs.readFileSync(process.argv[2], 'utf8'));
@@ -23,7 +24,13 @@ const cards = (src.support_cards || []).map(c => {
 const effects = (src.chara_effect_ids || []).map(Number);
 const isAijiao = effects.includes(8);
 if (!effects.length) notes.push('chara_effect_ids empty');
-// 人头：引擎要求 persons 数量 == 卡组张数；friend 卡（30323/10149）personType=1，其余 2
+// cardDB（App 里已随包）：id → charaId / cardType；给人头填对 chara_id
+const CARD_DB = (() => {
+  const p = process.env.CARD_DB;
+  if (!p) return null;
+  try { return JSON.parse(fs.readFileSync(p, 'utf8')); } catch (e) { notes.push('cardDB unreadable'); return null; }
+})();
+// 人头：引擎要求 persons 数量 == 卡组张数、顺序与 cardId 一一对应；friend 卡 personType=1，其余 2
 const FRIEND_CARDS = [30323, 10149];
 const partnerByCard = {};
 (src.trainings || []).forEach(t => (t.partners || []).forEach(p => {
@@ -35,7 +42,7 @@ const persons = (src.support_cards || []).map(c => {
   const p = partnerByCard[cid] || {};
   return {
     personType: FRIEND_CARDS.includes(cid) ? 1 : 2,
-    charaId: Number(p.partner_id || 0),
+    charaId: Number((CARD_DB && CARD_DB[cid] && CARD_DB[cid].charaId) || p.partner_id || 0),
     friendship: Number(p.current_bond || 0)
   };
 });
