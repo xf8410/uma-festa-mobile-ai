@@ -277,6 +277,21 @@ object NativeEngine {
         return when {
             method == "POST" && p == "/data" -> { ingest(body, "push"); json("{\"ok\":true}") }
             p == "/engine" -> json(EngineBridge.statusJson()) // [ENGINE-ANDROID]
+            // [APP-FIX-102] master 表代理（技能规划用）：/api/mdb?t=skill_data&batch=2000&offset=0
+            p == "/api/mdb" -> {
+                val qs = path.substringAfter('?', "")
+                fun qp(k: String): String = qs.split('&')
+                    .map { it.split('=', limit = 2) }
+                    .firstOrNull { it.size == 2 && it[0] == k }?.get(1) ?: ""
+                val t = qp("t")
+                val batch = qp("batch").ifEmpty { "2000" }
+                val off = qp("offset").ifEmpty { "0" }
+                if (t.isEmpty()) json("{\"ok\":false,\"error\":\"missing_t\"}")
+                else {
+                    val text = httpGetText("/debug/table?name=" + t + "&batch=" + batch + "&offset=" + off)
+                    if (text == null) json("{\"ok\":false,\"error\":\"so_unreachable\"}") else json(text)
+                }
+            }
             p == "/api/health" -> json(healthJson().toString())
             p == "/api/snapshot" -> json(snapshot().toString())
             p == "/api/frames" -> json(framesJson(path).toString())
