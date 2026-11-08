@@ -961,6 +961,12 @@ const V5_EVO=[{id:601,name:'特化',eff:'主属性获得 +5~25 / 上限 +5~25',w
   {id:901,name:'不屈',eff:'失败体力阈值 45→0 · 稽古效果 +0~5',when:'T47 默认与 301 融合'},
   {id:1001,name:'兼修',eff:'副属性获得 +1~25 · 稽古效果 +1~15',when:'T47 默认与 401 融合'}];
 const V5_KEYS=['spd','sta','pow','gut','wis'];
+// [APP-FIX-099] 卡册：支援卡名 / 得意训练（cardType 0速1耐2力3根4智）
+let CARDD={};
+fetch(BASE+'/api/carddb',{cache:'force-cache'}).then(function(r){return r.json();}).then(function(j){CARDD=j;}).catch(function(){});
+const cardMeta=function(id){return CARDD[String(id)]||null;};
+const cardShort=function(id){const c=cardMeta(id);if(!c)return '';const n=String(c.cardName||'');const m=n.match(/^\[([^\]]+)\]/);return m?m[1]+' '+n.replace(/^\[[^\]]+\]/,''):n;};
+const isShiningNow=function(p,cmdIdx){const c=cardMeta(p.support_card_id);if(!c||c.cardType==null)return null;if(p.current_bond==null)return null;const th=(p.bond_threshold==null?80:p.bond_threshold);return (+c.cardType===cmdIdx)&&(+p.current_bond>=+th);};
 function v5Head(type,label,noBuff){
   const c={link:'',card:'card',god:'god',guest:'guest',npc:'npc',social:'social'}[type]||'npc';
   return `<div class="v5-head ${c}"><span class="ic"></span><span class="tx">${esc(label)}</span>${noBuff?'<span class="nof">无buff</span>':''}</div>`;

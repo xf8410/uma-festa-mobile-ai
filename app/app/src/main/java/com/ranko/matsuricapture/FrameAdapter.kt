@@ -169,15 +169,23 @@ object FrameAdapter {
                 put("resultType", c.optInt("result_type", 0))
             })
         }
+        // [APP-FIX-097] festa.persons 只含卡位人头（persons 下标，不含友人卡），按分布反推
+        val friendIdx = HashSet<Int>()
+        for (i in cardPlain.indices) {
+            if (cardPlain[i] == FRIEND_CARD || cardPlain[i] == FRIEND_CARD_R) friendIdx.add(i)
+        }
         val fPersons = JSONArray()
-        val fp = fs.optJSONArray("persons") ?: JSONArray()
-        for (i in 0 until fp.length()) {
-            val p = fp.optJSONObject(i) ?: continue
-            fPersons.put(JSONObject().apply {
-                put("targetId", p.optInt("target_id", p.optInt("chara_id", 0)))
-                put("actType", p.optInt("act_type", 0))
-                put("origin", p.optString("origin", "card"))
-            })
+        for (ai in 0 until 5) {
+            val row = dist.getJSONArray(ai)
+            for (k in 0 until row.length()) {
+                val pi = row.optInt(k, -1)
+                if (pi < 0 || friendIdx.contains(pi)) continue
+                fPersons.put(JSONObject().apply {
+                    put("targetId", pi)
+                    put("actType", ai + 1)
+                    put("origin", "card")
+                })
+            }
         }
         // [APP-FIX-091] 稽古掷中标记：acts[].state（SO 的 ActTrainingState）非 0 视为已掷中
         val kensanArr = JSONArray()
@@ -186,10 +194,12 @@ object FrameAdapter {
             kensanArr.put(a.optInt("state", 0) != 0)
         }
         if (kensanArr.length() != 5) notes.put("kensan_missing_or_partial")
+        val finfo = fs.optJSONObject("festa_info")
         val festa = JSONObject().apply {
             put("acts", acts)
-            put("maxActLevel", 10)
-            put("campRemain", JSONObject.NULL)
+            // [APP-FIX-097] 合宿剩余回合 / 演目最高等级用游戏真值
+            put("maxActLevel", finfo?.optInt("max_act_level", 10) ?: 10)
+            put("campRemain", if (finfo != null && finfo.has("summer_camp_remain_turn")) finfo.optInt("summer_camp_remain_turn", 0) else JSONObject.NULL)
             put("assistSupportLeft", JSONObject.NULL)
             put("fatigueRecovery", false)
             put("checkPoints", if (cpsJ.length() > 0) cpsJ else JSONObject.NULL)

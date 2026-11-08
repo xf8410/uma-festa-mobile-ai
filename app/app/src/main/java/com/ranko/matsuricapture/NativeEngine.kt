@@ -202,8 +202,6 @@ object NativeEngine {
                             pullRecv++
                             lastPullOkAtMs = now
                             lastSummaryError = ""
-                            // [APP-FIX-096] 主动拉取这条线也要喂内置引擎（原来只 store，引擎收不到帧）
-                            appContext?.let { EngineBridge.onSummary(it, jo) }
                             store(normalize(jo, null, "pull"))
                         }
                     }
@@ -286,6 +284,8 @@ object NativeEngine {
             method == "POST" && p == "/api/export_file" -> json(exportFile().toString())
             p == "/api/pull" -> json(pull().toString())
             p == "/float" || p == "/float.html" -> asset("float.html", "text/html; charset=utf-8")
+            // [APP-FIX-099] 卡册（支援卡名 / 得意训练），人头角标在页面侧按上游规则算
+            p == "/api/carddb" -> asset("engine/data/cardDB.json", "application/json")
             p == "/support_cards.json" -> asset("support_cards.json", "application/json; charset=utf-8")
             p == "/" || p == "/index.html" -> html()
             else -> Resp("404 Not Found", "application/json; charset=utf-8",
