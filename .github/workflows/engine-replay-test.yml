@@ -17,16 +17,6 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Generate frame from fixture
-        run: |
-          set -euo pipefail
-          mkdir -p ci-replay/frames
-          node .github/scripts/summary_to_frame.js .github/fixtures/summary_min.json > /tmp/frame.json
-          cp /tmp/frame.json "ci-replay/frames/game102003_turn12.json"
-          echo "--- frame head ---"
-          head -c 400 /tmp/frame.json; echo
-          node -e "JSON.parse(require('fs').readFileSync('/tmp/frame.json','utf8'));console.log('frame JSON ok')"
-
       - name: Cache cargo + engine build
         uses: actions/cache@v4
         with:
@@ -34,44 +24,41 @@ jobs:
             ~/.cargo/registry
             ~/.cargo/git
             /tmp/w
-          key: engine-replay-${{ hashFiles('.github/workflows/engine-replay-test.yml') }}
+          key: engine-replay-v3
 
-      - name: Clone upstream and build engine (host)
-        run: |
-          set -euo pipefail
-          mkdir -p /tmp/w
-          [ -d /tmp/w/umaai_next/.git ] || git clone --depth 1 https://github.com/umaai-project/umaai-next.git /tmp/w/umaai_next
-          [ -d /tmp/w/umaai-matsuri/.git ] || git clone --depth 1 https://github.com/umaai-project/umaai-matsuri.git /tmp/w/umaai-matsuri
-          cd /tmp/w/umaai-matsuri
-          cargo build --release -p matsuri-cli 2>&1 | tail -15
-          ls -l target/release/matsuri
-
-      - name: Run engine replay
+      - name: Build + replay + commit log (one shell)
         run: |
           set -o pipefail
+          OUT="$GITHUB_WORKSPACE/ci-last-replay.txt"
+          : > "$OUT"
+          say() { echo "$@" | tee -a "$OUT"; }
+          mkdir -p /tmp/w
+          say "step=clone"
+          [ -d /tmp/w/umaai_next/.git ] || git clone --depth 1 https://github.com/umaai-project/umaai-next.git /tmp/w/umaai_next 2>&1 | tail -2 | tee -a "$OUT"
+          [ -d /tmp/w/umaai-matsuri/.git ] || git clone --depth 1 https://github.com/umaai-project/umaai-matsuri.git /tmp/w/umaai-matsuri > /dev/null 2>&1
           cd /tmp/w/umaai-matsuri
-          rm -rf ci-frames
-          cp -a "$GITHUB_WORKSPACE/ci-replay/frames" ./ci-frames
+          say "step=build"
+          cargo build --release -p matsuri-cli 2>&1 | tail -6 | tee -a "$OUT"
+          ls -l target/release/matsuri | tee -a "$OUT"
+          say "step=frame"
+          node "$GITHUB_WORKSPACE/.github/scripts/summary_to_frame.js" "$GITHUB_WORKSPACE/.github/fixtures/summary_min.json" > /tmp/frame.json
+          say "frame_bytes=$(wc -c < /tmp/frame.json)"
+          rm -rf ci-frames && mkdir -p ci-frames
+          cp /tmp/frame.json ci-frames/game102003_turn12.json
+          say "step=run"
           set +e
           timeout 240 ./target/release/matsuri online --replay ./ci-frames --json > /tmp/out.json 2> /tmp/err.txt
           RC=$?
           set -e
-          {
-            echo "exit=$RC"
-            echo "=== stdout ==="
-            head -c 4000 /tmp/out.json || true
-            echo
-            echo "=== stderr ==="
-            head -c 6000 /tmp/err.txt || true
-          } > "$GITHUB_WORKSPACE/replay-capture.txt"
-          cat "$GITHUB_WORKSPACE/replay-capture.txt"
-
-      - name: Report
-        if: always()
-        run: |
-          { echo "job_status=${{ job.status }}"; head -c 9000 replay-capture.txt 2>/dev/null || true; } > ci-last-replay.txt
+          say "exit=$RC"
+          say "stdout_bytes=$(wc -c < /tmp/out.json) stderr_bytes=$(wc -c < /tmp/err.txt)"
+          say "---- stdout ----"
+          head -c 4000 /tmp/out.json | tee -a "$OUT" > /dev/null
+          say "---- stderr ----"
+          head -c 6000 /tmp/err.txt | tee -a "$OUT" > /dev/null
+          say "---- end ----"
           git config user.name dsh-bot
           git config user.email dsh-bot@users.noreply.github.com
-          git add ci-last-replay.txt || true
-          git commit -m "ci: engine replay log (${{ job.status }})" || echo nothing
+          git add -f ci-last-replay.txt
+          git commit -m "ci: replay log (exit=$RC)" || echo nothing
           git push || echo "push failed"
