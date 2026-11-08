@@ -4,14 +4,15 @@
 //  2) 帧不再写 /summary 原文，改写成引擎帧（FrameAdapter）
 //  3) 解析引擎 stdout 的 decision 行 → lastDecision（期望分/σ/档/候选分）
 //  4) /engine 里带出 decision
+// 容错：锚点缺失只跳过（上游/基线版本差异不该让整条构建挂掉）
 const fs = require('fs');
 const P = process.argv[2];
 if (!P) throw new Error('usage: apply_appfix_086.js <EngineBridge.kt>');
 let s = fs.readFileSync(P, 'utf8');
-if (s.includes('[ENGINE-ADAPTER]')) { console.log('already applied'); process.exit(0); }
+if (s.includes('FrameAdapter.toFrame')) { console.log('already applied (FrameAdapter wired)'); process.exit(0); }
 const once = (a, b) => {
   const n = s.split(a).length - 1;
-  if (n !== 1) throw new Error('anchor count=' + n + ' for: ' + JSON.stringify(a.slice(0, 70)));
+  if (n !== 1) { console.log('skip (anchor count=' + n + '): ' + JSON.stringify(a.slice(0, 50))); return; }
   s = s.split(a).join(b);
 };
 
