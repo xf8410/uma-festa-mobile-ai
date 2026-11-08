@@ -41,6 +41,8 @@ class FloatingWindowService : Service() {
     private var lp: WindowManager.LayoutParams? = null
     private var web: WebView? = null
     private var collapsed = false
+    // [APP-FIX-078] 紧凑模式（大屏 / 紧凑 二选一）
+    private var compactMode = false
     private var scaleIdx = 0
 
     override fun onCreate() {
@@ -151,29 +153,35 @@ class FloatingWindowService : Service() {
                     header.visibility = View.GONE
                     w.evaluateJavascript("window.setMini&&setMini(true)", null)
                 } else {
-                    // 展开：高度先给一屏内的默认值，页面下一次 render 的 reportHeight 会收紧
-                    // [APP-FIX-077] 展开=大框
+                    // [APP-FIX-078] 展开：一定回到大屏 + 主面板，杜绝回不去
+                    compactMode = false
                     wlp.height = (0.60 * resources.displayMetrics.heightPixels).toInt()
                     w.layoutParams = wlp
                     header.visibility = View.VISIBLE
-                    w.evaluateJavascript("window.setMini&&setMini(false)", null)
+                    w.loadUrl(FLOAT_URL)
                 }
             }
             minBtn.text = if (collapsed) "□" else "—"
             wm?.updateViewLayout(container, lp)
         }
         closeBtn.setOnClickListener { stopSelf() }
-        // 缩放：100% → 70% → 45% 循环，页面整体 zoom，窗口宽度同步缩（露出游戏画面）
+        // [APP-FIX-078] ⤢ = 大屏 ⇄ 紧凑，两档互相可逆
         scaleBtn.setOnClickListener {
-            scaleIdx = (scaleIdx + 1) % SCALES.size
-            val sc = SCALES[scaleIdx]
+            compactMode = !compactMode
             web?.let { w ->
                 val wlp = w.layoutParams as LinearLayout.LayoutParams
-                wlp.width = ((0.94 * resources.displayMetrics.widthPixels) * sc).toInt()
-                w.layoutParams = wlp
-                w.evaluateJavascript("window.setZoom&&setZoom($sc)", null)
+                wlp.width = (0.94 * resources.displayMetrics.widthPixels).toInt()
+                if (compactMode) {
+                    wlp.height = dp(360)
+                    w.layoutParams = wlp
+                    w.loadUrl(SMALL_URL)
+                } else {
+                    wlp.height = (0.60 * resources.displayMetrics.heightPixels).toInt()
+                    w.layoutParams = wlp
+                    w.loadUrl(FLOAT_URL)
+                }
             }
-            scaleBtn.text = if (sc >= 1f) "⤢" else "${(sc * 100).toInt()}"
+            scaleBtn.text = if (compactMode) "▣" else "⤢"
             wm?.updateViewLayout(container, lp)
         }
 
@@ -195,6 +203,25 @@ class FloatingWindowService : Service() {
         // 折叠态（标题栏已隐藏）：迷你条自身可拖动；展开时不拦截 WebView 触摸
         web?.setOnTouchListener { _, ev ->
             if (!collapsed) return@setOnTouchListener false
+            // [APP-FIX-078] 迷你条轻点=回到大屏
+            if (ev.action == MotionEvent.ACTION_UP) {
+                val dx = Math.abs(ev.rawX - tx)
+                val dy = Math.abs(ev.rawY - ty)
+                if (dx < dp(8) && dy < dp(8)) {
+                    collapsed = false
+                    compactMode = false
+                    minBtn.text = "—"
+                    web?.let { w ->
+                        val wlp = w.layoutParams as LinearLayout.LayoutParams
+                        wlp.height = (0.60 * resources.displayMetrics.heightPixels).toInt()
+                        w.layoutParams = wlp
+                        w.loadUrl(FLOAT_URL)
+                    }
+                    header.visibility = View.VISIBLE
+                    wm?.updateViewLayout(container, lp)
+                    return@setOnTouchListener true
+                }
+            }
             when (ev.action) {
                 MotionEvent.ACTION_DOWN -> {
                     ix = lp!!.x; iy = lp!!.y; tx = ev.rawX; ty = ev.rawY; true
@@ -270,6 +297,8 @@ class FloatingWindowService : Service() {
         private const val NOTIFY_ID = 2
         // [APP-FIX-077] 大面板：加载主面板页
         private const val FLOAT_URL = "http://127.0.0.1:18766/"
+        // [APP-FIX-078] 紧凑页
+        private const val SMALL_URL = "http://127.0.0.1:18766/float"
         private val SCALES = floatArrayOf(1.0f, 0.70f, 0.45f)
         @Volatile private var running = false
         fun isRunning(): Boolean = running
