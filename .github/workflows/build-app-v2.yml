@@ -1,4 +1,4 @@
-name: "Build matsuri AI app v4 (内置引擎+多端口)"
+name: "Build matsuri AI app v5 (白屏修复)"
 on:
   push:
     branches: [main]
@@ -7,6 +7,7 @@ on:
       - ".github/scripts/apply_appfix_081.js"
       - ".github/scripts/apply_appfix_082.js"
       - ".github/scripts/apply_appfix_083.js"
+      - ".github/scripts/apply_appfix_084.js"
   workflow_dispatch:
 
 permissions:
@@ -72,15 +73,18 @@ jobs:
         run: |
           set -euo pipefail
           : > app-capture.txt
-          node .github/scripts/apply_appfix_080.js app/app/src/main/java/com/ranko/matsuricapture/NativeEngine.kt app/app/src/main/assets/index.html app/app/build.gradle.kts 2>&1 | tee -a app-capture.txt
-          node .github/scripts/apply_appfix_081.js app/app/src/main/java/com/ranko/matsuricapture/NativeEngine.kt app/app/src/main/assets/index.html app/app/build.gradle.kts 2>&1 | tee -a app-capture.txt
-          node .github/scripts/apply_appfix_082.js app/app/src/main/java/com/ranko/matsuricapture/NativeEngine.kt 2>&1 | tee -a app-capture.txt
-          node .github/scripts/apply_appfix_083.js app/app/src/main/java/com/ranko/matsuricapture/NativeEngine.kt 2>&1 | tee -a app-capture.txt
+          K=app/app/src/main/java/com/ranko/matsuricapture
+          node .github/scripts/apply_appfix_080.js $K/NativeEngine.kt app/app/src/main/assets/index.html app/app/build.gradle.kts 2>&1 | tee -a app-capture.txt
+          node .github/scripts/apply_appfix_081.js $K/NativeEngine.kt app/app/src/main/assets/index.html app/app/build.gradle.kts 2>&1 | tee -a app-capture.txt
+          node .github/scripts/apply_appfix_082.js $K/NativeEngine.kt 2>&1 | tee -a app-capture.txt
+          node .github/scripts/apply_appfix_083.js $K/NativeEngine.kt 2>&1 | tee -a app-capture.txt
+          node .github/scripts/apply_appfix_084.js $K/MainActivity.kt $K/FloatingWindowService.kt 2>&1 | tee -a app-capture.txt
           grep -qF '[APP-FIX-081]' app/app/src/main/assets/index.html
-          grep -qF '[ENGINE-ANDROID]' app/app/src/main/java/com/ranko/matsuricapture/NativeEngine.kt
-          grep -qF '[APP-FIX-083]' app/app/src/main/java/com/ranko/matsuricapture/NativeEngine.kt
-          sed -i 's/versionName = "[^"]*"/versionName = "0.9.4-dsh13"/' app/app/build.gradle.kts
-          sed -i 's/versionCode = [0-9]\+/versionCode = 29/' app/app/build.gradle.kts
+          grep -qF '[ENGINE-ANDROID]' $K/NativeEngine.kt
+          grep -qF '[APP-FIX-083]' $K/NativeEngine.kt
+          grep -qF '[APP-FIX-084]' $K/MainActivity.kt
+          sed -i 's/versionName = "[^"]*"/versionName = "0.9.5-dsh14"/' app/app/build.gradle.kts
+          sed -i 's/versionCode = [0-9]\+/versionCode = 30/' app/app/build.gradle.kts
           grep -E 'versionCode|versionName' app/app/build.gradle.kts
 
       - uses: gradle/actions/setup-gradle@v4
@@ -99,21 +103,21 @@ jobs:
           set -euo pipefail
           mkdir -p app/dist
           SRC=$(find app/app/build/outputs/apk/release -name "*.apk" | head -1)
-          cp "$SRC" app/dist/matsuri-ai-0.9.4-dsh13.apk
+          cp "$SRC" app/dist/matsuri-ai-0.9.5-dsh14.apk
           cp "$SRC" app/dist/matsuri-ai-latest.apk
           ls -l app/dist/
           git config user.name dsh-bot
           git config user.email dsh-bot@users.noreply.github.com
-          git add -f app/dist/matsuri-ai-0.9.4-dsh13.apk app/dist/matsuri-ai-latest.apk
+          git add -f app/dist/matsuri-ai-0.9.5-dsh14.apk app/dist/matsuri-ai-latest.apk
           git add -f app/app/src/main/java app/app/src/main/assets/index.html app/app/build.gradle.kts 2>/dev/null || true
-          git commit -m "build(app): 0.9.4-dsh13 端口回退+纯拉收帧，可三软同开" || echo nothing
+          git commit -m "build(app): 0.9.5-dsh14 白屏修复（按实际绑定端口加载）" || echo nothing
           git push || echo "push failed"
 
       - uses: actions/upload-artifact@v4
         if: success()
         with:
-          name: matsuri-ai-0.9.4-dsh13
-          path: app/dist/matsuri-ai-0.9.4-dsh13.apk
+          name: matsuri-ai-0.9.5-dsh14
+          path: app/dist/matsuri-ai-0.9.5-dsh14.apk
 
       - name: Report (always)
         if: always()
@@ -122,5 +126,5 @@ jobs:
           git config user.name dsh-bot
           git config user.email dsh-bot@users.noreply.github.com
           git add ci-last-app-v2.txt || true
-          git commit -m "ci: app v4 log (${{ job.status }})" || echo nothing
+          git commit -m "ci: app v5 log (${{ job.status }})" || echo nothing
           git push || echo "push failed"
