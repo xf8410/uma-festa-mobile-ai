@@ -4564,9 +4564,10 @@ unsafe fn read_skill_tips(
             }
         }
         // Fallback: raw field offsets (URA protocol dump: 0x10/0x14/0x18)
-        let gid = std::ptr::read_unaligned::<i32>(base.add(0x10) as *const i32);
-        let rar = std::ptr::read_unaligned::<i32>(base.add(0x14) as *const i32);
-        let lvl = std::ptr::read_unaligned::<i32>(base.add(0x18) as *const i32);
+        // // [SKILLTIPS-3292] SkillTips 三个字段都是内联 ObscuredInt
+        let gid = read_obscured_int_at(base as *const c_void, 16);
+        let rar = read_obscured_int_at(base as *const c_void, 36);
+        let lvl = read_obscured_int_at(base as *const c_void, 56);
         if gid > 0 || rar > 0 {
             Some((gid, rar, lvl))
         } else {
@@ -4577,13 +4578,14 @@ unsafe fn read_skill_tips(
     // Approach 1: get_SkillTipsList() -> List<SkillTips>
     let list = call_getter_on_instance(chara_class, chara_obj, "get_SkillTipsList");
     if !list.is_null() {
+        // // [SKILLTIPS-3292] List<T>: _size@0x18, _items@0x10 → 元素在数组 +0x20
         let lb = list as *const u8;
-        let count =
-            std::ptr::read_unaligned::<usize>(lb.add(IL2CPP_LIST_COUNT_OFF) as *const usize);
-        if count > 0 && count < 500 {
+        let count = std::ptr::read_unaligned::<usize>(lb.add(0x18) as *const usize);
+        let items = std::ptr::read_unaligned::<*mut c_void>(lb.add(0x10) as *const *mut c_void);
+        if count > 0 && count < 500 && !items.is_null() {
             for i in 0..count {
                 let ep = std::ptr::read_unaligned::<*mut c_void>(
-                    lb.add(IL2CPP_LIST_ITEMS_OFF + i * IL2CPP_LIST_ITEM_SIZE) as *const *mut c_void,
+                    (items as *const u8).add(0x20 + i * 8) as *const *mut c_void,
                 );
                 if let Some(t) = read_tip(ep) {
                     tips.push(t);
@@ -4598,13 +4600,14 @@ unsafe fn read_skill_tips(
     // Approach 2: skill_tips_array field direct read
     let field_arr = read_field_value(chara_class, chara_obj, "skill_tips_array");
     if !field_arr.is_null() {
+        // // [SKILLTIPS-3292] 同上：字段可能是 List，也可能是数组
         let ab = field_arr as *const u8;
-        let count =
-            std::ptr::read_unaligned::<usize>(ab.add(IL2CPP_LIST_COUNT_OFF) as *const usize);
-        if count > 0 && count < 500 {
+        let count = std::ptr::read_unaligned::<usize>(ab.add(0x18) as *const usize);
+        let items = std::ptr::read_unaligned::<*mut c_void>(ab.add(0x10) as *const *mut c_void);
+        if count > 0 && count < 500 && !items.is_null() {
             for i in 0..count {
                 let ep = std::ptr::read_unaligned::<*mut c_void>(
-                    ab.add(IL2CPP_LIST_ITEMS_OFF + i * IL2CPP_LIST_ITEM_SIZE) as *const *mut c_void,
+                    (items as *const u8).add(0x20 + i * 8) as *const *mut c_void,
                 );
                 if let Some(t) = read_tip(ep) {
                     tips.push(t);
