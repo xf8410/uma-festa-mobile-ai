@@ -26,19 +26,19 @@ jobs:
             ~/.cargo/registry
             ~/.cargo/git
             /tmp/w
-          key: engine-replay-v4
+          key: engine-replay-v5
 
-      - name: Build + replay (print + save log)
+      - name: Build + replay + push log
         run: |
           set -o pipefail
-          OUT="$GITHUB_WORKSPACE/ci-last-replay.txt"
+          OUT="/tmp/replay-log.txt"
           : > "$OUT"
           say() { echo "$@" | tee -a "$OUT"; }
           mkdir -p /tmp/w
           [ -d /tmp/w/umaai_next/.git ] || git clone --depth 1 https://github.com/umaai-project/umaai-next.git /tmp/w/umaai_next > /dev/null 2>&1
           [ -d /tmp/w/umaai-matsuri/.git ] || git clone --depth 1 https://github.com/umaai-project/umaai-matsuri.git /tmp/w/umaai-matsuri > /dev/null 2>&1
           cd /tmp/w/umaai-matsuri
-          cargo build --release -p matsuri-cli 2>&1 | tail -4 | tee -a "$OUT"
+          cargo build --release -p matsuri-cli 2>&1 | tail -3 | tee -a "$OUT"
           node "$GITHUB_WORKSPACE/.github/scripts/summary_to_frame.js" "$GITHUB_WORKSPACE/.github/fixtures/summary_min.json" > /tmp/frame.json
           say "frame_bytes=$(wc -c < /tmp/frame.json)"
           rm -rf ci-frames && mkdir -p ci-frames
@@ -51,22 +51,14 @@ jobs:
           say "---- stdout ----"
           head -c 3000 /tmp/out.json >> "$OUT"
           say "---- stderr ----"
-          head -c 4000 /tmp/err.txt >> "$OUT"
+          head -c 3000 /tmp/err.txt >> "$OUT"
           say "---- end ----"
-          echo "::warning::REPLAY_LOG_START"
           cat "$OUT"
-          echo "::warning::REPLAY_LOG_END"
-
-      - name: Push log to ci-log branch
-        if: always()
-        run: |
-          set -e
+          cd "$GITHUB_WORKSPACE"
+          cp "$OUT" ./ci-last-replay.txt
           git config user.name dsh-bot
           git config user.email dsh-bot@users.noreply.github.com
-          git stash -u >/dev/null 2>&1 || true
-          git checkout -B ci-log
-          cp ci-last-replay.txt /tmp/x.txt 2>/dev/null || true
-          if [ -f /tmp/x.txt ]; then cp /tmp/x.txt ci-last-replay.txt; fi
+          git checkout -B ci-log > /dev/null 2>&1
           git add -f ci-last-replay.txt
-          git commit -m "ci: replay log" || echo nothing
-          git push -f origin ci-log || echo "push failed"
+          git commit -m "ci: replay log (exit=$RC)" || echo "nothing to commit"
+          git push -f "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git" HEAD:refs/heads/ci-log || echo "push failed"
