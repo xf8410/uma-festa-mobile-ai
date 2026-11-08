@@ -45,16 +45,10 @@ class MainActivity : AppCompatActivity() {
         web.addJavascriptInterface(Bridge(), "Android")
 
         val dir = File(filesDir, "sessions/latest").apply { mkdirs() }.absolutePath
-        if (NativeEngine.start(BIND, dir, this) || portAlreadyServed()) web.loadUrl(baseUrlOf())
+        if (NativeEngine.start(BIND, dir, this) || portAlreadyServed()) web.loadUrl(LOCAL)
         else retryStart(dir, 0)
 
         ContextCompat.startForegroundService(this, Intent(this, CaptureService::class.java))
-    }
-
-    // [APP-FIX-084] 18766 可能被别的进程占（本机 DSH 等），加载用实际绑定端口，否则会白屏
-    private fun baseUrlOf(): String {
-        val p = NativeEngine.boundPort
-        return "http://127.0.0.1:" + (if (p > 0) p else 18766) + "/"
     }
 
     /** 端口被上一进程占住时，先确认它确实是自己的接收端，是则同源加载，不退回 file:// */
@@ -73,7 +67,7 @@ class MainActivity : AppCompatActivity() {
             return
         }
         Handler(Looper.getMainLooper()).postDelayed({
-            if (NativeEngine.start(BIND, dir, this) || portAlreadyServed()) web.loadUrl(baseUrlOf())
+            if (NativeEngine.start(BIND, dir, this) || portAlreadyServed()) web.loadUrl(LOCAL)
             else retryStart(dir, attempt + 1)
         }, 600)
     }
