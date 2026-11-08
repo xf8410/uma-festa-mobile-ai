@@ -12,10 +12,10 @@
 
 | crate | 测试面 | 现状 |
 |---|---|---|
-| `matsuri-core` | 内联单测 + `tests/data.rs`（L2 数据层）+ `tests/mechanics.rs`（机制集成）+ `tests/diag.rs`（诊断守门）+ `tests/search.rs`（搜索档） | 内联单测 **168** 个（含 1 个 `#[ignore]` 微基准）+ L2 数据层 **16** 个 + 机制集成 **36** 个 + 诊断 **1** 个 + 搜索 **4** 个（另 1 个 1024 手动 `#[ignore]`） |
+| `matsuri-core` | 内联单测 + `tests/data.rs`（L2 数据层）+ `tests/mechanics.rs`（机制集成）+ `tests/restore.rs`（还原层）+ `tests/diag.rs`（诊断守门）+ `tests/search.rs`（搜索档） | 内联单测 **171** 个（含 1 个 `#[ignore]` 微基准）+ L2 数据层 **16** 个 + 机制集成 **36** 个 + 还原层 **17** 个 + 诊断 **1** 个 + 搜索 **4** 个（另 1 个 1024 手动 `#[ignore]`） |
 | `matsuri-sim` | `tests/baseline.rs`（固定种子基线） | 待补 |
-| `matsuri-cli` | 内联（呈现件纯函数）+ `tests/manual_smoke.rs` + `tests/explain_smoke.rs` + `tests/search_smoke.rs` | 内联 **8** 个 + 冒烟 **3** 个（manual / explain / search）；基线待补 |
-| `matsuri-ai` | 内联 8 + `tests/replay.rs` 2 + `tests/w2.rs` 3（诊断）+ `tests/layers.rs` 1（诊断） | 帧解析 / 终局帧门禁 / 回放顺序与局末终局帧 / 一帧一决策 / 训练验算与偏差拆解 |
+| `matsuri-cli` | 内联（呈现件纯函数）+ `tests/manual_smoke.rs` + `tests/explain_smoke.rs` + `tests/search_smoke.rs` | 内联 **13** 个 + 冒烟 **3** 个（manual / explain / search）；基线待补 |
+| `matsuri-ai` | 内联 16 + `tests/replay.rs` 2 + `tests/w2.rs` 3（诊断）+ `tests/layers.rs` 1（诊断） | 帧解析（含 `charaEffects` 全量状态 / `storyId`）/ **路由（事件帧查不到数据 → 跳过，不回落训练）** / 终局帧门禁 / 回放顺序与局末终局帧 / 一帧一决策 / 训练验算与偏差拆解 |
 | `matsuri-tools` | 性能测量 bin `bench`（整局 / 分段 / rollout 分布 / 固定根） | 无单测（测量工具，按 docs/perf_profiling.md 复现） |
 
 ## 2. 单元测试（内联）
@@ -29,7 +29,8 @@
 | `core/src/game/stage.rs` | `next_chain` / `stage_ids_are_stable` / `camp_starts_only_at_window_start` / `camp_basic_window` / `camp_race_turn_extends` / `camp_race_at_window_start_extends` / `camp_forced_rest_turn_extends` / `camp_consecutive_races_keep_extending` / `camp_rest_version_only_in_original_window` / `check_point_index_matches_schedule` / `advice_window_index_matches` / `ura_race_turns` / `ura_boundaries_and_interlude` | 五阶段链 / 阶段号稳定；合宿窗口起点、基础 4 回合、比赛 / 强制休息顺延、连续顺延、合宿版休息只限原窗口；発表会 / 教诲窗口；**URA 边界：68–71 空窗期 / 72–77 URA 回合 / 73·75·77 决赛** |
 | `core/src/trainer.rs` | `trainer_prefers_heal_when_bad_trainer` / `explain_action_reports_candidates_and_reason` | 手写训练员守门链：不擅长优先治病；解释 API 与决策同源 |
 | `core/src/game/advice.rs` | `microbench_participant_advice`（`#[ignore]`） | 参与教诲聚合微基准：`participant_advice` / `advice_slot_effect` / `shining_count` 的 ns/op（性能轮次立项依据，不参与常规测试） |
-| `core/src/search.rs` | `event_token_roundtrip` / `score_leaf_returns_search_score` / `search_consumes_one_decision_draw` / `search_summary_matches_selected_candidate` | 事件搜索 dummy token 往返；叶估占位接口与搜索分同口径；**搜索恰好消费一个决策流随机字（ramen 口径），局面规则流独立派生** |
+| `core/src/search.rs` | `event_token_roundtrip` / `score_leaf_returns_search_score` / `search_consumes_one_decision_draw` / `search_summary_matches_selected_candidate` / `baseline_and_stdev_weight_by_samples` | 事件搜索 dummy token 往返；叶估占位接口与搜索分同口径；**搜索恰好消费一个决策流随机字（ramen 口径），局面规则流独立派生**；**期望分与单局终局 σ 按样本数加权合并（无样本 → 0）** |
+| `cli/src/online.rs` | `candidate_color_has_three_tiers` / `render_luck_appends_expected_score` | 候选分档配色；**运气行 `期望 E （±S，档）` 的拼装 / 上色（E 与档亮青、σ 不着色）/ 退化（无摘要 / σ=0 / 档位空）** |
 | `core/src/game/traits.rs` | `apply_root_action_uses_strategy_stream` / `search_score_uses_pt_favor_knob_and_actual_failed_score` | 搜索根动作走剧本自持策略流；**搜索分用 `pt_favor_rate` 口径，失败分支按实际分** |
 | `core/src/value.rs` | `big_eater_choice_follows_vital` / `assignment_puts_801_on_most_assigned_act` / `status_marginal_saturates_at_limit` / `kensan_bonus_uses_participants_for_keiko` / `overflow_tilts_away_from_capped_axis` / `overflow_keep_preserves_secondary_value_when_main_capped` / `endgame_keiko_pressure_boosts_full_gauges` / `endgame_window_excludes_ura` / `endgame_window_starts_after_third_camp` / `flags_value_signs_benefit_and_harm` / `assignment_value_rejects_out_of_range_slots` | 估值层：事件选项按体力取舍（大胃王）/ 教诲分配 801 硬约束同口径 / 五维边际到上限归零 / **追加稽古兑现按稽古训练位参与者判定（与 try_kensan 同口径）** / **溢出层按生效上限近顶并保留副属性 / PT** / **末段窗口（第三年合宿后～T71）满槽稽古加分与普通训练机会成本；URA 不进入** |
 | `core/src/game/mod.rs` | `lowest_act_follows_three_rule_order` / `gauge_three_rule_skips_full_and_splits_ties` / `gauge_gain_capped_per_act` / `scenario_resources_start_at_turn2` / `act_level_capped_and_three_rule` / `presentation_bonus_follows_latest_resolved_row` / `race_scale_multiplies_deck_and_scenario_bonus` / `dictus_iron_heart_bonus_window_and_kind` / `judge_presentation_uses_act_levels` / `keiko_period_switches_at_turn_24` / `practice_acts_camp_all_and_gauge_lit` / `ura_round_all_keiko` / `train_level_bonus_raises_all_facilities` / `deck_five_types` / `max_level_act_still_accumulates_and_practices` | 三则落点 / gauge 满槽跳过与上限 / **剧本机制 turn 2 启动闸门（0–1 不入槽）** / 演目 Lv 夹取 / 发布会 buff 取行与结果判定 / **比赛系数乘算（卡面赛后 × 剧本赛后；本番前 / 成功 ×1.3 / 大成功 ×2.0）** / **狄杜斯铁心（T12–71 生涯赛 五维×2.5 / PT×0.46，与卡面乘算；T11 / 自选 / URA 不加；View 同步）** / 稽古换档 / 排练集合 / **URA 回合全变稽古（`all_keiko_round` / `practice_acts` 全真；空窗期不启用）** / 训练 Lv 提升 / 5 种卡条件 / **演目 Lv 满（10）后仍可攒 5 槽并排练、排练后槽清空且 Lv 保持 10** |
@@ -38,9 +39,9 @@
 | `core/src/game/advice.rs` | `permutation_count_and_uniqueness` / `advice_effect_aggregation` / `slot_effect_uses_bound_act_level` / `fusion_adds_new_and_upgraded_effects` / `participant_advice_stacks_by_count` / `assignment_candidates_enumerate_and_apply` / `enforce_801_on_most_assigned_act` / `kensan_act_found_after_fusion` / `fusion_failure_leaves_slots_untouched` | 教诲：按绑定演目 Lv 取级 / 融合 = 新教诲 + 固定升级效果 / 参与人数叠加与絆平摊 / 120 排列与校验 / 401+801 硬约束 |
 | `core/src/game/distribute.rs` | `absent_weight_uses_scenario_values` / `deyilv_includes_presentation_baseline` / `distribution_locks_act_members_and_fills_friend` / `yayoi_and_reporter_never_on_practice_positions` / `friend_fills_practice_position_when_any` / `at_most_one_social_person_per_position` / `cooperate_advice_adds_split_appearance` / `finals_extra_member_only_for_edition_cards` / `practice_five_types_lights_all_card_hints` | 分布：不在率 / 得意率基线 / 亮起锁人 + 吾妻补位 + 容量 / **理事长·记者不落稽古位（全稽古回合不出现）** / **吾妻有稽古必补未满稽古位（唯一位必中、不去普通位）** / **每训练位至多 1 名友人 / 团队 / 理事长 / 记者（40 seed）** / 協力与 URA 分身 / 排练全灵感 |
 | `core/src/game/train.rs` | `upper_*`（8 条）/ `ura_training_effects`（72–77 生效、68–71 空窗期不生效、净回体）/ `train_level_counts_successful_normal_training_and_stacks_bonus`（成功 4 次 +1、稽古不计、与発表会 +1 相加、夹上限 5）/ `unyielding_drops_failure_to_zero` / `kensan_pushes_choice_event` / `kensan_triggers_on_normal_training_too` / `gauge_gain_by_participants_with_shining` / `preview_action_resources_matches_actual` / `keiko_flat_applies_to_all_five_stats` / `friend_click_pushes_first_then_click_by_probability` / `fat_zeroes_training_speed_only` / `fat_cleared_by_clinic_and_camp_rest` / `preview_matches_actual_training` / `previews_do_not_leak_between_actions`（预览零克隆后候选间不串味）/ `preview_training_restores_keiko_context`（稽古标记含报错路径恢复） | 训练上层公式 / 失败率 / 追加稽古事件化 / 训练入槽 / **动作资源预览（槽 / Lv）与实结算一致、不改原局面** / 全基础 +10 flat / 友人点击链（首次必发 + 40%）/ 变胖速度归零与解除 / 预览与实结算一致 |
-| `core/src/game/event.rs` | `camp_rule_suppresses_random_events` / `extended_camp_runs_normal_event_axis` / `fixed_scenario_event_preempts_random` / `friend_unlock_event_by_probability` / `card_event_candidates_exclude_friend` / `friend_out_unlock_and_fatigue_recovery` / `event_flags_are_applied` / `fat_recovery_roll_by_rules_probability` / `event_extra_gauge_and_debuff` / `kensan_upper_event_applies_all_effects` / `evolution_hint_accounted_at_turn66` / `event_hint_level_is_counted` / `after_train_events_queued` / `event_records_are_logged` | S6 事件管线：合宿抑制（第 2/3 年常规）/ **延长段事件轴 = 正常回合（200 seed 抽样，支援卡连续事件可触发；常规回合仍抑制）** / 固定事件 / 友人解锁与卡事件候选 / 出行解锁与疲劳回复 / flags 结算 / 变胖解除 / 事件扩展（gauge + 解 debuff）/ 追加稽古上档完整结算 / turn 66 hint / **事件 `hint_level` 计入 `total_hints`（View 同步；URA 事件本身无 Hint）** / 回合后事件入队 / 事件记录与容量上限 |
+| `core/src/game/event.rs` | `extra_train_upper_clears_fat`（选项 1 定点治变胖、选项 2 不治）/ `extra_train_upper_keeps_other_ills`（只治变胖，偏头痛 / 不擅长不动）/ `camp_rule_suppresses_random_events` / `extended_camp_runs_normal_event_axis` / `fixed_scenario_event_preempts_random` / `friend_unlock_event_by_probability` / `card_event_candidates_exclude_friend` / `friend_out_unlock_and_fatigue_recovery` / `event_flags_are_applied` / `fat_recovery_roll_by_rules_probability` / `event_extra_gauge_and_debuff` / `kensan_upper_event_applies_all_effects` / `evolution_hint_accounted_at_turn66` / `event_hint_level_is_counted` / `after_train_events_queued` / `event_records_are_logged` | S6 事件管线：合宿抑制（第 2/3 年常规）/ **延长段事件轴 = 正常回合（200 seed 抽样，支援卡连续事件可触发；常规回合仍抑制）** / 固定事件 / 友人解锁与卡事件候选 / 出行解锁与疲劳回复 / flags 结算 / 变胖解除 / 事件扩展（gauge + 解 debuff）/ 追加稽古上档完整结算 / turn 66 hint / **事件 `hint_level` 计入 `total_hints`（View 同步；URA 事件本身无 Hint）** / 回合后事件入队 / 事件记录与容量上限 |
 | `core/src/game/settle.rs` | `first_check_point_great_success_applies_reward` / `check_point_success_when_one_act_short` / `finals_sets_finals_done_and_reward` / `camp_level_up_raises_all_acts` / `advice_window_zero_does_not_acquire_at_end` / `advice_fusion_after_begin_acquire` / `career_end_rewards_by_presentation_results` | 発表会 / 本番判定与奖励 / 合宿 +1 / **T2 首发在 Begin、End 窗口 0 不重复授予** / 教诲融合 / 育成终了 |
-| `cli/src/manual.rs` | `test_paint_respects_switch` / `test_pad_to_counts_display_width` / `test_gauge_text_shape` / `test_advice_fallback_names` / `test_delta_tone` / `test_display_status_compression` / `test_member_color_priority` | 手动面板呈现件：上色开关退化 / CJK 宽度补齐 / 演目槽数字 x/y / 教诲兜底名 / 增减量色调 / **五维显示压缩（>1200 减半，含上限）** / **训练表人物配色优先级（彩圈 > 助力黄 > 类型底色；研鑽不再给人头着色）** |
+| `cli/src/panel.rs` / `cli/src/manual.rs` | `choice_effect_label_omits_probability`（面板事件标签：在线回显去概率、手动面板保留）/ `test_paint_respects_switch` / `test_pad_to_counts_display_width` / `test_gauge_text_shape` / `test_advice_fallback_names` / `test_delta_tone` / `test_display_status_compression` / `test_member_color_priority` | 手动面板呈现件：上色开关退化 / CJK 宽度补齐 / 演目槽数字 x/y / 教诲兜底名 / 增减量色调 / **五维显示压缩（>1200 减半，含上限）** / **训练表人物配色优先级（彩圈 > 助力黄 > 类型底色；研鑽不再给人头着色）** |
 
 ### 2.1 L2 数据层集成（`core/tests/data.rs`）
 
@@ -56,7 +57,7 @@
 | `advices` | 絆平摊 +3 / 不屈阈值 45→0 / 両道 25% + 15% |
 | `fusion_and_check_points` | 転成 5 条 / 本番大成功 buff 20-80-150-100 / 成功档一次性奖励 / 育成终了全大成功 |
 | `schedule_camp_rules_and_outing` | 23/47/67 与 Lv3/5/6、教诲窗口、合宿结算点、gauge 入账、羁绊基础值、出行 |
-| `rules_s5_s6` | S5/S6 规则常量：上层基础上限 100 / 助力支撑 3×5% / 变胖解除 20% |
+| `rules_s5_s6` | S5/S6 规则常量：上层基础上限 100 / 助力支撑 3×5% / 变胖解除 15% |
 | `engine_events_race_rewards` | 仓内 `data/events.json` 已同步引擎新基础：目标赛 5/72、URA 决赛 40/60/80、非目标赛随机 1 项 |
 | `engine_events_friend_chain` | 吾妻 `809052xxx` 友人链 10 个槽位全就位（first / click / out / newyear / 出行 1–5 / end）、无温泉残留、出行占位事件已删 |
 | `engine_events_big_eater` | 构造事件「大胃王」`5010`：Random max_time 3、二选一、33% 附加变胖（`Ill::FAT`） |
@@ -127,6 +128,21 @@
 | `rollout_fork_skips_event_log_without_changing_game` | 事件明细开关不改变评分 / PT；`fork_for_rollout` 关闭明细且跑完整局后 `event_log` 为空（性能优化 B 组守门） |
 | `search_1024_full_game_is_reproducible`（ignored） | 1024 每候选：同种子两次逐位一致；手动跑 `cargo test --release -- --ignored` |
 
+### 3.3 还原层（`core/tests/restore.rs`）
+
+> 帧 → 局面 round-trip：不依赖真机帧，先把「帧字段 ↔ 状态字段」钉死。
+
+| 用例 | 守门内容 |
+|---|---|
+| `restore_round_trip_at_decision_point` | 决策点还原与离线态逐项一致（演目 / 教诲 / 合宿 / 発表会 / 分布映射 / 训练等级 / 编成警告） |
+| `restore_keeps_build_roster_before_scenario_start` / `restore_after_training_stage` / `restore_carries_level_baseline_when_frame_zero` | T0/T1 名单保持建局结果；`AfterTrain` 入口；帧等级为 0 时沿用跨帧基准（`G12`） |
+| `restore_rejects_deck_without_ssr_friend` / `restore_rejects_unknown_guest` / `restore_rejects_roster_order_mismatch` | 编成门禁与卡位顺序自检（缺 SSR 吾妻 / 未知神驹 / 顺序不符 → 明确报错） |
+| `distribution_maps_protocol_ids` / `restore_maps_check_point_results` | 协议人头 id → `person_index`；発表会结果按 `scheduleId` 落位 |
+| `restore_chara_effects_by_kind` / `restore_fat_comes_from_effect_4` | 帧 `charaEffects` 按 **142 表**还原（1 = 熬夜 / 3 = 皮肤粗糙 / **4 = 变胖**），覆盖引擎粗粒度 `UNKNOWN`；`1` 不再被误判成变胖、`4` 不再被当成摸鱼 |
+| `restore_chara_effects_ignores_non_illness_ids` / `restore_empty_chara_effects` / `restore_buffs_only_clears_unknown` | 全量状态数组口径：`[25, 47, 4]` 只还原 `FAT`；`[]` 保持 `NONE` 或按 `isIll` 回退 `UNKNOWN`；`[25, 47]` 覆盖掉 `UNKNOWN`，不误判生病 |
+| `restore_injects_event_by_story_id` | 事件帧 `storyId` 按本地事件表注入：追加稽古 `400015106`（`scenario_events`）/ 友人出行第三段 `809052013`（`friend_events`）；未收录 id 不注入假事件 |
+| `restore_prefers_local_event_over_frame_story` | **本仓数据优先**：引擎按帧 `story` 建的同 id 事件被本地那份覆盖（同 id 只留一条、选项数与数值都按本仓） |
+
 ## 4. 冒烟与基线
 
 | 项 | 内容 | 判定 |
@@ -140,6 +156,66 @@
 
 - 重录命令：`<cargo ... baseline --update>`（S9 落地）
 - 数值占位替换后必须重录，并在 `glossary.md` 记影响面。
+
+### 4.1 基线快照（2026-11-08 重测）
+
+`RAYON_NUM_THREADS=16 ./target/release/bench.exe baseline` 全绿（两档四项，判定容差 = 3 × 合并标准误 / 1%）。
+
+| 档 | 训练员 | 局数 | 均分 | σ | PT | 位移 vs 11-06 |
+|---|---|---|---|---|---|---|
+| `a-normal` | 手写 | 100 | 80701.2 | 3513.9 | 11267.5 | −12.1 / +4.9 |
+| `a-normal` | 搜索 N=8192 | 10 | 86392.4 | 1757.0 | 12167.5 | −778.3 / −158.0 |
+| `b-ideal` | 手写 | 100 | 86004.3 | 3423.2 | 11892.4 | −148.6 / −6.3 |
+| `b-ideal` | 搜索 N=8192 | 10 | 90455.4 | 861.1 | 12790.4 | +191.8 / +31.8 |
+
+四项位移都在容差内（搜索档容差 ±2192.8 / ±1318.0）；位移归因见 `glossary.md` 2026-11-08 条目。
+
+### 4.2 MCTS − 手写 的差值（同一口径测量）
+
+| 档 | 手写 | 搜索 | 差 | 合并标准误 | 相对 | PT 差 | 分数 σ |
+|---|---|---|---|---|---|---|---|
+| `a-normal` | 80701.2 | 86392.4 | **+5691.2** | 657.4 | +7.05% | +900.0 | 3514 → 1757 |
+| `b-ideal` | 86004.3 | 90455.4 | **+4451.1** | 437.4 | +5.18% | +898.0 | 3423 → 861 |
+
+同种子配对补充（`a-normal` 73200–73209，两侧各 10 局，`bench game --seed 73200 --games 10`）：
+
+- 配对差 **+5899.1 ±1126.6（1 SE）**，逐种子 `[6211, 2108, 10419, 3763, 7192, 173, 11666, 7985, 4772, 4702]`；
+- `corr(手写, 搜索) = 0.158` —— **配对几乎不降方差**：搜索档早期就分叉，同一 `seed0` 的事件运气不再同源（配对 SE 1126.6 vs 非配对 1207.2）。
+  所以判读差距时应看**全档非配对**那两行（手写侧 100 局，标准误 657 / 437）。
+
+**结论**：MCTS 比手写逻辑高 **约 +4500 ~ +5700 分（中心 ~+5000，+5%~+7%）**，且 PT 同步多约 +900；
+分数标准差降到 1/2（`a-normal`）到 1/4（`b-ideal`）。
+
+### 4.3 `pt_favor_rate` 扫测（1.0 – 3.0，N=2048 × 10 局）
+
+命令模板（临时配置走 `--matsuri-config`，不动仓内默认层）：
+
+```bash
+RAYON_NUM_THREADS=16 ./target/release/bench.exe game \
+  --matsuri-config logs/_scratch/favor_<v>.toml --games 10 --seed 73200 --warmup 0 --search-n 2048
+```
+
+| `favor` | 均分（SE） | PT（SE） | 总分 − 2×PT | 配对 Δscore vs 1.7271 | 配对 ΔPT |
+|---|---|---|---|---|---|
+| 1.0 | 85702.7（488） | 11784.7（56） | 62133 | −156 ±416 | −260 ±101 |
+| 1.25 | 86151.0（488） | 12047.8（109） | 62055 | +293 ±471 | +3 ±137 |
+| 1.5 | 86029.6（539） | 12092.0（99） | 61846 | +171 ±635 | +47 ±126 |
+| **1.7271**（默认） | **85858.4**（407） | **12044.7**（59） | 61769 | — | — |
+| 2.0 | 86341.8（621） | 12229.3（114） | 61883 | +483 ±543 | +185 ±152 |
+| 2.25 | 85904.3（540） | 12261.8（109） | 61381 | +46 ±526 | +217 ±109 |
+| 2.5 | 86019.0（600） | 12271.3（108） | 61476 | +161 ±585 | +227 ±146 |
+| 2.75 | 86346.4（652） | 12438.3（93） | 61470 | +488 ±593 | +394 ±126 |
+| 3.0 | 86081.6（607） | 12374.8（71） | 61332 | +223 ±381 | +330 ±76 |
+
+**读法**：
+
+- **总分与 `favor` 无关**：9 个点的极差 644 分，与单点 SE（≈500）和配对差 SE（381–652）同量级；
+  相对默认 1.7271 的 8 个配对 Δscore 均在 1 SE 内（最大 +488 ±593），判为噪声而非趋势；
+- **PT 与 `favor` 强相关**：11,785 → 12,375（+5.0%），2.25 之后饱和；3.0 的配对 ΔPT +330 ±76（4.3σ）是本次最硬的信号；
+- **代价在面板分**：`总分 − 2×PT`（≈ 技能 + 五维）从 62,133 掉到 61,332（−801），与 PT 增益几乎对冲 ——
+  提高 `favor` 是「拿面板分换 PT」，不是「白拿分」；
+- 结论：默认 **1.7271 无需改动**；要冲 PT 就把旋钮放 2.25–2.75（饱和区），代价是面板分。
+- 精度提醒：想把 ±300 级的分差分辨出来需要 ~30 局 或 N=8192；本轮 10 局 N=2048 只能定「无显著差异」。
 
 ## 5. 对话核对记录（前期主验证方式）
 
@@ -184,3 +260,11 @@
 | 2026-11-04 | **M2 搜索档接 FlatSearch（ramen 集成层）** | 用户 + Agent | `MatsuriSearchTrainer` 包 `FlatSearch<MatsuriGame>`，rollout 基策 = 手写训练员（无搜索）；`matsuri_config [search].search_n` 每候选预算 + `train` / `advice` / `event` 分开关；教诲 120 候选剪枝 top-16；事件 dummy token + `search_with`，应用当前选项后从 `event_queue` 下一事件继续；`search_score` 用 `pt_favor_rate` 口径，失败分支按实际分；叶估 `LeafEvaluator` 预留，`max_depth=0`；搜索日志 `DiagGuard` 静默 + 每决策一行摘要；搜索只消费一个决策流随机字，局面规则流独立派生。新增 5 内联 + 4 搜索集成（1 ignored）+ 1 CLI 冒烟；四档绿 **218 测例**（153 内联 + 15 L2 + 36 机制 + 1 diag + 7 CLI 内联 + 3 CLI 冒烟 + 3 搜索集成，另 1 ignored）；seed 61444 单局 1024 → **83326 / LG11、PT 11602**（90.8 s）、2048 → **83519 / LG11、PT 11901**（180 s）；`search_n=0` 手写零差 | 搜索单局验证；批量 / 8192 待机制完全实现后再跑 |
 
 | 2026-11-05 | 基线库与自动判定 | Agent | 新增 `baselines/`（`a-normal` 普通马娘无 buff、`b-ideal` 狄杜斯理想档）与 `matsuri-sim::baseline`（JSON 自检 / 合并标准误 × 相对容差判定）；`bench baseline` 按档复跑并判定，任一档漂移非零退出；新增 4 个内联用例（同分布通过 / 超容差判漂移 / 空样本拒判 / 仓根基线可解析） | 测试数 221 → 225；基线数据不参与 CI 重跑（搜索档单局约 20 s） |
+| 2026-11-08 | **变胖（`Ill::FAT`）机制收口** | 用户 + Agent | `rules.fat_recovery_prob` 20 → 25 → **15**（同日回调）；「追加訓練」(`102`) 选项 1 定点治变胖（`apply_event_extra` + `event_choice_value` 同步给分）；`debuff_clear_value` 改为与 `clear_one_debuff` 同序；线上插件补 `baseGame.illEffects`（同日后续改名 `charaEffects` / 全量状态数组），剧本仓 `frame` / `restore::ill_from_effects` 精确还原病种（旧插件退化 `UNKNOWN`）。四档绿（**170 内联 + 16 L2 + 36 机制 + 11 还原 + 1 diag + 4 搜索 + 9 ai 内联 + 8 CLI 内联 + 3 冒烟 + 4 sim = 268 测例**）；同种子块 73200 手写 100 局 80713.3 → **80714.0**（+0.7，25% 档）；15% 档未录基线 | 引擎 / 协议未改；线上需新插件 dll |
+| 2026-11-08 | **在线运气行加「期望 ± 单局 σ + 档次」** | 用户 + Agent | `SearchSummary` 增 `baseline_stdev`（候选样本方差按样本数加权合并 = 单局终局分标准差，**不随预算收敛**）与 `expected_score` / `expected_rank`（官方口径：`search − PT加权 × rate × 切者因子 × (favor−1)`，搜索基线本身被 `pt_favor_rate` 放大约 1.6 万）；`online.rs::render_luck` 行尾追加「期望 E （±S，档）」（`E` 与档亮青）；`S=0` / 手写档 / 搜索 fallback 时不显示；JSON 同口径进 `scenario_extra.expected_score` / `expected_stdev` / `expected_rank`。**270 测例**（+2）。实测`logs/replay_smoke`（N=1024）：`[回合 0 运气]本局：+0, 本轮: --, 期望 82123 （±4532，LG9）`（同局搜索基线 98013，差 1.6 万即 PT 项放大额） | 只改呈现层与摘要字段，决策 / 搜索排序 / 基线不受影响 |
+| 2026-11-08 | **在线协议接线（handoff）：病种 142 表 + 事件帧 `storyId`** | 用户 + Agent | `ill_from_effects` 改 142 表显式映射（1 熬夜 / 2 懒惰 / 3 皮肤 / 4 变胖 / 5 偏头痛 / 6 不擅长）；`RestoreInput.story_id` → `lookup_event`（`scenario_events` 优先 + 引擎五表）→ 注入 `unresolved_events`；`source=event` 且查不到 → `Route::Skip`（不回退训练建议）；`storyId` 进帧提示与 JSON。四档绿（**276 测例**，+6：3 路由 + 1 帧解析 + 2 还原）；端到端回放：事件帧 `storyId=400015106` → 「回合 23 事件 首选：选项1」，未知 id → 跳过 + 帧提示 | 离线零影响（无帧）；线上事件帧不再误给训练建议 |
+| 2026-11-08 | **在线事件帧回显 + 跳过行配色** | 用户 + Agent | 事件决策前打印 `[回合 N 事件]名称 #id` 与逐选项实际效果（属性取还原出的 `EventData`；帧 `story` 有选项文本时附括号，否则「选项N」）；事件名亮蓝、跳过行改亮黄（`33`）。**277 测例**（+1） | 只改呈现层，决策 / JSON 契约不变 |
+| 2026-11-08 | **clippy 清零 + 基线重测 + MCTS 档间差** | 用户 + Agent | ①`cargo clippy --workspace --all-targets -- -D warnings` **全绿**（去掉此前 **15 条**存量告警：6 条 `needless_range_loop` / 1 条 `collapsible_if` / 3 条 `type_complexity` / 2 条 `dead_code` / 1 条 `manual_range_patterns` / 2 条冗余引用；全部纯等价改写，行为零变化）；②基线重测两档四项全绿并重录 （见 §4.1）；③MCTS − 手写 = **+5691（a-normal）/ +4451（b-ideal）**，配对校验 +5899 ±1127（见 §4.2）| CI（`.github/workflows/ci.yml`）的 clippy 门禁此前应长期红，现已可绿 | 行为零影响（仅等价改写）；基线与档间差为新参考 |
+| 2026-11-08 | **运气显示分标定 + `pt_favor_rate` 扫测** | 用户 + Agent | ①`ai_config [record].luck_turn_bonus` **70 → 100**：MCTS 自博弈实测期望分随回合系统性上升 +135/回合（T0 79,443 → T76 87,772，终局 87,712；95% CI [128,143]），旧 70 只抵消一半 → 平均局读成 +1,179「很幸运」；取 100 后 +96（范围 ±1,900）。三者口径 91/103/135 取中；②确认 **`期望 E` 未接入该参数**（`Expected = raw`，rollout 已跑到终局，再叠回合加成会重复计入）——T0 显示 79–82k 而实际终局 ~87k 的缺口来自估计器自身的乐观/悲观漂移，属另一件事（是否显示投影值待定）；③`pt_favor_rate` 1.0–3.0 扫测（N=2048×10 局）：总分持平（极差 644，与 SE≈500 同量级、配对差均在 1 SE 内）、PT +590（2.25 后饱和）、面板分 −801，属构成偏好非分数旋钮，默认 1.7271 不动（见 §4.3）| user 2026-11-08「调整 luck_turn_bonus + 检查期望分接线 + 扫测 favor」 | 显示口径变化（运气分归零），决策 / 模拟零影响；**副作用：`render_luck` 分档阈值仍按旧标定（<0/<500/<1500），待同步下移** |
+| 2026-11-08 | **`charaEffects` 接收端同步 + 跳过帧提示收敛 + 期望分显示投影** | 用户 + Agent | ①按 `URA_Plugins/handoff-2026-11-08.md` 把 `illEffects` → `charaEffects` 全链路改名（`frame` / `session` / `restore` / 测试夹具 / 文档），`ill_from_effects` 的 142 表显式映射**逻辑不变**；新增全量数组解析与还原用例 4 条（buff + 病种混合 / 空数组 / 纯 buff 覆盖 `UNKNOWN` / 含非病 ID 的帧解析）。②跳过帧只留黄色跳过行：删「storyId 未收录」note、`render_notes` 只在 Decision 打印、skip reason 去掉「见帧提示」，JSON 的 `story_id` / `reason` 保留供对账。③期望分按回合计入 `luck_turn_bonus`（`E₀ + (77−t)×b`），**档次 / JSON 同步按投影后的 E 重算 / 输出**；投影统一在 `matsuri-ai::output::projected_summary`，终端与 JSON 只消费同一份（新增 2 例：只平移 E 不改 σ / 档次按投影值重查）。四档绿（**286 测例**：171 内联 + 16 L2 + 36 机制 + 17 还原 + 1 diag + 4 搜索 + 16 ai 内联 + 6 ai 集成 + 12 CLI 内联 + 3 冒烟 + 4 sim）；`cargo fmt --all --check` / `check` / `clippy -D warnings` 全过；dist 已重打包并同步运行目录 | 引擎 / 协议未改；离线零影响；线上字段改名需插件 DLL 与接收端同步部署 |
+| 2026-11-08 | **搜索线程数进 `matsuri_config [search]`** | 用户 + Agent | ①`[search].threads` 与 `search_n` 同段（默认 0 = 自动，显式 `RAYON_NUM_THREADS` 优先）；`config.rs::SearchScopeConfig` 加字段 / `Default`（0）/ 文档注释，覆盖层「整段替换」语义不变，新增 2 条断言（覆盖层指定 8 / 未写回落 0）；②CLI 新增 `apply_search_threads`（`rayon::ThreadPoolBuilder::build_global`），在线 `online.rs::run` 与离线 `main.rs::run` 载入配置后各调一次，新增 1 例验证 `threads=0` 不初始化全局池；③workspace 登记 `rayon = "1.12.0"`（已在 `Cargo.lock`）、`matsuri-cli` 引用。四档绿（**287 测例**）；fmt / check / clippy 全过；dist 重打包并同步运行目录 | 默认 0 = 自动，离线 / 在线行为不变；测量工具仍用环境变量 / `--threads` |

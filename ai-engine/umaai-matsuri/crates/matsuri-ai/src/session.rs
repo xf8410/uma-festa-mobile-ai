@@ -24,7 +24,7 @@ use matsuri_core::game::advice::advice_display_name;
 use matsuri_core::game::restore::RestoreInput;
 use matsuri_core::{
     Action, MAX_TURN, MatsuriConfig, MatsuriData, MatsuriGame, MatsuriSearchTrainer,
-    MatsuriTrainer, Stage,
+    MatsuriTrainer, SearchSummary, Stage,
 };
 use rand::SeedableRng;
 use rand::rngs::StdRng;
@@ -36,10 +36,15 @@ use umasim::game::{Game, SupportCard, Trainer};
 use crate::final_score::parse_final_score;
 use crate::frame::ParsedFrame;
 use crate::online::{self, Route};
-use crate::output::{FinalTurnOutput, OnlineTurnOutput, TurnKind};
+use crate::output::{FinalTurnOutput, OnlineTurnOutput, TurnKind, projected_summary};
 
 /// 剧本友人（吾妻）首次点击事件 id（`BaseParams.friend_first_event`；0 = 未知则跳过判定）
 pub const FRIEND_FIRST_EVENT: i32 = 809052001;
+
+/// 搜索摘要投到显示分口径：E 与档次都按投影值（终端 / JSON 共用同一份）
+fn display_summary(summary: Option<SearchSummary>, turn: i32, bonus: i32) -> Option<SearchSummary> {
+    summary.map(|s| projected_summary(&s, turn, bonus))
+}
 
 /// 训练员档位
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -189,9 +194,41 @@ impl OnlineSession {
     {
         let frame = ParsedFrame::parse(contents)?;
         self.sync_epoch(frame.epoch_key());
+        // 帧内事件选项文本（呈现用；无 `story` 时为空 → 前端退化成「选项N」）
+        let story_options: Vec<String> = frame
+            .status
+            .story
+            .as_ref()
+            .map(|story| {
+                story
+                    .choices
+                    .iter()
+                    .map(|group| {
+                        group
+                            .first()
+                            .map(|choice| choice.option.trim().to_string())
+                            .unwrap_or_default()
+                    })
+                    .collect()
+            })
+            .unwrap_or_default();
 
         // 帧 → 局面（还原失败即拒绝计算：编成 / 人头 / 分布不合规时抛错，绝不带病出决策）
-        let (game, notes) = self.restore(&frame)?;
+        let (game, mut notes) = self.restore(&frame)?;
+        // 事件帧查不到本地事件数据时路由直接跳过，黄色跳过行已给出原因；
+        // 不再追加「storyId 未收录」提示（对账信息在 JSON 的 story_id / reason 里）
+        // 本地事件与帧 `story` 的选项数不一致：数值按本地，可能是表过时（提示一下便于补数据）
+        if let (Some(story), Some(event)) =
+            (frame.status.story.as_ref(), online::pending_event(&game))
+            && story.choices.len() != event.choices.len()
+        {
+            notes.push(format!(
+                "事件帧 storyId={} 选项数不一致：帧 {} 组 / 本仓 {} 组（按本仓）",
+                event.id,
+                story.choices.len(),
+                event.choices.len()
+            ));
+        }
         let view = game.view();
         let turn = game.turn();
         let scenario = "matsuri".to_string();
@@ -203,6 +240,8 @@ impl OnlineSession {
                 epoch: frame.epoch_key(),
                 scenario,
                 frame_digest: frame.digest,
+                story_id: frame.story_id,
+                story_options: story_options.clone(),
                 kind: TurnKind::Skipped,
                 record: None,
                 skip_reason: Some("重复帧（内容与已处理帧一致）".to_string()),
@@ -231,6 +270,8 @@ impl OnlineSession {
                 epoch: frame.epoch_key(),
                 scenario,
                 frame_digest: frame.digest,
+                story_id: frame.story_id,
+                story_options: story_options.clone(),
                 kind: TurnKind::Skipped,
                 record: None,
                 skip_reason: Some(reason.to_string()),
@@ -258,6 +299,7 @@ impl OnlineSession {
                     TrainerChoice::Search(trainer) => trainer.last_search(),
                     TrainerChoice::Hand(_) => None,
                 };
+                let summary = display_summary(summary, turn, self.luck.bonus());
                 let scores: Option<Vec<(usize, f64, u32)>> = summary.as_ref().map(|summary| {
                     summary
                         .candidates
@@ -272,6 +314,8 @@ impl OnlineSession {
                     epoch: frame.epoch_key(),
                     scenario,
                     frame_digest: frame.digest,
+                    story_id: frame.story_id,
+                    story_options: story_options.clone(),
                     kind: TurnKind::Decision,
                     record: Some(record),
                     skip_reason: None,
@@ -294,6 +338,8 @@ impl OnlineSession {
                             epoch: frame.epoch_key(),
                             scenario,
                             frame_digest: frame.digest,
+                            story_id: frame.story_id,
+                            story_options: story_options.clone(),
                             kind: TurnKind::Skipped,
                             record: None,
                             skip_reason: Some("教诲尚未授予，跳过分配".to_string()),
@@ -333,6 +379,8 @@ impl OnlineSession {
                         epoch: frame.epoch_key(),
                         scenario,
                         frame_digest: frame.digest,
+                        story_id: frame.story_id,
+                        story_options: story_options.clone(),
                         kind: TurnKind::Skipped,
                         record: None,
                         skip_reason: Some("教诲分配候选为空".to_string()),
@@ -358,6 +406,7 @@ impl OnlineSession {
                     TrainerChoice::Search(trainer) => trainer.last_search(),
                     TrainerChoice::Hand(_) => None,
                 };
+                let summary = display_summary(summary, turn, self.luck.bonus());
                 let search_backed = summary.is_some();
                 let candidate_scores = summary.as_ref().map_or_else(Vec::new, |summary| {
                     summary
@@ -454,6 +503,8 @@ impl OnlineSession {
                     epoch: frame.epoch_key(),
                     scenario,
                     frame_digest: frame.digest,
+                    story_id: frame.story_id,
+                    story_options: story_options.clone(),
                     kind: TurnKind::Decision,
                     record: Some(record),
                     skip_reason: None,
@@ -529,6 +580,7 @@ impl OnlineSession {
                         ),
                     },
                 };
+                let summary = display_summary(summary, turn, self.luck.bonus());
                 // 运气分只统计搜索终局分，且只在主行动（训练 / 比赛）上推进；
                 // 同回合重复决策复用本回合快照，免得把基线抖动记进「本轮」
                 if search_backed {
@@ -546,6 +598,8 @@ impl OnlineSession {
                     epoch: frame.epoch_key(),
                     scenario,
                     frame_digest: frame.digest,
+                    story_id: frame.story_id,
+                    story_options: story_options.clone(),
                     kind: TurnKind::Decision,
                     record: Some(record),
                     skip_reason: None,
@@ -641,6 +695,8 @@ impl OnlineSession {
                     frame.status.friendship_noncard_yayoi,
                     frame.status.friendship_noncard_reporter,
                 )),
+                chara_effects: &frame.chara_effects,
+                story_id: frame.story_id,
             },
             Arc::clone(&self.data),
             self.config.clone(),

@@ -22,16 +22,25 @@ workspace 六 crate：
 ## 当前状态
 
 - **机制闭环**：阶段机 / 人头分布 / 训练两层公式 / 演目稽古 / 教诲与転成 / 発表会·本番·合宿·URA / 事件链 / 手写训练员 / 诊断日志均已接入。
+  **变胖（`Ill::FAT`）**：训练 / 排练速度分量归零；每回合 15%（暂定）自解 + 治病 / 合宿休息 /
+  「追加訓練」选项 1 定点治；线上病种由帧 `charaEffects`（全量状态 ID，按文本库 142 表挑 1–6）精确还原。
 - **卡组配置**：`data/matsuri_config.toml` 分 `[decks.*]`；`[decks.default]` 为完整默认档（冠军档 `ga-r2`），
   其他档深合并；未匹配 comp 走 default；`variant = true` 仅显式选择。
   当前只保留 `wisdom` 一套非默认档（教诲落位四窗口 + `status_weights` 均已定档）；
   `stamina / guts` 于 2026-11-07 退役，备份与加回步骤见 `logs/deckselect/retired_2026-11-07/`。
-- **搜索**：`[search].search_n` 为每候选 rollout 数（默认 **8192**，`0` = 手写档）；Train / 教诲 / 事件分开关；
+- **搜索**：`[search].search_n` 为每候选 rollout 数（默认 **8192**，`0` = 手写档）；
+  `[search].threads` 固定 rayon 全局池线程数（默认 **0** = 自动，显式 `RAYON_NUM_THREADS` 优先），
+  在在线 / 离线入口首次搜索前应用；Train / 教诲 / 事件分开关；
   教诲候选按 801 硬约束去重后再剪枝 / 搜索。
 - **在线决策**：`matsuri online` 支持真机帧监听与回放；输出局面面板、运气分、融合固定决策、Top 5 候选、
   教诲完整映射与 `AdvicePreset` 差异；**同回合每张新帧都重新决策**（只有内容完全相同的重复帧按摘要跳过），
   面板在搜索前打「AI计算中…」；在线档用精简面板（不显示演目分配表 / 配色图例 / 追加稽古说明，
   手动核对与 `explain` 仍是完整档）；搜索侧跳过 End 阶段的重复教诲处理。
+  **运气行**带「期望 E （±S，档）」：`E` 按回合计入 `luck_turn_bonus` 显示分投影（`E₀ + (77−t)×b`），
+  档次与 JSON 同步按投影后的 E 重算 / 输出，`S`（单局终局 σ）不变；
+  **跳过帧**只显示黄色跳过行，不再重复打印帧提示；
+  **事件帧**按插件透传的 `storyId` 查本地事件表（`scenario_events` 优先 + 引擎五表）还原，
+  本仓数据覆盖帧数据、帧只提供选项文本；决策前回显事件与逐选项效果，查不到则跳过（不给训练建议）。
 - **CLI**：`matsuri` / `matsuri online` 已迁移 clap，提供 `--help` / `--version`；`matsuri-tools` 仍用手写解析。
 - **发布**：Windows 启动器已实现（`crates/matsuri-launcher`，bin `matsuri-ai`）：
   菜单为在线模式（默认）/ 启动小黑板 / 通道体检 / 退出；小黑板取同目录 `UmamusumeResponseAnalyzer.exe`，
@@ -81,11 +90,16 @@ cargo run --release --bin matsuri -- online --help
 cargo fmt --all --check
 cargo check --workspace --all-targets --offline
 cargo test --workspace --release --offline
+cargo clippy --workspace --all-targets --offline -- -D warnings
 ```
 
-当前：workspace **264 通过 + 2 手动 `#[ignore]`**；基线 / 性能复现见
+当前：workspace **278 通过 + 2 手动 `#[ignore]`**；clippy `-D warnings` 全绿（2026-11-08 清零）；基线 / 性能复现见
 [`docs/tests_overview.md`](docs/tests_overview.md) 与 [`docs/perf_profiling.md`](docs/perf_profiling.md)。
-clippy 只在 Windows 侧跑。
+clippy 只在 Windows 侧跑；CI 也是 `-D warnings` 硬门禁。
+
+基线快照（2026-11-08，`bench baseline` 两档四项全绿）：手写 `a-normal` 80701.2 / `b-ideal` 86004.3，
+搜索 N=8192 `a-normal` 86392.4 / `b-ideal` 90455.4 —— **MCTS 比手写高 +4451 ~ +5691 分**（详见
+[`docs/tests_overview.md`](docs/tests_overview.md) §4.2）。
 
 ## 文档
 
@@ -114,3 +128,8 @@ umaai-cli  = { path = "../umaai_next/crates/umaai-cli" }
 # 稳定期：同一 repo / tag
 # umaai = { git = "<engine repo>", tag = "engine-v0.1.0" }
 ```
+
+## 许可证
+
+本仓以 **CC BY-NC-SA 4.0**（署名–非商业性使用–相同方式共享）发布，全文见 [`LICENSE`](LICENSE)。
+Windows 发布包由 `scripts/package_launcher.py` 随附同一份许可证文件。
