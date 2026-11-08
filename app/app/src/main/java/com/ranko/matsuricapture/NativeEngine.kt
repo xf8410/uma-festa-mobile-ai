@@ -315,6 +315,16 @@ object NativeEngine {
     }
 
     /** 与 matsuri-capture/src/lib.rs::Frame::build 同口径；extra = /debug/festa_probe 响应 */
+    // [APP-SCORETABLE] 内置表算分：五维查定 + PT×倍率 + 技能分（技能分暂 0）
+    private fun localScore(summary: JSONObject, stats: JSONObject?): Int {
+        if (stats == null) return -1
+        val five = IntArray(5) { iv(stats, FIVE_KEYS[it]).toInt().coerceAtLeast(0) }
+        val pt = iv(stats, "skill_point").toInt().coerceAtLeast(0)
+        val skill = iv(summary, "skill_score").toInt().coerceAtLeast(0)
+        val qie = summary.optBoolean("is_qie_zhe", false)
+        return ScoreTable.total(five, pt, skill, qie)
+    }
+
     private fun normalize(summary: JSONObject, extra: JSONObject?, source: String): JSONObject {
         val festa: JSONObject? = when {
             summary.optJSONObject("festa") != null -> summary.optJSONObject("festa")
@@ -488,6 +498,8 @@ object NativeEngine {
             .put("missing", missing)
             .put("has_festa", festa != null)
             .put("fields_ok", stats != null)
+            // [APP-SCORETABLE] App 自己算评价分（不依赖 SO 的 score）
+            .put("score", localScore(summary, stats))
             .put("raw", summary)
     }
 
