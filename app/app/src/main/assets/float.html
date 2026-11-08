@@ -185,7 +185,7 @@ const dsp=v=>{v=+v;if(!isFinite(v)||v<0)return '—';return v;};
 /* 祭典杯属性上限（剧本提升后，用户实测口径）：速2200 耐1850 力1800 根1700 智1800 */
 const MAX_ATTR={spd:2200,sta:1850,pow:1800,gut:1700,wis:1800};
 const advName=id=>ADV[+id]||(+id>0?'#'+id:'—');
-const BASE='http://127.0.0.1:18766';
+const BASE='http://127.0.0.1:18767';
 let timer=null,paused=false,lastRec={txt:'等待游戏连接',wait:true};
 
 /* 五属性训练 command_id（SO lib.rs：101速/105耐/102力/103根/106智；URA 决赛 601-605 同序） */

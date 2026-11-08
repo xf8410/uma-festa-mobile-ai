@@ -14,11 +14,11 @@ import java.nio.charset.StandardCharsets
 import java.util.concurrent.atomic.AtomicBoolean
 
 /**
- * 18766 接收端 —— 纯 Kotlin 实现，不依赖 cargo-ndk 预编译的 libmatsuri_capture.so。
+ * 18767 接收端 —— 纯 Kotlin 实现，不依赖 cargo-ndk 预编译的 libmatsuri_capture.so。
  *
  * 【与 SO 插件的对齐】
  * 传输层：`libhachimi_ura.so` 的 push_to_app() 把 read_summary() 的 /summary JSON
- *   以 `POST /data` 推到 127.0.0.1:18766（src/lib.rs:878 / 剧本15 线 :6631）。
+ *   以 `POST /data` 推到 127.0.0.1:18767（src/lib.rs:878 / 剧本15 线 :6631）。
  * 字段层：SO 的 /summary 是**深层嵌套**（`stats.speed`、`festa.festa_info` …），
  *   而面板吃的是 matsuri-capture 的**扁平帧**（`five` / `vital` / `skill_point` …）。
  *   本文件按 matsuri-capture/src/lib.rs 的 Frame::build() 逐项做归一化，缺值一律 -1。
@@ -30,9 +30,9 @@ import java.util.concurrent.atomic.AtomicBoolean
  *
  * 【接线方向（勿再写反）】
  *   SO（游戏进程内）hook 数据 → 在 18765 提供 /summary（数据出口，随持续育成不断更新）
- *     ├─ 推送通道：SO 把 /summary 以 POST /data 推到 18766      （SO 是唯一推送方）
- *     └─ 拉取通道：18766 周期性主动 GET 18765 /summary         （pullLoop，持续跑）
- *   18766 全程只 LISTEN/ACCEPT + GET，绝不对外 POST；两端都当推送方就没人收。
+ *     ├─ 推送通道：SO 把 /summary 以 POST /data 推到 18767      （SO 是唯一推送方）
+ *     └─ 拉取通道：18767 周期性主动 GET 18765 /summary         （pullLoop，持续跑）
+ *   18767 全程只 LISTEN/ACCEPT + GET，绝不对外 POST；两端都当推送方就没人收。
  *   两条通道收到的 body 一律 normalize 成育成属性帧
  *   （stats→五维/体力/PT/干劲，festa→稽古/教诲/角标/人头/设施）。
  */
@@ -76,12 +76,12 @@ object NativeEngine {
         return try {
             val i = bind.lastIndexOf(':')
             val host = if (i > 0) bind.substring(0, i) else "127.0.0.1"
-            val port = if (i > 0) bind.substring(i + 1).toInt() else 18766
+            val port = if (i > 0) bind.substring(i + 1).toInt() else 18767
             val server = ServerSocket(port, 32, InetAddress.getByName(host))
             sessionDir = File(dir).apply { mkdirs() }
             restoreFromArchive()
             running.set(true)
-            Thread({ loop(server) }, "matsuri-18766").apply { isDaemon = true }.start()
+            Thread({ loop(server) }, "matsuri-18767").apply { isDaemon = true }.start()
             Thread({ probeLoop() }, "matsuri-so-probe").apply { isDaemon = true }.start()
             Thread({ pullLoop() }, "matsuri-so-pull").apply { isDaemon = true }.start()
             true
@@ -145,13 +145,13 @@ object NativeEngine {
     /**
      * 持续主动拉取 18765 的 /summary —— 游戏是持续育成的，这条通道必须一直存在。
      *
-     * 接线角色：SO 是唯一推送方(POST /data)，18766 只 LISTEN + GET，绝不往外 POST。
+     * 接线角色：SO 是唯一推送方(POST /data)，18767 只 LISTEN + GET，绝不往外 POST。
      *   - 主通道：SO push_loop「数据变化 800ms 去抖即推 + 15s 兜底心跳」，负责把
-     *     持续育成的最新帧推到 18766。推送正常时 lastAt 常新，本循环不发起任何请求，
+     *     持续育成的最新帧推到 18767。推送正常时 lastAt 常新，本循环不发起任何请求，
      *     零额外 IL2CPP 真读，SO 的降频成果完整保留。
      *   - 兜底通道：一旦推送静默超过 PULL_STALE_MS(20s，> SO 15s 兜底)，说明
      *     push_enabled 被关 / 端口配错 / 推送丢失，此时主动 GET /summary 接管，
-     *     保证「就算 SO 不推，18766 也一直能把游戏内育成属性拉进来」。
+     *     保证「就算 SO 不推，18767 也一直能把游戏内育成属性拉进来」。
      *
      * 拉取本身取原文做 hash 去重，内容不变不落库；且两次兜底拉取最小间隔同为
      * PULL_STALE_MS，SO 不可达时最坏 20s 一次请求，绝不打爆游戏进程。
@@ -556,7 +556,7 @@ object NativeEngine {
             .put("last_pull_ok_ms", lastPullOkAtMs)
             .put("last_summary_error", lastSummaryError)
             .put("stats_ok", f?.optBoolean("fields_ok", false) ?: false)
-            .put("source", "18766-kotlin")
+            .put("source", "18767-kotlin")
     }
 
     private fun framesJson(path: String): JSONObject {
@@ -679,7 +679,7 @@ object NativeEngine {
         .put("push_recv", pushRecv)
         .put("pull_recv", pullRecv)
         .put("stats_ok", latest?.optBoolean("fields_ok", false) ?: false)
-        .put("bind", "127.0.0.1:18766")
+        .put("bind", "127.0.0.1:18767")
 
     /**
      * 冷启动恢复：半路退出游戏 / 卡死重进 / App 被回收后，
