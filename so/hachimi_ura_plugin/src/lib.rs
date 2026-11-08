@@ -5094,13 +5094,14 @@ unsafe fn festa_json(chara_obj: *const c_void) -> String {
     let mut acts: Vec<String> = Vec::new();
     for p in read_items(read_ptr_at(ds, 48)) {
         acts.push(format!(
-            r#"{{"act_type":{},"gauge":{},"level":{},"need_gauge":{},"state":{},"advice_id":{},"friend_outing_gain_act_level":{}}}"#,
+            r#"{{"act_type":{},"gauge":{},"level":{},"need_gauge":{},"state":{},"advice_id":{},"friend_outing":{},"friend_outing_gain_act_level":{}}}"#,
             read_obscured_int_at(p, 16),
             read_obscured_int_at(p, 36),
             read_obscured_int_at(p, 56),
             read_obscured_int_at(p, 76),
             read_obscured_int_at(p, 96),
             read_obscured_int_at(p, 116),
+            read_obscured_int_at(p, 136),
             read_obscured_int_at(p, 136)
         ));
     }
@@ -5161,9 +5162,10 @@ unsafe fn festa_json(chara_obj: *const c_void) -> String {
             gs.join(",")
         ));
     }
+    // [FESTA4-3292] 兼容 App 0.7.4 字段名
     let not_level_up = read_il2cpp_int_list(read_ptr_at(read_ptr_at(ds, 72), 40));
     format!(
-        r#"{{"ok":true,"acts":[{}],"advice":[{}],"checkpoints":[{}],"persons":[{}],"command_gains":[{}],"commands":[{}],"not_level_up_act_types":{:?},"festa_info":{}}}"#,
+        r#"{{"ok":true,"acts":[{}],"advice":[{}],"checkpoints":[{}],"persons":[{}],"command_gains":[{}],"commands":[{}],"not_level_up_act_types":{:?},"command_info":[{}],"gain_gauges":[{}],"evaluation_info":[{}],"festa_info":{}}}"#,
         acts.join(","),
         adv.join(","),
         cps.join(","),
@@ -5171,6 +5173,9 @@ unsafe fn festa_json(chara_obj: *const c_void) -> String {
         cgains.join(","),
         cmds.join(","),
         not_level_up,
+        cmds.join(","),
+        cgains.join(","),
+        persons.join(","),
         info_json
     )
 }
