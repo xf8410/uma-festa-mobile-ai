@@ -1235,6 +1235,8 @@ function applyFrame(f){
           for (const i of order) { if (i===ch) continue; if (rank>3) break; rest.push('#'+rank+' '+(descs[i]||('#'+i))+' '+dl(scores[i])+td(i,ch)); rank++; }
           if (rest.length) html += '<br><span style="font-size:12px">' + rest.join('　') + '</span>';
           box.innerHTML = html;
+          // [APP-FIX-101] 引擎回合快照 → 盘面按 view 渲染
+          try { if (d.view) { window.__VIEW = d.view; if (window.renderFromView) window.renderFromView(d.view); } } catch (e) {}
         } catch (e) { box.textContent = '引擎：解析失败'; }
       }, 2000);
     }
@@ -1446,6 +1448,46 @@ window.setZoom = function(z){
   document.documentElement.style.zoom = v;
 };
 /* ===== 电脑版原样盘面（1:1 复刻视图） ===== */
+// [APP-FIX-101] 用引擎快照渲染盘面（人头/彩圈/演目槽/赛程）；数据源 = matsuri 引擎的 MatsuriView
+window.renderFromView = function(v){
+  try {
+    const cols = document.querySelectorAll("#a-board .col");
+    const persons = (v.board && v.board.persons) || [];
+    const dist = (v.board && v.board.distribution) || [];
+    const NM = ["速","耐","力","根","智"];
+    const shortName = function(p){
+      if (p && p.card_id) { const n = cardShort(p.card_id); if (n) return n; }
+      if (p && p.chara_id) return "[" + (p.origin === "guest" ? "NPC" : (p.origin === "friend" ? "友" : "?")) + "]" + p.chara_id;
+      return "?";
+    };
+    for (let t = 0; t < 5 && t < cols.length; t++) {
+      const box = cols[t].querySelector(".v5-heads");
+      if (!box) continue;
+      const row = dist[t] || [];
+      if (!row.length) { box.innerHTML = '<div class="v5-head npc"><span class="tx">空位</span></div>'; continue; }
+      box.innerHTML = row.map(function(m){
+        const p = persons[m.person] || {};
+        const pt = p.origin;
+        const typ = (pt === "friend") ? "guest" : ((pt === "card") ? "card" : "npc");
+        let b = '';
+        if (m.shining) b += '<i class="bg shine" title="彩圈（引擎判定）">彩</i>';
+        if (p.hint) b += '<i class="bg tip" title="叹号">叹</i>';
+        const bd = (p.friendship != null && pt === "card") ? (" ·" + p.friendship) : "";
+        return '<div class="v5-head ' + typ + '"><span class="ic"></span><span class="tx">' + esc(shortName(p) + bd) + '</span>' + b + '</div>';
+      }).join("");
+    }
+    const r = v.resources || {}, sched = v.schedule || {}, camp = v.camp || {};
+    const g = r.act_gauge || [], lv = r.act_level || [], gm = r.act_gauge_max || 0;
+    let line = "演目槽：" + NM.map(function(_, i){ return NM[i] + " " + (lv[i]||0) + "Lv " + (g[i]||0) + "/" + (gm||"-"); }).join(" · ");
+    if (camp && camp.remain != null) line += "　合宿剩 " + camp.remain;
+    line += "　本轮追加稽古: " + (r.kensan_pending ? "已掷中" : "—");
+    const goal = sched.goal_races || [], opt = sched.optional_races || [];
+    if (goal.length) line += "<br>目标赛：T" + goal.join(" T");
+    if (opt.length) line += "　自选赛：T" + opt.join(" T");
+    const nt = document.getElementById("a-boardnote");
+    if (nt) nt.innerHTML = "📊 " + line;
+  } catch (e) { }
+};
 let boardZ = 0.42;
 function setBoardZoom(z){
   boardZ = Math.max(.1, Math.min(3.0, +z.toFixed(3))); // [APP-FIX-093] 随时可拉伸
