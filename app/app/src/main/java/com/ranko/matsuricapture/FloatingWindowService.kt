@@ -107,7 +107,9 @@ class FloatingWindowService : Service() {
             // 紧凑一屏面板：宽约屏宽 94%，高度由页面 reportHeight 回执收紧（WebView
             // 的 WRAP_CONTENT 不按内容收缩）。折叠时高度压成迷你条。
             val w = (0.94 * resources.displayMetrics.widthPixels).toInt()
-            layoutParams = LinearLayout.LayoutParams(w, dp(320))
+            // [APP-FIX-077] 初始就给大框高度（约 60% 屏高），不再靠页面回执收成小条
+            val bigH = (0.60 * resources.displayMetrics.heightPixels).toInt()
+            layoutParams = LinearLayout.LayoutParams(w, bigH)
         }
 
         val container = LinearLayout(this).apply {
@@ -150,7 +152,8 @@ class FloatingWindowService : Service() {
                     w.evaluateJavascript("window.setMini&&setMini(true)", null)
                 } else {
                     // 展开：高度先给一屏内的默认值，页面下一次 render 的 reportHeight 会收紧
-                    wlp.height = dp(320)
+                    // [APP-FIX-077] 展开=大框
+                    wlp.height = (0.60 * resources.displayMetrics.heightPixels).toInt()
                     w.layoutParams = wlp
                     header.visibility = View.VISIBLE
                     w.evaluateJavascript("window.setMini&&setMini(false)", null)
@@ -265,7 +268,8 @@ class FloatingWindowService : Service() {
         const val ACTION_STOP = "com.ranko.matsuricapture.FLOAT_STOP"
         private const val CHANNEL = "festa_float"
         private const val NOTIFY_ID = 2
-        private const val FLOAT_URL = "http://127.0.0.1:18766/float"
+        // [APP-FIX-077] 大面板：加载主面板页
+        private const val FLOAT_URL = "http://127.0.0.1:18766/"
         private val SCALES = floatArrayOf(1.0f, 0.70f, 0.45f)
         @Volatile private var running = false
         fun isRunning(): Boolean = running
