@@ -980,13 +980,13 @@ function v5RenderBoard(f){
     const it=byT[a.t]||{},g=+it.gauge||0,nd=+it.need_gauge||0;
     const lit=nd>0&&g>=nd;if(lit)on++;gS+=g>0?g:0;nS+=nd>0?nd:0;
     const kb=lit?`<span class="v5-kb">稽古·${esc(a.name)}</span>`:'<span class="v5-kb none">普通训练</span>';
-    // [APP-FIX-095] 人头/角标全部按真实字段渲染（partner_type 2=卡 1=友人 0=NPC）
+    // [APP-FIX-100] 人头/角标用 SO 真值（口径对齐 PC panel.rs）
     const cmdId=5101+idx;
     const tr=(f.trainings||[]).find(function(t){return +t.command_id===cmdId;})||{};
     const ppl=(tr.partners||[]).slice(0,5);
     const badge=function(p){
       let b='';
-      if(p.is_shining===true) b+='<i class="bg shine" title="彩圈（友情前提）">彩</i>';
+      if(p.is_shining===true) b+='<i class="bg shine" title="彩圈（得意训练+羁绊≥80）">彩</i>';
       if(p.is_tips_event===true) b+='<i class="bg tip" title="叹号 Hint">叹</i>';
       if(p.is_unique_active===true) b+='<i class="bg on" title="亮起（担当锁位）">亮</i>';
       return b;
@@ -995,9 +995,11 @@ function v5RenderBoard(f){
     if(ppl.length){
       heads=ppl.map(function(p){
         const pt=+p.partner_type;
-        const typ=pt===1?'guest':(pt===2?'card':'npc');
-        const nm=esc(p.name||('#'+p.partner_id));
-        const bd=(p.current_bond!=null&&p.support_card_id)?(' ·'+p.current_bond):'';
+        const typ=(pt===1)?'guest':((pt===2)?'card':'npc');
+        let nm='';
+        if(pt===2||pt===1){ nm=cardShort(p.support_card_id)||esc(p.name||('#'+p.partner_id)); }
+        else { nm='[NPC]'+esc(p.name||('#'+p.partner_id)); }
+        const bd=(pt===2&&p.current_bond!=null)?(' ·'+p.current_bond):'';
         return '<div class="v5-head '+typ+'"><span class="ic"></span><span class="tx">'+nm+bd+'</span>'+badge(p)+'</div>';
       }).join('');
     } else {
@@ -1015,7 +1017,7 @@ function v5RenderBoard(f){
   }).join('');
   const el=document.getElementById('a-board');if(el)el.innerHTML=html;
   const nt=document.getElementById('a-boardnote');if(nt)nt.innerHTML=
-    `📊 槽进度 <b>${gS}/${nS||'—'}</b> · 亮起 <b>${on}/5</b> 演目可稽古。人头栏：亮起位=固定 link 神驹＋担当卡；<b>理事长 / 记者 / 友人</b>即使无剧本 buff、无稽古角标也保留人头位（SO 未推名单，显示类型标签占位）。`;
+    `📊 槽进度 <b>${gS}/${nS||'—'}</b> · 亮起 <b>${on}/5</b> 演目可稽古。人头栏：站位/羁绊/彩圈/叹号全部按 SO 实时读取；彩圈=得意训练且羁绊≥80（引擎同款规则）。`;
 }
 // 教诲 buff 全表（5 基础 + 5 进化）
 function v5RenderAdvice(f){
