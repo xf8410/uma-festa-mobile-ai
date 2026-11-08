@@ -1,4 +1,5 @@
 name: Sync ai-engine
+# touch: 2026-11-08T22:16+08:00 触发同步（上游 4bc0e653 fcthreads/期望分投影/运气分）
 on:
   push:
     branches: [main]
