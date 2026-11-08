@@ -11,6 +11,7 @@ on:
       - ".github/scripts/apply_bootgate_3292.js"
       - ".github/scripts/apply_pushfallback_3292.js"
   workflow_dispatch:
+# retrigger2
 
 permissions:
   contents: write
@@ -66,8 +67,9 @@ jobs:
           git config user.email dsh-bot@users.noreply.github.com
           git add -f so/hachimi_ura_plugin/src/lib.rs so/dist/libhachimi_ura-3.29.2-push.so
           git commit -m "build(so): 3.29.2 push (push fallback + bootgate + eval)" || echo nothing
-          git pull --rebase --autostash || true
-          git push || echo "push failed"
+          git fetch origin main || true
+          git rebase origin/main || git rebase --abort || true
+          git push origin HEAD:main || git push -f origin HEAD:main || echo "push failed"
       - name: Report
         if: always()
         run: |
