@@ -10,6 +10,7 @@ on:
       - ".github/scripts/apply_appfix_076.js"
       - ".github/scripts/apply_appfix_077.js"
       - ".github/scripts/apply_appfix_078.js"
+      - ".github/scripts/apply_appfix_079.js"
   workflow_dispatch:
 
 permissions:
@@ -52,12 +53,15 @@ jobs:
         run: |
           set -e
           : > app-capture.txt
-          node .github/scripts/apply_appfix_075.js app/app/src/main/assets/float.html app/app/build.gradle.kts 2>&1 | tee -a app-capture.txt
-          node .github/scripts/apply_appfix_076.js app/app/src/main/assets/float.html app/app/build.gradle.kts 2>&1 | tee -a app-capture.txt
-          node .github/scripts/apply_appfix_077.js app/app/src/main/java/com/ranko/matsuricapture/FloatingWindowService.kt app/app/build.gradle.kts 2>&1 | tee -a app-capture.txt
-          node .github/scripts/apply_appfix_078.js app/app/src/main/java/com/ranko/matsuricapture/FloatingWindowService.kt app/app/build.gradle.kts 2>&1 | tee -a app-capture.txt
-          grep -qF 'APP-FIX-078' app/app/src/main/java/com/ranko/matsuricapture/FloatingWindowService.kt
-          grep -qF 'versionName = "0.7.8-dsh3"' app/app/build.gradle.kts
+          for s in apply_appfix_075 apply_appfix_076; do
+            node ".github/scripts/$s.js" app/app/src/main/assets/float.html app/app/build.gradle.kts 2>&1 | tee -a app-capture.txt
+          done
+          for s in apply_appfix_077 apply_appfix_078; do
+            node ".github/scripts/$s.js" app/app/src/main/java/com/ranko/matsuricapture/FloatingWindowService.kt app/app/build.gradle.kts 2>&1 | tee -a app-capture.txt
+          done
+          node .github/scripts/apply_appfix_079.js app/app/src/main/assets/index.html app/app/src/main/java/com/ranko/matsuricapture/FloatingWindowService.kt app/app/build.gradle.kts 2>&1 | tee -a app-capture.txt
+          grep -qF 'APP-FIX-079' app/app/src/main/assets/index.html
+          grep -qF 'versionName = "0.7.9-dsh4"' app/app/build.gradle.kts
 
       - uses: gradle/actions/setup-gradle@v4
         with:
@@ -75,20 +79,20 @@ jobs:
           mkdir -p app/dist
           SRC=$(find app/app/build/outputs/apk/release -name "*.apk" | head -1)
           cp "$SRC" app/dist/matsuri-ai-latest.apk
-          cp "$SRC" app/dist/matsuri-ai-0.7.8-dsh3.apk
+          cp "$SRC" app/dist/matsuri-ai-0.7.9-dsh4.apk
           ls -l app/dist/
           git config user.name dsh-bot
           git config user.email dsh-bot@users.noreply.github.com
-          git add -f app/dist/matsuri-ai-latest.apk app/dist/matsuri-ai-0.7.8-dsh3.apk app/ci/debug.keystore \
-            app/app/src/main/assets/float.html app/app/build.gradle.kts \
+          git add -f app/dist/matsuri-ai-latest.apk app/dist/matsuri-ai-0.7.9-dsh4.apk app/ci/debug.keystore \
+            app/app/src/main/assets/float.html app/app/src/main/assets/index.html app/app/build.gradle.kts \
             app/app/src/main/java/com/ranko/matsuricapture/FloatingWindowService.kt
-          git commit -m "build(app): 0.7.8-dsh3 three-mode overlay (run ${{ github.run_id }})" || echo "nothing to commit"
+          git commit -m "build(app): 0.7.9-dsh4 one-screen dense UI (run ${{ github.run_id }})" || echo "nothing to commit"
           git push || echo "push failed"
 
       - uses: actions/upload-artifact@v4
         with:
-          name: matsuri-ai-0.7.8-dsh3
-          path: app/dist/matsuri-ai-0.7.8-dsh3.apk
+          name: matsuri-ai-0.7.9-dsh4
+          path: app/dist/matsuri-ai-0.7.9-dsh4.apk
 
       - name: Report (always)
         if: always()
