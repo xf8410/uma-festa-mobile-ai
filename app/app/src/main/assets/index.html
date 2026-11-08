@@ -1171,8 +1171,10 @@ function applyFrame(f){
           const scores = Array.isArray(d.scores) ? d.scores.slice() : [];
           const descs = Array.isArray(d.descriptions) ? d.descriptions.slice() : [];
           if (!scores.length) { box.textContent = '引擎：无候选分'; return; }
-          const mean = scores.reduce(function(a,b){return a+b;},0)/scores.length;
-          const delta = function(v){ const x = Math.round(v-mean); return (x>=0?'+':'')+x; };
+          const base = (typeof d.baseline === 'number' && d.baseline !== 0) ? d.baseline : (scores.reduce(function(a,b){return a+b;},0)/scores.length); // [APP-FIX-088] 引擎 baseline 优先
+          const det = Array.isArray(d.detail) ? d.detail : [];
+          const tdelta = function(i, ch){ const a = det.find(function(x){return x.i===i;}), b = det.find(function(x){return x.i===ch;}); if(!a||!b) return ''; const NM=['速','耐','力','根','智']; let s2=''; for(let k2=0;k2<5;k2++){ const v=Math.round(a.five[k2]-b.five[k2]); if(v!==0) s2 += NM[k2]+(v>0?'+':'')+v+' '; } const pt=Math.round(a.pt-b.pt); if(pt!==0) s2 += 'PT'+(pt>0?'+':'')+pt; return s2 ? ' ('+s2.trim()+')' : ''; };
+          const delta = function(v){ const x = Math.round(v-base); return (x>=0?'+':'')+x; };
           const idx = [];
           for (let i=0;i<scores.length;i++) idx.push(i);
           idx.sort(function(a,b){return scores[b]-scores[a];});
@@ -1181,7 +1183,7 @@ function applyFrame(f){
           const top = '首选：' + (descs[ch]||('#'+ch)) + ' ' + delta(scores[ch]);
           const rest = [];
           let rank = 2;
-          for (const i of idx) { if (i===ch) continue; if (rank>3) break; rest.push('#'+rank+' '+ (descs[i]||('#'+i)) +' '+delta(scores[i])); rank++; }
+          for (const i of idx) { if (i===ch) continue; if (rank>3) break; rest.push('#'+rank+' '+ (descs[i]||('#'+i)) +' '+delta(scores[i]) + tdelta(i, ch)); rank++; }
           box.innerHTML = '<b style="color:#2a7ad1">'+head+'</b><br>'+top+'<br><span style="font-size:12px">'+rest.join('　')+'</span>';
         } catch (e) { }
       }, 2000);

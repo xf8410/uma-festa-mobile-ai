@@ -118,7 +118,9 @@ object EngineBridge {
             d.append("\"expected_stdev\":").append(ex?.optInt("expected_stdev", 0) ?: 0).append(",")
             d.append("\"expected_rank\":\"").append(ex?.optString("expected_rank", "") ?: "").append("\",")
             d.append("\"descriptions\":").append(o.optJSONArray("candidate_descriptions")?.toString() ?: "[]").append(",")
-            d.append("\"scores\":").append(o.optJSONArray("candidate_scores")?.toString() ?: "[]")
+            d.append("\"scores\":").append(o.optJSONArray("candidate_scores")?.toString() ?: "[]").append(",")
+            d.append("\"baseline\":").append(ex?.optDouble("baseline", 0.0) ?: 0.0).append(",") // [APP-FIX-088]
+            d.append("\"detail\":").append(ex?.optJSONArray("candidate_detail")?.toString() ?: "[]")
             d.append("}")
             lastDecision = d.toString()
         } catch (e: Throwable) {
