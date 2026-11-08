@@ -1,0 +1,65 @@
+name: Build hachimi_ura 3.29.2 (festa4)
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/build-ura-3292-v11.yml"
+      - ".github/scripts/apply_festa4_3292.js"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: build-ura-3292-v11
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Apply all fixes
+        run: |
+          set -euo pipefail
+          for f in apply_offset_fix_3292 apply_arrayfix_3292 apply_logfix_3292 apply_crashdiag_3292 apply_crashdiag2_3292 apply_festa_3292 apply_festa2_3292 apply_festa3_3292 apply_crashdiag3_3292 apply_festa4_3292; do
+            echo "== $f" | tee -a ci-capture.txt
+            node ".github/scripts/$f.js" so/hachimi_ura_plugin/src/lib.rs 2>&1 | tee -a ci-capture.txt
+          done
+          grep -qF 'evaluation_info' so/hachimi_ura_plugin/src/lib.rs
+          echo verified | tee -a ci-capture.txt
+      - name: Toolchain
+        run: |
+          set -euo pipefail
+          rustup target add aarch64-linux-android
+          NDK="${ANDROID_NDK_HOME:-${ANDROID_NDK_LATEST_HOME:-}}"
+          if [ -z "${NDK:-}" ] || [ ! -d "$NDK" ]; then NDK=$(ls -d /usr/local/lib/android/sdk/ndk/* 2>/dev/null | sort -V | tail -1 || true); fi
+          TC="$NDK/toolchains/llvm/prebuilt/linux-x86_64/bin"
+          printf '[target.aarch64-linux-android]\nlinker = "%s/aarch64-linux-android24-clang"\n' "$TC" > so/hachimi_ura_plugin/.cargo/config.toml
+          { echo "CC_aarch64_linux_android=$TC/aarch64-linux-android24-clang"; echo "AR_aarch64_linux_android=$TC/llvm-ar"; } >> "$GITHUB_ENV"
+      - name: Build
+        working-directory: so/hachimi_ura_plugin
+        run: |
+          set -o pipefail
+          cargo build --release --target aarch64-linux-android 2>&1 | tee -a "$GITHUB_WORKSPACE/ci-capture.txt" | tail -40
+          ls -l target/aarch64-linux-android/release/libhachimi_ura.so
+      - name: Publish
+        if: success()
+        run: |
+          set -euo pipefail
+          mkdir -p so/dist
+          cp so/hachimi_ura_plugin/target/aarch64-linux-android/release/libhachimi_ura.so so/dist/libhachimi_ura-3.29.2-festa4.so
+          git config user.name dsh-bot
+          git config user.email dsh-bot@users.noreply.github.com
+          git add -f so/hachimi_ura_plugin/src/lib.rs so/dist/libhachimi_ura-3.29.2-festa4.so
+          git commit -m "build(so): 3.29.2 festa4 aliases" || echo nothing
+          git push || echo "push failed"
+      - name: Report
+        if: always()
+        run: |
+          { echo "job_status=${{ job.status }}"; tail -c 3000 ci-capture.txt 2>/dev/null || true; } > ci-last-v11.txt
+          git config user.name dsh-bot
+          git config user.email dsh-bot@users.noreply.github.com
+          git add ci-last-v11.txt || true
+          git commit -m "ci: v11 log" || echo nothing
+          git push || echo "push failed"
