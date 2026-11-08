@@ -1,0 +1,104 @@
+name: Build matsuri AI app (v2: 期望分/评级)
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/build-app-v2.yml"
+      - ".github/scripts/apply_appfix_081.js"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: build-app-v2
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Restore 0.7.4 baseline (port 18766, original UI)
+        run: |
+          set -euo pipefail
+          git checkout 4a0009f3 -- app/app/src/main
+          grep -c '18766' app/app/src/main/assets/index.html || true
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - uses: android-actions/setup-android@v3
+        with:
+          packages: "platforms;android-35 build-tools;35.0.0 platform-tools"
+
+      - name: Stable debug keystore
+        run: |
+          set -e
+          mkdir -p app/ci
+          if [ ! -f app/ci/debug.keystore ]; then
+            keytool -genkeypair -v -keystore app/ci/debug.keystore -storepass android -keypass android -alias androiddebugkey -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Android Debug,O=Android,C=US"
+          fi
+          mkdir -p "$HOME/.android"
+          cp app/ci/debug.keystore "$HOME/.android/debug.keystore"
+
+      - name: Rank table (pin upstream 4bc0e653 data/constants.json)
+        run: |
+          set -euo pipefail
+          curl -sSL "https://raw.githubusercontent.com/umaai-project/umaai-matsuri/4bc0e653aebe5eca99e00abf4accff07a6cdf6bc/data/constants.json" -o /tmp/consts.json
+          node -e "const fs=require('fs');const c=JSON.parse(fs.readFileSync('/tmp/consts.json','utf8'));fs.writeFileSync('.github/scripts/rank_table.json',JSON.stringify({rank_scores:c.rank_scores,rank_names:c.rank_names}));console.log('rank table',c.rank_scores.length,'档');"
+
+      - name: Apply app fixes
+        run: |
+          set -euo pipefail
+          : > app-capture.txt
+          node .github/scripts/apply_appfix_080.js app/app/src/main/java/com/ranko/matsuricapture/NativeEngine.kt app/app/src/main/assets/index.html app/app/build.gradle.kts 2>&1 | tee -a app-capture.txt
+          node .github/scripts/apply_appfix_081.js app/app/src/main/java/com/ranko/matsuricapture/NativeEngine.kt app/app/src/main/assets/index.html app/app/build.gradle.kts 2>&1 | tee -a app-capture.txt
+          grep -qF '[APP-FIX-081]' app/app/src/main/assets/index.html
+          grep -E 'versionCode|versionName' app/app/build.gradle.kts
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "8.11.1"
+
+      - name: Assemble release
+        run: |
+          set -o pipefail
+          gradle -p app --no-daemon assembleRelease 2>&1 | tee -a app-capture.txt | tail -40
+          find app/app/build/outputs -name "*.apk" -ls
+
+      - name: Publish APK
+        if: success()
+        run: |
+          set -euo pipefail
+          mkdir -p app/dist
+          SRC=$(find app/app/build/outputs/apk/release -name "*.apk" | head -1)
+          cp "$SRC" app/dist/matsuri-ai-0.9.1-dsh10.apk
+          cp "$SRC" app/dist/matsuri-ai-latest.apk
+          ls -l app/dist/
+          git config user.name dsh-bot
+          git config user.email dsh-bot@users.noreply.github.com
+          git add -f app/dist/matsuri-ai-0.9.1-dsh10.apk app/dist/matsuri-ai-latest.apk app/app/src/main
+          git commit -m "build(app): 0.9.1-dsh10 期望分/运气投影/评级" || echo nothing
+          git push || echo "push failed"
+
+      - uses: actions/upload-artifact@v4
+        if: success()
+        with:
+          name: matsuri-ai-0.9.1-dsh10
+          path: app/dist/matsuri-ai-0.9.1-dsh10.apk
+
+      - name: Report (always)
+        if: always()
+        run: |
+          { echo "job_status=${{ job.status }}"; tail -c 4000 app-capture.txt 2>/dev/null || true; } > ci-last-app-v2.txt
+          git config user.name dsh-bot
+          git config user.email dsh-bot@users.noreply.github.com
+          git add ci-last-app-v2.txt || true
+          git commit -m "ci: app v2 log (${{ job.status }})" || echo nothing
+          git push || echo "push failed"
