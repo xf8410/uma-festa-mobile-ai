@@ -1,4 +1,4 @@
-name: "Build matsuri AI app v7 (适配器接线)"
+name: "Build matsuri AI app v8 (PC 同款面板)"
 on:
   push:
     branches: [main]
@@ -10,6 +10,7 @@ on:
       - ".github/scripts/apply_appfix_084.js"
       - ".github/scripts/apply_appfix_085.js"
       - ".github/scripts/apply_appfix_086.js"
+      - ".github/scripts/apply_appfix_087.js"
   workflow_dispatch:
 
 permissions:
@@ -27,23 +28,37 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Restore 0.7.4 baseline (port 18766, original UI)
+      - name: Restore 0.7.4 baseline
         run: |
           set -euo pipefail
           git checkout 4a0009f3 -- app/app/src/main
-          grep -c '18766' app/app/src/main/assets/index.html || true
+          ls app/app/src/main/java/com/ranko/matsuricapture/ | head
 
-      - name: Bundle umaai engine + game data into the APK
+      - name: Clone upstream + patch engine (panel json) + cross-build arm64
         run: |
           set -euo pipefail
-          mkdir -p app/app/src/main/jniLibs/arm64-v8a app/app/src/main/assets/engine/data
-          cp app/engine/libmatsuri_engine-arm64.so app/app/src/main/jniLibs/arm64-v8a/libmatsuri_engine.so
-          chmod 0755 app/app/src/main/jniLibs/arm64-v8a/libmatsuri_engine.so
-          REF=4bc0e653aebe5eca99e00abf4accff07a6cdf6bc
-          for f in constants.json cardDB.json umaDB.json events.json scenario_matsuri.json text_data_dict.json manifest.json ai_config.toml matsuri_config.toml; do
-            curl -sSL "https://raw.githubusercontent.com/umaai-project/umaai-matsuri/$REF/data/$f" -o "app/app/src/main/assets/engine/data/$f"
-          done
-          ls -l app/app/src/main/jniLibs/arm64-v8a/
+          mkdir -p /tmp/w
+          [ -d /tmp/w/umaai_next/.git ] || git clone --depth 1 https://github.com/umaai-project/umaai-next.git /tmp/w/umaai_next
+          [ -d /tmp/w/umaai-matsuri/.git ] || git clone --depth 1 https://github.com/umaai-project/umaai-matsuri.git /tmp/w/umaai-matsuri
+          node .github/scripts/apply_engine_json_panel.js /tmp/w/umaai-matsuri/crates/matsuri-ai/src/output.rs
+          rustup target add aarch64-linux-android
+          NDK="${ANDROID_NDK_HOME:-${ANDROID_NDK_LATEST_HOME:-}}"
+          if [ -z "${NDK:-}" ] || [ ! -d "$NDK" ]; then NDK=$(ls -d /usr/local/lib/android/sdk/ndk/* 2>/dev/null | sort -V | tail -1 || true); fi
+          TC="$NDK/toolchains/llvm/prebuilt/linux-x86_64/bin"
+          mkdir -p /tmp/w/umaai-matsuri/.cargo
+          printf '[target.aarch64-linux-android]\nlinker = "%s/aarch64-linux-android24-clang"\n' "$TC" > /tmp/w/umaai-matsuri/.cargo/config.toml
+          { echo "CC_aarch64_linux_android=$TC/aarch64-linux-android24-clang"; echo "AR_aarch64_linux_android=$TC/llvm-ar"; } >> "$GITHUB_ENV"
+          cd /tmp/w/umaai-matsuri
+          cargo build --release --target aarch64-linux-android -p matsuri-cli 2>&1 | tail -5
+          mkdir -p "$GITHUB_WORKSPACE/app/app/src/main/jniLibs/arm64-v8a"
+          cp target/aarch64-linux-android/release/matsuri "$GITHUB_WORKSPACE/app/app/src/main/jniLibs/arm64-v8a/libmatsuri_engine.so"
+          ls -l "$GITHUB_WORKSPACE/app/app/src/main/jniLibs/arm64-v8a/"
+
+      - name: Bundle data
+        run: |
+          set -euo pipefail
+          mkdir -p app/app/src/main/assets/engine/data
+          cp /tmp/w/umaai-matsuri/data/*.json /tmp/w/umaai-matsuri/data/*.toml app/app/src/main/assets/engine/data/ 2>/dev/null || true
           du -sh app/app/src/main/assets/engine/data
 
       - uses: actions/setup-java@v4
@@ -65,10 +80,10 @@ jobs:
           mkdir -p "$HOME/.android"
           cp app/ci/debug.keystore "$HOME/.android/debug.keystore"
 
-      - name: Rank table (pin upstream 4bc0e653 data/constants.json)
+      - name: Rank table
         run: |
           set -euo pipefail
-          curl -sSL "https://raw.githubusercontent.com/umaai-project/umaai-matsuri/4bc0e653aebe5eca99e00abf4accff07a6cdf6bc/data/constants.json" -o /tmp/consts.json
+          cp /tmp/w/umaai-matsuri/data/constants.json /tmp/consts.json
           node -e "const fs=require('fs');const c=JSON.parse(fs.readFileSync('/tmp/consts.json','utf8'));fs.writeFileSync('.github/scripts/rank_table.json',JSON.stringify({rank_scores:c.rank_scores,rank_names:c.rank_names}));console.log('rank table',c.rank_scores.length);"
 
       - name: Apply app fixes
@@ -76,22 +91,20 @@ jobs:
           set -euo pipefail
           : > app-capture.txt
           K=app/app/src/main/java/com/ranko/matsuricapture
-          node .github/scripts/apply_appfix_080.js $K/NativeEngine.kt app/app/src/main/assets/index.html app/app/build.gradle.kts 2>&1 | tee -a app-capture.txt
-          node .github/scripts/apply_appfix_081.js $K/NativeEngine.kt app/app/src/main/assets/index.html app/app/build.gradle.kts 2>&1 | tee -a app-capture.txt
-          node .github/scripts/apply_appfix_082.js $K/NativeEngine.kt 2>&1 | tee -a app-capture.txt
-          node .github/scripts/apply_appfix_083.js $K/NativeEngine.kt 2>&1 | tee -a app-capture.txt
-          node .github/scripts/apply_appfix_084.js $K/MainActivity.kt $K/FloatingWindowService.kt 2>&1 | tee -a app-capture.txt
-          node .github/scripts/apply_appfix_085.js app/app/build.gradle.kts 2>&1 | tee -a app-capture.txt
-          node .github/scripts/apply_appfix_086.js $K/EngineBridge.kt 2>&1 | tee -a app-capture.txt
-          grep -qF '[APP-FIX-081]' app/app/src/main/assets/index.html
-          grep -qF '[ENGINE-ANDROID]' $K/NativeEngine.kt
-          grep -qF '[APP-FIX-083]' $K/NativeEngine.kt
-          grep -qF '[APP-FIX-084]' $K/MainActivity.kt
-          grep -qF '[APP-FIX-085]' app/app/build.gradle.kts
+          for f in 080 081 082 083 084 085 086 087; do
+            case $f in
+              080|081) node .github/scripts/apply_appfix_$f.js $K/NativeEngine.kt app/app/src/main/assets/index.html app/app/build.gradle.kts ;;
+              082|083|086) node .github/scripts/apply_appfix_$f.js $K/NativeEngine.kt ;;
+              084) node .github/scripts/apply_appfix_$f.js $K/MainActivity.kt $K/FloatingWindowService.kt ;;
+              085) node .github/scripts/apply_appfix_$f.js app/app/build.gradle.kts ;;
+              087) node .github/scripts/apply_appfix_$f.js app/app/src/main/assets/index.html ;;
+            esac 2>&1 | tee -a app-capture.txt
+          done
+          grep -qF '[APP-FIX-087]' app/app/src/main/assets/index.html
           grep -qF '[ENGINE-ADAPTER]' $K/EngineBridge.kt
-          ls -l $K/FrameAdapter.kt
-          sed -i 's/versionName = "[^"]*"/versionName = "0.9.7-dsh16"/' app/app/build.gradle.kts
-          sed -i 's/versionCode = [0-9]\+/versionCode = 32/' app/app/build.gradle.kts
+          grep -qF '[APP-FIX-085]' app/app/build.gradle.kts
+          sed -i 's/versionName = "[^"]*"/versionName = "0.9.8-dsh17"/' app/app/build.gradle.kts
+          sed -i 's/versionCode = [0-9]\+/versionCode = 33/' app/app/build.gradle.kts
           grep -E 'versionCode|versionName' app/app/build.gradle.kts
 
       - uses: gradle/actions/setup-gradle@v4
@@ -101,7 +114,7 @@ jobs:
       - name: Assemble release
         run: |
           set -o pipefail
-          gradle -p app --no-daemon assembleRelease 2>&1 | tee -a app-capture.txt | tail -40
+          gradle -p app --no-daemon assembleRelease 2>&1 | tee -a app-capture.txt | tail -30
           find app/app/build/outputs -name "*.apk" -ls
 
       - name: Publish APK
@@ -110,21 +123,15 @@ jobs:
           set -euo pipefail
           mkdir -p app/dist
           SRC=$(find app/app/build/outputs/apk/release -name "*.apk" | head -1)
-          cp "$SRC" app/dist/matsuri-ai-0.9.7-dsh16.apk
+          cp "$SRC" app/dist/matsuri-ai-0.9.8-dsh17.apk
           cp "$SRC" app/dist/matsuri-ai-latest.apk
           ls -l app/dist/
           git config user.name dsh-bot
           git config user.email dsh-bot@users.noreply.github.com
-          git add -f app/dist/matsuri-ai-0.9.7-dsh16.apk app/dist/matsuri-ai-latest.apk
+          git add -f app/dist/matsuri-ai-0.9.8-dsh17.apk app/dist/matsuri-ai-latest.apk
           git add -f app/app/src/main/java app/app/src/main/assets/index.html app/app/build.gradle.kts 2>/dev/null || true
-          git commit -m "build(app): 0.9.7-dsh16 适配器接线（帧→引擎→决策）" || echo nothing
+          git commit -m "build(app): 0.9.8-dsh17 PC 同款面板" || echo nothing
           git push || echo "push failed"
-
-      - uses: actions/upload-artifact@v4
-        if: success()
-        with:
-          name: matsuri-ai-0.9.7-dsh16
-          path: app/dist/matsuri-ai-0.9.7-dsh16.apk
 
       - name: Report (always)
         if: always()
@@ -133,6 +140,6 @@ jobs:
           git config user.name dsh-bot
           git config user.email dsh-bot@users.noreply.github.com
           git add ci-last-app-v2.txt || true
-          git commit -m "ci: app v7 log (${{ job.status }})" || echo nothing
+          git commit -m "ci: app v8 log (${{ job.status }})" || echo nothing
           git pull --rebase --autostash || true
           git push || echo "push failed"
