@@ -1,10 +1,23 @@
 job_status=failure
 app-fix-080 applied
-app-fix-081 applied (v0.9.2-dsh11)
-app-fix-082 applied
-app-fix-083 applied
-app-fix-084 applied
-already applied
-already applied (FrameAdapter wired)
-app-fix-087 applied
-already applied
+node:fs:440
+    return binding.readFileUtf8(path, stringToFlags(options.flag));
+                   ^
+
+Error: ENOENT: no such file or directory, open '/home/runner/work/uma-festa-mobile-ai/uma-festa-mobile-ai/.github/scripts/rank_table.json'
+    at Object.readFileSync (node:fs:440:20)
+    at Object.<anonymous> (/home/runner/work/uma-festa-mobile-ai/uma-festa-mobile-ai/.github/scripts/apply_appfix_081.js:19:27)
+    at Module._compile (node:internal/modules/cjs/loader:1781:14)
+    at Object..js (node:internal/modules/cjs/loader:1913:10)
+    at Module.load (node:internal/modules/cjs/loader:1505:32)
+    at Function._load (node:internal/modules/cjs/loader:1309:12)
+    at wrapModuleLoad (node:internal/modules/cjs/loader:254:19)
+    at Function.executeUserEntryPoint [as runMain] (node:internal/modules/run_main:171:5)
+    at node:internal/main/run_main_module:36:49 {
+  errno: -2,
+  code: 'ENOENT',
+  syscall: 'open',
+  path: '/home/runner/work/uma-festa-mobile-ai/uma-festa-mobile-ai/.github/scripts/rank_table.json'
+}
+
+Node.js v22.23.4
