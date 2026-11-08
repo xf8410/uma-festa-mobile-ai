@@ -1,4 +1,4 @@
-name: "Build matsuri AI app v5 (白屏修复)"
+name: "Build matsuri AI app v6 (引擎解压修复)"
 on:
   push:
     branches: [main]
@@ -8,6 +8,7 @@ on:
       - ".github/scripts/apply_appfix_082.js"
       - ".github/scripts/apply_appfix_083.js"
       - ".github/scripts/apply_appfix_084.js"
+      - ".github/scripts/apply_appfix_085.js"
   workflow_dispatch:
 
 permissions:
@@ -79,12 +80,14 @@ jobs:
           node .github/scripts/apply_appfix_082.js $K/NativeEngine.kt 2>&1 | tee -a app-capture.txt
           node .github/scripts/apply_appfix_083.js $K/NativeEngine.kt 2>&1 | tee -a app-capture.txt
           node .github/scripts/apply_appfix_084.js $K/MainActivity.kt $K/FloatingWindowService.kt 2>&1 | tee -a app-capture.txt
+          node .github/scripts/apply_appfix_085.js app/app/build.gradle.kts 2>&1 | tee -a app-capture.txt
           grep -qF '[APP-FIX-081]' app/app/src/main/assets/index.html
           grep -qF '[ENGINE-ANDROID]' $K/NativeEngine.kt
           grep -qF '[APP-FIX-083]' $K/NativeEngine.kt
           grep -qF '[APP-FIX-084]' $K/MainActivity.kt
-          sed -i 's/versionName = "[^"]*"/versionName = "0.9.5-dsh14"/' app/app/build.gradle.kts
-          sed -i 's/versionCode = [0-9]\+/versionCode = 30/' app/app/build.gradle.kts
+          grep -qF '[APP-FIX-085]' app/app/build.gradle.kts
+          sed -i 's/versionName = "[^"]*"/versionName = "0.9.6-dsh15"/' app/app/build.gradle.kts
+          sed -i 's/versionCode = [0-9]\+/versionCode = 31/' app/app/build.gradle.kts
           grep -E 'versionCode|versionName' app/app/build.gradle.kts
 
       - uses: gradle/actions/setup-gradle@v4
@@ -103,21 +106,21 @@ jobs:
           set -euo pipefail
           mkdir -p app/dist
           SRC=$(find app/app/build/outputs/apk/release -name "*.apk" | head -1)
-          cp "$SRC" app/dist/matsuri-ai-0.9.5-dsh14.apk
+          cp "$SRC" app/dist/matsuri-ai-0.9.6-dsh15.apk
           cp "$SRC" app/dist/matsuri-ai-latest.apk
           ls -l app/dist/
           git config user.name dsh-bot
           git config user.email dsh-bot@users.noreply.github.com
-          git add -f app/dist/matsuri-ai-0.9.5-dsh14.apk app/dist/matsuri-ai-latest.apk
+          git add -f app/dist/matsuri-ai-0.9.6-dsh15.apk app/dist/matsuri-ai-latest.apk
           git add -f app/app/src/main/java app/app/src/main/assets/index.html app/app/build.gradle.kts 2>/dev/null || true
-          git commit -m "build(app): 0.9.5-dsh14 白屏修复（按实际绑定端口加载）" || echo nothing
+          git commit -m "build(app): 0.9.6-dsh15 引擎解压到 nativeLibraryDir（修 engine_missing）" || echo nothing
           git push || echo "push failed"
 
       - uses: actions/upload-artifact@v4
         if: success()
         with:
-          name: matsuri-ai-0.9.5-dsh14
-          path: app/dist/matsuri-ai-0.9.5-dsh14.apk
+          name: matsuri-ai-0.9.6-dsh15
+          path: app/dist/matsuri-ai-0.9.6-dsh15.apk
 
       - name: Report (always)
         if: always()
@@ -126,5 +129,5 @@ jobs:
           git config user.name dsh-bot
           git config user.email dsh-bot@users.noreply.github.com
           git add ci-last-app-v2.txt || true
-          git commit -m "ci: app v5 log (${{ job.status }})" || echo nothing
+          git commit -m "ci: app v6 log (${{ job.status }})" || echo nothing
           git push || echo "push failed"
