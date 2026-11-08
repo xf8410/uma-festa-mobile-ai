@@ -77,11 +77,19 @@ const acts = (festaSrc.acts || []).map(a => ({
   outingGainLevel: Number(a.friend_outing_gain_act_level || 0)
 }));
 const cps = (festaSrc.checkpoints || []).map(c => ({ scheduleId: Number(c.schedule_id || 0), resultType: Number(c.result_type || 0) }));
-const fPersons = (festaSrc.persons || []).map(p => ({
-  targetId: Number(p.target_id || p.chara_id || 0),
-  actType: Number(p.act_type || 0),
-  origin: p.origin || 'card'
-}));
+// festa.persons 只能含「卡位人头」（不含友人卡），按 personDistribution 反推；targetId = persons 下标
+const friendIndex = new Set();
+(src.support_cards || []).forEach((c, i) => {
+  const cid = Number(c.support_card_id || c.id || 0);
+  if (FRIEND_CARDS.includes(cid)) friendIndex.add(i);
+});
+const fPersons = [];
+personDistribution.forEach((row, actIdx) => {
+  row.forEach(pi => {
+    if (pi < 0 || friendIndex.has(pi)) return;
+    fPersons.push({ targetId: pi, actType: actIdx + 1, origin: 'card' });
+  });
+});
 const baseGame = {
   scenarioId: 15,
   umaId: Number(src.chara_id || 0),
