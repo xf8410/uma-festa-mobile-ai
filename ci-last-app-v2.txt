@@ -5,14 +5,9 @@ app-fix-082 applied
 app-fix-083 applied
 app-fix-084 applied
 already applied
-skip (anchor count=0): "        copyAssetDir(ctx, \"engine/data\", dataDir(c"
-skip (anchor count=0): "            f.writeText(raw.toString())"
-skip (anchor count=0): "    @Volatile var frames: Int = 0\n        private "
-skip (anchor count=0): "        Thread { drain(p.inputStream) { s -> lastL"
-skip (anchor count=0): "    private fun drain("
-skip (anchor count=0): "        sb.append(\"\\\"last_error\\\":\").append(q(trim"
-app-fix-086 applied
+already applied (FrameAdapter wired)
 app-fix-087 applied
+app-fix-088 applied
 To honour the JVM settings for this build a single-use Daemon process will be forked. For more on this, please refer to https://docs.gradle.org/8.11.1/userguide/gradle_daemon.html#sec:disabling_the_daemon in the Gradle documentation.
 Daemon will be stopped at the end of the build 
 > Task :app:buildKotlinToolingMetadata
@@ -24,8 +19,8 @@ Daemon will be stopped at the end of the build
 > Task :app:mapReleaseSourceSetPaths
 > Task :app:generateReleaseResources
 > Task :app:packageReleaseResources
-> Task :app:createReleaseCompatibleScreenManifests
 > Task :app:mergeReleaseResources
+> Task :app:createReleaseCompatibleScreenManifests
 > Task :app:extractDeepLinksRelease
 > Task :app:parseReleaseLocalResources
 > Task :app:processReleaseMainManifest
@@ -33,9 +28,8 @@ Daemon will be stopped at the end of the build
 > Task :app:javaPreCompileRelease
 > Task :app:extractProguardFiles
 > Task :app:mergeReleaseJniLibFolders
-> Task :app:mergeReleaseNativeLibs
 > Task :app:processReleaseManifestForPackage
-> Task :app:checkReleaseDuplicateClasses
+> Task :app:mergeReleaseNativeLibs
 
 > Task :app:stripReleaseDebugSymbols
 Unable to strip the following libraries, packaging them as they are: libmatsuri_engine.so.
@@ -43,24 +37,27 @@ Unable to strip the following libraries, packaging them as they are: libmatsuri_
 > Task :app:desugarReleaseFileDependencies
 > Task :app:mergeReleaseStartupProfile
 > Task :app:extractReleaseNativeSymbolTables
+> Task :app:checkReleaseDuplicateClasses
 > Task :app:mergeReleaseNativeDebugMetadata NO-SOURCE
-> Task :app:mergeReleaseShaders
 > Task :app:mergeReleaseArtProfile
+> Task :app:mergeReleaseShaders
 > Task :app:compileReleaseShaders NO-SOURCE
 > Task :app:generateReleaseAssets UP-TO-DATE
 > Task :app:mergeReleaseAssets
-> Task :app:extractReleaseVersionControlInfo
 > Task :app:processReleaseResources
+> Task :app:extractReleaseVersionControlInfo
 > Task :app:compressReleaseAssets
 > Task :app:collectReleaseDependencies
+> Task :app:optimizeReleaseResources
 > Task :app:sdkReleaseDependencyData
 > Task :app:validateSigningRelease
-> Task :app:optimizeReleaseResources
 > Task :app:writeReleaseAppMetadata
 > Task :app:writeReleaseSigningConfigVersions
 > Task :app:mergeExtDexRelease
 
 > Task :app:compileReleaseKotlin
+e: The daemon has terminated unexpectedly on startup attempt #1 with error code: 0. The daemon process output:
+    1. Kotlin compile daemon is ready
 w: file:///home/runner/work/uma-festa-mobile-ai/uma-festa-mobile-ai/app/app/src/main/java/com/ranko/matsuricapture/FloatingWindowService.kt:104:22 'var allowUniversalAccessFromFileURLs: Boolean' is deprecated. Deprecated in Java.
 w: file:///home/runner/work/uma-festa-mobile-ai/uma-festa-mobile-ai/app/app/src/main/java/com/ranko/matsuricapture/FloatingWindowService.kt:124:40 'static field TYPE_PHONE: Int' is deprecated. Deprecated in Java.
 w: file:///home/runner/work/uma-festa-mobile-ai/uma-festa-mobile-ai/app/app/src/main/java/com/ranko/matsuricapture/MainActivity.kt:41:22 'var allowUniversalAccessFromFileURLs: Boolean' is deprecated. Deprecated in Java.
@@ -79,7 +76,7 @@ w: file:///home/runner/work/uma-festa-mobile-ai/uma-festa-mobile-ai/app/app/src/
 > Task :app:lintVitalReportRelease
 > Task :app:lintVitalRelease
 > Task :app:assembleRelease
-gradle/actions: Writing build results to /home/runner/work/_temp/.gradle-actions/build-results/__run_7-1794157036365.json
+gradle/actions: Writing build results to /home/runner/work/_temp/.gradle-actions/build-results/__run_7-1794157367618.json
 
-BUILD SUCCESSFUL in 32s
+BUILD SUCCESSFUL in 53s
 48 actionable tasks: 48 executed
