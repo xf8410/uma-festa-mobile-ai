@@ -110,7 +110,7 @@ class FloatingWindowService : Service() {
             // 的 WRAP_CONTENT 不按内容收缩）。折叠时高度压成迷你条。
             val w = (0.94 * resources.displayMetrics.widthPixels).toInt()
             // [APP-FIX-077] 初始就给大框高度（约 60% 屏高），不再靠页面回执收成小条
-            val bigH = (0.60 * resources.displayMetrics.heightPixels).toInt()
+            val bigH = (0.78 * resources.displayMetrics.heightPixels).toInt() // [APP-FIX-079] 一屏
             layoutParams = LinearLayout.LayoutParams(w, bigH)
         }
 
@@ -155,7 +155,7 @@ class FloatingWindowService : Service() {
                 } else {
                     // [APP-FIX-078] 展开：一定回到大屏 + 主面板，杜绝回不去
                     compactMode = false
-                    wlp.height = (0.60 * resources.displayMetrics.heightPixels).toInt()
+                    wlp.height = (0.78 * resources.displayMetrics.heightPixels).toInt()
                     w.layoutParams = wlp
                     header.visibility = View.VISIBLE
                     w.loadUrl(FLOAT_URL)
@@ -176,7 +176,7 @@ class FloatingWindowService : Service() {
                     w.layoutParams = wlp
                     w.loadUrl(SMALL_URL)
                 } else {
-                    wlp.height = (0.60 * resources.displayMetrics.heightPixels).toInt()
+                    wlp.height = (0.78 * resources.displayMetrics.heightPixels).toInt()
                     w.layoutParams = wlp
                     w.loadUrl(FLOAT_URL)
                 }
@@ -213,7 +213,7 @@ class FloatingWindowService : Service() {
                     minBtn.text = "—"
                     web?.let { w ->
                         val wlp = w.layoutParams as LinearLayout.LayoutParams
-                        wlp.height = (0.60 * resources.displayMetrics.heightPixels).toInt()
+                        wlp.height = (0.78 * resources.displayMetrics.heightPixels).toInt()
                         w.layoutParams = wlp
                         w.loadUrl(FLOAT_URL)
                     }
