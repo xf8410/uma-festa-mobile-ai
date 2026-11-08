@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 // [/summary → 引擎帧] 把 SO 的 /summary 转成上游引擎要的 thisTurn.json（Envelope{festa, baseGame}）
 // 依据：matsuri-ai/src/frame.rs（Envelope）+ umaai/src/protocol/base.rs（BaseStatus）
-// 原则：源数据没有的字段不编造，填保守值并在 _adapter_notes 里标注（引擎忽略未知键）
+//      + 上游 docs/issues.md：cardId = 卡 ID × 10 + 突破等级；persons[i].charaId 必须对得上
+// 原则：源数据没有的字段不编造，填保守值并写进 _adapter_notes（引擎忽略未知键）
 const fs = require('fs');
 const src = JSON.parse(fs.readFileSync(process.argv[2], 'utf8'));
 const notes = [];
@@ -11,9 +12,15 @@ const five = [st.speed || 0, st.stamina || 0, st.power || 0, st.guts || 0, st.wi
 const lim = src.max_stats || {};
 const fiveLimit = [lim.speed || 0, lim.stamina || 0, lim.power || 0, lim.guts || 0, lim.wiz || 0];
 const turn = Math.max(0, Math.min(77, (Math.max(1, src.month || 1) - 1) * 2 + (Math.max(1, src.half || 1) - 1)));
-const lv = Array.isArray(src.training_levels) ? src.training_levels : [];
-const trainLevelCount = [0, 1, 2, 3, 4].map(i => Number(lv[i] || 0));
-// 协议 cardId 是「卡 ID × 10 + 突破等级」的合并值（上游 docs/issues.md 明确）
+// training_levels 是 [{command_id, level}]（不是 5 个数字）：稽古位 5101-5105 优先，退化到设施 101-105
+const lvList = Array.isArray(src.training_levels) ? src.training_levels : [];
+const levelOf = id => {
+  const e = lvList.find(x => Number(x && x.command_id) === id);
+  return e ? Number(e.level || 0) : 0;
+};
+let trainLevelCount = [5101, 5102, 5103, 5104, 5105].map(levelOf);
+if (trainLevelCount.every(v => v === 0)) trainLevelCount = [101, 102, 103, 104, 105].map(levelOf);
+// 协议 cardId 是「卡 ID × 10 + 突破等级」的合并值
 const cards = (src.support_cards || []).map(c => {
   const id = Number(c.support_card_id || c.id || 0);
   const lb = Number(c.limit_break_count || c.limit_break || 0);
@@ -44,7 +51,7 @@ const persons = (src.support_cards || []).map(c => {
     friendship: Number(p.current_bond || 0)
   };
 });
-// personDistribution：5 训练位 × 5 槽，元素是 persons 的下标，-1 = 空；引擎按它分配参与人头
+// personDistribution：5 训练位 × 5 槽，元素是 persons 的下标，-1 = 空
 const cardIndexByCard = {};
 (src.support_cards || []).forEach((c, i) => { cardIndexByCard[Number(c.support_card_id || c.id || 0)] = i; });
 const personDistribution = [0, 1, 2, 3, 4].map(() => [-1, -1, -1, -1, -1]);
