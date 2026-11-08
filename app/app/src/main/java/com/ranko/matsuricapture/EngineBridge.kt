@@ -41,8 +41,11 @@ object EngineBridge {
 
     fun rootDir(ctx: Context): File = File(ctx.filesDir, "engine").also { it.mkdirs() }
     fun dataDir(ctx: Context): File = File(rootDir(ctx), "data").also { it.mkdirs() }
-    fun framesDir(ctx: Context, trainer: String): File =
-        File(rootDir(ctx), "frames_$trainer").also { it.mkdirs() }
+    // [APP-FIX-092] 上游 live 口径：--root 是游戏根，帧放 <root>/.portable/PluginData/SendGameStatusPlugin/thisTurn.json
+    fun gameRoot(ctx: Context, trainer: String): File =
+        File(rootDir(ctx), "root_$trainer").also { it.mkdirs() }
+    fun pluginDir(ctx: Context, trainer: String): File =
+        File(gameRoot(ctx, trainer), ".portable/PluginData/SendGameStatusPlugin").also { it.mkdirs() }
 
     fun init(ctx: Context) {
         val app = ctx.applicationContext
@@ -104,7 +107,7 @@ object EngineBridge {
         val pb = ProcessBuilder(
             engine.absolutePath,
             "online",
-            "--root", framesDir(ctx, trainer).absolutePath,
+            "--root", gameRoot(ctx, trainer).absolutePath,
             "--trainer", trainer,
             "--json"
         )
@@ -137,15 +140,15 @@ object EngineBridge {
 
     /** 每收到一帧 /summary 就转成引擎帧，同时喂给两档 */
     fun onSummary(ctx: Context, raw: org.json.JSONObject) {
+        frames++
         try {
             val frame = FrameAdapter.toFrame(raw).toString()
             for (t in arrayOf("matsuri", "search")) {
-                val dir = framesDir(ctx, t)
+                val dir = pluginDir(ctx, t)
                 val turn = raw.optInt("turn", 0)
                 val chara = raw.optInt("chara_id", 0)
-                File(dir, "game" + chara + "_turn" + turn + ".json").writeText(frame)
+                File(dir, "thisTurn.json").writeText(frame)
             }
-            frames++
         } catch (e: Throwable) {
             slot("matsuri").lastError = "frame_write_failed: " + (e.message ?: "")
         }
