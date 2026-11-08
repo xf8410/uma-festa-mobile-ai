@@ -4652,11 +4652,12 @@ fn compute_skill_eval(skills: &[(i32, i32)]) -> (i32, i32, String) {
                 });
         });
 
+    // [SKILLNAME-3292] 技能名的真实 id 在 [index] 列
     // Also get skill names
     let mut name_map: std::collections::HashMap<i32, String> = std::collections::HashMap::new();
     let _ = conn
         .prepare(&format!(
-            "SELECT id, text FROM text_data WHERE category={}",
+            "SELECT [index], text FROM text_data WHERE category={} ORDER BY [index]",
             TEXT_DATA_CATEGORY_SKILL_NAME
         ))
         .map(|mut stmt| {
@@ -16968,7 +16969,7 @@ fn read_skilldata() -> String {
 
     // Collect skill names (category=47)
     let names: Vec<String> = match conn.prepare(&format!(
-        "SELECT id, text FROM text_data WHERE category={} ORDER BY id",
+        "SELECT [index], text FROM text_data WHERE category={} ORDER BY [index]",
         TEXT_DATA_CATEGORY_SKILL_NAME
     )) {
         Ok(mut stmt) => stmt
