@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 // [/summary → 引擎帧] 把 SO 的 /summary 转成上游引擎要的 thisTurn.json（Envelope{festa, baseGame}）
 // 依据：matsuri-ai/src/frame.rs（Envelope）+ umaai/src/protocol/base.rs（BaseStatus）
+//      + 上游 docs/issues.md：协议 cardId 是「卡 ID × 10 + 突破等级」的合并值
 // 原则：源数据没有的字段不编造，填保守值并写进 _adapter_notes（引擎忽略未知键）
 const fs = require('fs');
 const src = JSON.parse(fs.readFileSync(process.argv[2], 'utf8'));
@@ -13,7 +14,12 @@ const fiveLimit = [lim.speed || 0, lim.stamina || 0, lim.power || 0, lim.guts ||
 const turn = Math.max(0, Math.min(77, (Math.max(1, src.month || 1) - 1) * 2 + (Math.max(1, src.half || 1) - 1)));
 const lv = Array.isArray(src.training_levels) ? src.training_levels : [];
 const trainLevelCount = [0, 1, 2, 3, 4].map(i => Number(lv[i] || 0));
-const cards = (src.support_cards || []).map(c => Number(c.id || c.support_card_id || 0)).filter(x => x > 0);
+// cardId = 卡 ID × 10 + 突破等级（合并值）
+const cards = (src.support_cards || []).map(c => {
+  const id = Number(c.support_card_id || c.id || 0);
+  const lb = Number(c.limit_break_count || c.limit_break || 0);
+  return id > 0 ? id * 10 + lb : 0;
+}).filter(x => x > 0);
 const effects = (src.chara_effect_ids || []).map(Number);
 const isAijiao = effects.includes(8);
 if (!effects.length) notes.push('chara_effect_ids empty');
