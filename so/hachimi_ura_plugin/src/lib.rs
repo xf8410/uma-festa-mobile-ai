@@ -4598,7 +4598,7 @@ unsafe fn read_skill_tips(
     }
 
     // Approach 2: skill_tips_array field direct read
-    let field_arr = /* [SKILLTIPS2-3292] 真实字段名 */ read_field_value(chara_class, chara_obj, "_skillTipsList");
+    let field_arr = /* [SKILLTIPS3-3292] 引用字段要 deref，不是取地址 */ read_ptr_at(chara_obj, 696);
     if !field_arr.is_null() {
         // // [SKILLTIPS-3292] 同上：字段可能是 List，也可能是数组
         let ab = field_arr as *const u8;
