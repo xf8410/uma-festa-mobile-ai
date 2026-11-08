@@ -1,4 +1,4 @@
-name: "Build matsuri AI app v17 (同源+引擎帧)"
+name: "Build matsuri AI app v18 (帧收+合宿)"
 on:
   push:
     branches: [main]
@@ -17,6 +17,7 @@ on:
       - ".github/scripts/apply_appfix_094.js"
       - ".github/scripts/apply_appfix_095.js"
       - ".github/scripts/apply_appfix_096.js"
+      - ".github/scripts/apply_appfix_097.js"
       - "app/app/src/main/java/com/ranko/matsuricapture/EngineBridge.kt"
       - "app/app/src/main/java/com/ranko/matsuricapture/FrameAdapter.kt"
   workflow_dispatch:
@@ -112,6 +113,7 @@ jobs:
           run 094 $K/FloatingWindowService.kt
           run 095 app/app/src/main/assets/index.html
           run 096 $K/EngineBridge.kt $K/NativeEngine.kt
+          run 097 $K/FrameAdapter.kt
           grep -qF '[APP-FIX-089]' app/app/src/main/assets/index.html
           grep -qF '[APP-FIX-090]' $K/FrameAdapter.kt
           grep -qF '[APP-FIX-091]' $K/FrameAdapter.kt
@@ -120,9 +122,10 @@ jobs:
           grep -qF '[APP-FIX-094]' $K/FloatingWindowService.kt
           grep -qF '[APP-FIX-095]' app/app/src/main/assets/index.html
           grep -qF '[APP-FIX-096]' $K/EngineBridge.kt
+          grep -qF '[APP-FIX-097]' $K/FrameAdapter.kt
           grep -qF 'startOne' $K/EngineBridge.kt
-          sed -i 's/versionName = "[^"]*"/versionName = "0.9.15-dsh24"/' app/app/build.gradle.kts
-          sed -i 's/versionCode = [0-9]\+/versionCode = 40/' app/app/build.gradle.kts
+          sed -i 's/versionName = "[^"]*"/versionName = "0.9.16-dsh25"/' app/app/build.gradle.kts
+          sed -i 's/versionCode = [0-9]\+/versionCode = 41/' app/app/build.gradle.kts
           grep -E 'versionCode|versionName' app/app/build.gradle.kts
 
       - uses: gradle/actions/setup-gradle@v4
@@ -141,23 +144,23 @@ jobs:
           set -euo pipefail
           mkdir -p app/dist
           SRC=$(find app/app/build/outputs/apk/release -name "*.apk" | head -1)
-          cp "$SRC" app/dist/matsuri-ai-0.9.15-dsh24.apk
+          cp "$SRC" app/dist/matsuri-ai-0.9.16-dsh25.apk
           cp "$SRC" app/dist/matsuri-ai-latest.apk
           ls -l app/dist/
           git config user.name dsh-bot
           git config user.email dsh-bot@users.noreply.github.com
-          git add -f app/dist/matsuri-ai-0.9.15-dsh24.apk app/dist/matsuri-ai-latest.apk
+          git add -f app/dist/matsuri-ai-0.9.16-dsh25.apk app/dist/matsuri-ai-latest.apk
           git add -f app/app/src/main/java app/app/src/main/assets/index.html app/app/build.gradle.kts 2>/dev/null || true
-          git commit -m "build(app): 0.9.15-dsh24 同源+引擎帧+人头角标" || echo nothing
+          git commit -m "build(app): 0.9.16-dsh25 帧收+合宿" || echo nothing
           git push || echo "push failed"
 
       - name: Report (always)
         if: always()
         run: |
-          { echo "job_status=${{ job.status }}"; tail -c 5000 app-capture.txt 2>/dev/null || true; } > ci-last-app-v17.txt
+          { echo "job_status=${{ job.status }}"; tail -c 5000 app-capture.txt 2>/dev/null || true; } > ci-last-app-v18.txt
           git config user.name dsh-bot
           git config user.email dsh-bot@users.noreply.github.com
-          git add ci-last-app-v17.txt || true
-          git commit -m "ci: app v17 log (${{ job.status }})" || echo nothing
+          git add ci-last-app-v18.txt || true
+          git commit -m "ci: app v18 log (${{ job.status }})" || echo nothing
           git pull --rebase --autostash || true
           git push || echo "push failed"
