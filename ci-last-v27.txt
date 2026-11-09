@@ -1,0 +1,111 @@
+job_status=success
+                                                             ++++++++++++
+
+warning: creating a mutable reference to mutable static
+     --> src/lib.rs:19814:46
+      |
+19814 |     let jump_result = unsafe { sys_sigsetjmp(SIGSEGV_JMP_BUF.as_mut_ptr(), 1) };
+      |                                              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^ mutable reference to mutable static
+      |
+      = note: mutable references to mutable statics are dangerous; it's undefined behavior if any other pointer to the static is used or if any other reference is created for the static while the mutable reference lives
+      = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/static-mut-references.html>
+
+warning: creating a mutable reference to mutable static
+     --> src/lib.rs:19940:46
+      |
+19940 |     let jump_result = unsafe { sys_sigsetjmp(SIGSEGV_JMP_BUF.as_mut_ptr(), 1) };
+      |                                              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^ mutable reference to mutable static
+      |
+      = note: mutable references to mutable statics are dangerous; it's undefined behavior if any other pointer to the static is used or if any other reference is created for the static while the mutable reference lives
+      = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/static-mut-references.html>
+
+warning: creating a mutable reference to mutable static
+     --> src/lib.rs:21102:45
+      |
+21102 |     let jmp_result = unsafe { sys_sigsetjmp(SIGSEGV_JMP_BUF.as_mut_ptr(), 1) };
+      |                                             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^ mutable reference to mutable static
+      |
+      = note: mutable references to mutable statics are dangerous; it's undefined behavior if any other pointer to the static is used or if any other reference is created for the static while the mutable reference lives
+      = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/static-mut-references.html>
+
+warning: creating a mutable reference to mutable static
+     --> src/lib.rs:21288:45
+      |
+21288 |     let jmp_result = unsafe { sys_sigsetjmp(SIGSEGV_JMP_BUF.as_mut_ptr(), 1) };
+      |                                             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^ mutable reference to mutable static
+      |
+      = note: mutable references to mutable statics are dangerous; it's undefined behavior if any other pointer to the static is used or if any other reference is created for the static while the mutable reference lives
+      = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/static-mut-references.html>
+
+warning: direct cast of function item into an integer
+     --> src/lib.rs:21762:72
+      |
+21762 |         let trampoline = interceptor_get_trampoline(exec_training_hook as usize);
+      |                                                                        ^^^^^^^^
+      |
+help: first cast to a pointer `as *const ()`
+      |
+21762 |         let trampoline = interceptor_get_trampoline(exec_training_hook as *const () as usize);
+      |                                                                        ++++++++++++
+
+warning: direct cast of function item into an integer
+     --> src/lib.rs:21856:71
+      |
+21856 |         let trampoline = interceptor_get_trampoline(failure_rate_hook as usize);
+      |                                                                       ^^^^^^^^
+      |
+help: first cast to a pointer `as *const ()`
+      |
+21856 |         let trampoline = interceptor_get_trampoline(failure_rate_hook as *const () as usize);
+      |                                                                       ++++++++++++
+
+warning: direct cast of function item into an integer
+     --> src/lib.rs:21904:27
+      |
+21904 |         failure_rate_hook as usize,
+      |                           ^^^^^^^^
+      |
+help: first cast to a pointer `as *const ()`
+      |
+21904 |         failure_rate_hook as *const () as usize,
+      |                           ++++++++++++
+
+warning: creating a mutable reference to mutable static
+     --> src/lib.rs:21905:9
+      |
+21905 |         &mut ORIG_FAILURE_RATE_PROLOGUE,
+      |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ mutable reference to mutable static
+      |
+      = note: mutable references to mutable statics are dangerous; it's undefined behavior if any other pointer to the static is used or if any other reference is created for the static while the mutable reference lives
+      = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/static-mut-references.html>
+help: use `&raw mut` instead to create a raw pointer
+      |
+21905 |         &raw mut ORIG_FAILURE_RATE_PROLOGUE,
+      |          +++
+
+warning: direct cast of function item into an integer
+     --> src/lib.rs:21939:28
+      |
+21939 |         exec_training_hook as usize,
+      |                            ^^^^^^^^
+      |
+help: first cast to a pointer `as *const ()`
+      |
+21939 |         exec_training_hook as *const () as usize,
+      |                            ++++++++++++
+
+warning: creating a mutable reference to mutable static
+     --> src/lib.rs:21940:9
+      |
+21940 |         &mut ORIG_EXEC_TRAINING_PROLOGUE,
+      |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ mutable reference to mutable static
+      |
+      = note: mutable references to mutable statics are dangerous; it's undefined behavior if any other pointer to the static is used or if any other reference is created for the static while the mutable reference lives
+      = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/static-mut-references.html>
+help: use `&raw mut` instead to create a raw pointer
+      |
+21940 |         &raw mut ORIG_EXEC_TRAINING_PROLOGUE,
+      |          +++
+
+warning: `hachimi_ura` (lib) generated 154 warnings (run `cargo fix --lib -p hachimi_ura` to apply 60 suggestions)
+    Finished `release` profile [optimized] target(s) in 1m 03s
