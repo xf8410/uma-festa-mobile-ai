@@ -6,8 +6,9 @@
 <title>祭典杯 AI · 盘面</title>
 <style>
 :root{
-  /* 亮色透明主题：浮窗盖在游戏上可隐约透出画面 */
-  --bg:rgba(250,252,250,.80); --card:rgba(255,255,255,.55); --line:rgba(28,48,38,.22); --line2:rgba(28,48,38,.11);
+  /* 亮色透明主题：浮窗盖在游戏上可隐约透出画面；--ba 由设置面板透明度滑杆驱动 */
+  --ba:.80;
+  --bg:rgba(250,252,250,var(--ba)); --card:rgba(255,255,255,.55); --line:rgba(28,48,38,.22); --line2:rgba(28,48,38,.11);
   --txt:#18231d; --sub:#46564d; --dim:#7b8b81; --ok:#149053; --warn:#a87507; --bad:#cf4438;
   --spd:#d84040; --sta:#2b74c9; --pow:#d97a12; --gut:#6553c9; --wis:#0d9387; --pt:#a96f12;
   --base:#167a5c; --evo:#7145c4; --npc:#55697e; --kensan:#7145c4;
@@ -33,12 +34,22 @@ body{padding:6px 7px 7px}
 .duo .v.alt{color:var(--pt)}
 .duo .v.wait{color:var(--sub);font-weight:600}
 
-/* 预估评分 / 本局运气分 / 本回合运气分 */
-.trio{display:grid;grid-template-columns:1fr 1fr 1fr;gap:5px}
-.trio>div{background:rgba(255,255,255,.5);border:1px solid var(--line2);border-radius:7px;padding:3px 6px 4px;min-width:0;text-align:center}
-.trio .k{font-size:8.5px;color:var(--dim)}
-.trio .v{font-size:13px;font-weight:800;display:block;white-space:nowrap}
-.trio .v.luck{color:var(--warn)}
+/* 期望 / 评价分 / 本局运气 / 本轮运气（PC 口径四分行） */
+.quad{display:grid;grid-template-columns:1.15fr 1fr 1fr 1fr;gap:4px}
+.quad>div{background:rgba(255,255,255,.5);border:1px solid var(--line2);border-radius:7px;padding:3px 4px 4px;min-width:0;text-align:center}
+.quad .k{font-size:8.5px;color:var(--dim)}
+.quad .v{font-size:13px;font-weight:800;display:block;white-space:nowrap}
+.quad .v.luck{color:var(--warn)}
+.quad .v .rk{font-size:9px;color:var(--sub)}
+.parts{font-size:8.5px;color:var(--dim);text-align:center;margin-top:-2px;white-space:nowrap;overflow:hidden}
+
+/* [APP-CFG-3294] 设置面板（齿轮开关）：引擎线程/局数 + 透明度 */
+#cfg{background:rgba(255,255,255,.6);border:1px solid var(--line2);border-radius:7px;padding:5px 7px;font-size:9.5px}
+#cfg .ln{display:flex;gap:7px;align-items:center;flex-wrap:wrap}
+#cfg .ln+.ln{margin-top:4px}
+#cfg input[type=number]{width:52px;font-size:9.5px;border:1px solid var(--line);border-radius:4px;padding:1px 3px;background:rgba(255,255,255,.8)}
+#cfg button{font-size:9.5px;border:1px solid var(--line);border-radius:4px;background:rgba(255,255,255,.8);padding:1px 7px}
+#cfg input[type=range]{flex:1}
 
 /* 五维 6 列 */
 .grid6{display:grid;grid-template-columns:repeat(6,1fr);gap:4px}
@@ -135,11 +146,30 @@ body.mini #mini{display:flex}
     <div><div class="k">行动建议 · 本回合该点哪个</div><div class="v wait" id="advAct">等待游戏连接</div></div>
   </div>
 
-  <!-- 预估评分 / 运气分 -->
-  <div class="row trio">
-    <div><span class="k">预估评分</span><span class="v" id="score">—</span></div>
-    <div><span class="k">本局运气分</span><span class="v luck" id="luckGame">—</span></div>
-    <div><span class="k">本回合运气分</span><span class="v luck" id="luckTurn">—</span></div>
+  <!-- [APP-SCORE-3294] 期望终局（引擎）/ 评价分（本地官方口径）/ 运气分（PC 口径） -->
+  <div class="row quad">
+    <div><span class="k">期望终局</span><span class="v" id="expScore">—</span></div>
+    <div><span class="k">评价分</span><span class="v" id="score">—</span></div>
+    <div><span class="k">本局运气</span><span class="v luck" id="luckGame">—</span></div>
+    <div><span class="k">本轮运气</span><span class="v luck" id="luckTurn">—</span></div>
+  </div>
+  <div class="row parts" id="evalParts">评价分构成：五维 — ＋ PT — ＋ 技能 —</div>
+
+  <!-- [APP-CFG-3294] 设置面板（标题栏齿轮开关）：引擎线程/搜索局数 + 浮窗透明度 -->
+  <div class="row" id="cfg" style="display:none">
+    <div class="ln">
+      <span class="sub">引擎</span>
+      <label>线程 <input id="cfgThreads" type="number" min="1" max="32" value="4"></label>
+      <label>局数 <input id="cfgN" type="number" min="0" max="200000" step="512" value="8192"></label>
+      <button id="cfgApply">应用·重启引擎</button>
+      <span id="cfgMsg" class="dim"></span>
+    </div>
+    <div class="ln">
+      <span class="sub">透明度</span>
+      <input id="cfgOp" type="range" min="30" max="100" value="80">
+      <span id="cfgOpV">80%</span>
+      <span class="dim">局数 0 = 纯手写档</span>
+    </div>
   </div>
 
   <!-- 五维 + PT -->
@@ -167,8 +197,8 @@ body.mini #mini{display:flex}
   <div class="foot"><span id="cps"></span><span id="diag">—</span></div>
 </div>
 
-<!-- 折叠迷你条：运气分 ± ｜ 推荐训练 -->
-<div id="mini"><span class="lk" id="mLuck">运气 —</span><span class="sp">｜</span><span class="rc wait" id="mRec">等待游戏连接</span></div>
+<!-- 折叠迷你条：运气分 ± ｜ 推荐训练 ｜ 点按恢复提示（[APP-FIX-106] 点一下迷你条展开全盘面） -->
+<div id="mini"><span class="lk" id="mLuck">运气 —</span><span class="sp">｜</span><span class="rc wait" id="mRec">等待游戏连接</span><span class="sp">｜</span><span style="font-size:9px;color:var(--dim);flex:none">点按展开</span></div>
 
 <script>
 /* 静态映射：来自上游 umaai-matsuri（glossary.md / mechanism.md / scenario_matsuri.json） */
@@ -229,6 +259,53 @@ function togglePause(){
   else if(timer){clearInterval(timer);timer=null;}
 }
 function closeWin(){try{Android.close();}catch(e){window.close&&window.close();}}
+
+/* [APP-CFG-3294] 实际搜索局数（置信半径分母）：/engine 读一次，默认 8192 */
+let SEARCH_N=8192;
+fetch(BASE+'/engine',{cache:'no-store'}).then(r=>r.json()).then(j=>{
+  if(+j.search_n>0)SEARCH_N=+j.search_n;
+}).catch(()=>{});
+
+/* [APP-CFG-3294] 设置面板：齿轮开关 / 透明度滑杆 / 引擎线程局数应用 */
+function toggleSettings(){
+  const el=document.getElementById('cfg');
+  el.style.display=el.style.display==='none'?'':'none';
+  reportH();
+}
+function setPageOpacity(pct){
+  pct=Math.max(30,Math.min(100,+pct||80));
+  document.documentElement.style.setProperty('--ba',(pct/100).toFixed(2));
+  const s=document.getElementById('cfgOp');
+  if(s){s.value=pct;document.getElementById('cfgOpV').textContent=pct+'%';}
+}
+(function initCfg(){
+  try{
+    if(window.Android&&Android.getOpacity)setPageOpacity(Android.getOpacity());
+    if(window.Android&&Android.getEngineCfg){
+      const p=String(Android.getEngineCfg()).split(',');
+      document.getElementById('cfgThreads').value=p[0]||4;
+      document.getElementById('cfgN').value=p[1]||8192;
+    }
+  }catch(e){}
+  document.getElementById('cfgOp').addEventListener('input',function(){
+    const v=+this.value;
+    setPageOpacity(v);
+    try{window.Android&&Android.setOpacity&&Android.setOpacity(v);}catch(e){}
+  });
+  document.getElementById('cfgApply').addEventListener('click',function(){
+    const t=Math.round(+document.getElementById('cfgThreads').value)||4;
+    const nn=Math.round(+document.getElementById('cfgN').value)||0;
+    const msg=document.getElementById('cfgMsg');
+    try{
+      if(window.Android&&Android.setEngineCfg){
+        Android.setEngineCfg(t,nn);
+        SEARCH_N=nn>0?nn:SEARCH_N;
+        msg.textContent='已保存，引擎重启中…';
+      }else msg.textContent='仅浮窗内可改';
+    }catch(e){msg.textContent='失败';}
+    setTimeout(()=>{msg.textContent='';},4000);
+  });
+})();
 
 function stateLabel(s){
   if(!s.service_running)return['接收端未启动','off'];
@@ -330,8 +407,11 @@ function render(s){
   if(aiTop)lastRec={txt:aiTop,wait:false};
   const aa=document.getElementById('advAct');
   aa.textContent=lastRec.txt+(kensan&&acts.length?' ⚡追加稽古':'');aa.className='v'+(lastRec.wait?' wait':'');
-  // 运气分 / 预估评分：内置 AI 未接入，无数据源，不编造
-  document.getElementById('score').innerHTML=n(f.score)+(+f.expected_stdev>0?` <span style="font-size:9px;color:var(--dim)">±${n(f.expected_stdev)}${f.expected_rank?' '+esc(f.expected_rank):''}</span>`:'');
+  // [APP-SCORE-3294] 期望终局（引擎搜索档）/ 评价分（本地官方口径，含档次）/ 运气分（PC 口径）
+  document.getElementById('expScore').innerHTML=n(f.expected)+(+f.expected_stdev>0?` <span style="font-size:9px;color:var(--dim)">±${n(f.expected_stdev)}${f.expected_rank?' '+esc(f.expected_rank):''}</span>`:'');
+  document.getElementById('score').innerHTML=n(f.score)+(f.eval_rank?` <span class="rk">${esc(f.eval_rank)}</span>`:'');
+  document.getElementById('evalParts').textContent=
+    '评价分构成：五维 '+n(f.five_score)+' ＋ PT '+n(f.pt_score)+' ＋ 技能 '+n(f.skill_score);
   document.getElementById('luckGame').textContent=n(f.luck_game);
   document.getElementById('luckTurn').textContent=n(f.luck_turn);
 
@@ -382,16 +462,20 @@ function render(s){
   const ar=document.getElementById('aiRow');
   if(cs.length){
     ar.style.display='';
-    document.getElementById('aiExp').textContent=n(f.score)+(+f.expected_stdev>0?(' ±'+n(f.expected_stdev)):'');
+    const rawMode=!!f.ai_raw; // [APP-SCORE-3294] hand 档：打分表原始分，非 delta
+    document.getElementById('aiExp').textContent=rawMode?'手写档':(n(f.expected)+(+f.expected_stdev>0?(' ±'+n(f.expected_stdev)):''));
     // [AI-CONF] 置信标注：两候选均值的 CI95 差分半径 ≈ √2·1.96·σ/√N
-    // （σ=引擎 expected_stdev 单局标准差，N=search_n=8192 见 matsuri_config.toml；
+    // （σ=引擎 expected_stdev 单局标准差，N=实际 search_n（/engine 读取，默认 8192）；
     //   与首选差距 < 半径的候选标 ≈，统计上分不出高下，任选即可）
     const sd=+f.expected_stdev||0;
-    const confR=sd>0?Math.round(Math.SQRT2*1.96*sd/Math.sqrt(8192)):0;
+    const confR=(!rawMode&&sd>0)?Math.round(Math.SQRT2*1.96*sd/Math.sqrt(SEARCH_N)):0;
     const sorted=[...cs].sort((a,b)=>+b.score-+a.score).slice(0,5);
     const topS=+sorted[0].score||0;
     document.getElementById('aiCands').innerHTML=sorted.map((c,i)=>{
-      const s=+c.score||0,cl=s>0?'#2e7d32':(s<0?'#c62828':'#888');
+      const s=+c.score||0;
+      if(rawMode||c.raw)
+        return `<span style="color:var(--sub);font-weight:${i==0?'800':'400'}">${i==0?'▶':''}${esc(c.name)} ${s}</span>`;
+      const cl=s>0?'#2e7d32':(s<0?'#c62828':'#888');
       const noisy=confR>0&&i>0&&Math.abs(topS-s)<confR;
       return `<span style="color:${cl};font-weight:${i==0?'800':'400'}">${i==0?'▶':''}${esc(c.name)} ${s>=0?'+':''}${s}${noisy?'<span style="font-size:9px;color:var(--dim)">≈</span>':''}</span>`;
     }).join('　');

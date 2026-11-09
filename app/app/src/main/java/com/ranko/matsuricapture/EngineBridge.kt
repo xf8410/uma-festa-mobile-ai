@@ -28,10 +28,65 @@ object EngineBridge {
         @Volatile var lastError: String = "",
         @Volatile var lines: Int = 0,
         @Volatile var decision: String = "",
-        @Volatile var decisionJson: org.json.JSONObject? = null
+        @Volatile var decisionJson: org.json.JSONObject? = null,
+        @Volatile var restarts: Int = 0
     )
 
     private val slots = ConcurrentHashMap<String, Slot>()
+
+    // [APP-CFG-3294] 用户可调引擎参数（SharedPreferences engine_cfg）：
+    //   search_threads = 搜索档 rayon 线程数（默认 4；PC 的 [search].threads 手机版出口）
+    //   search_n       = 每候选 rollout 局数（默认 8192；0 = 手写档，不启动搜索进程）
+    // 注入通道 = 上游官方环境变量 MATSURI_SEARCH_N / RAYON_NUM_THREADS（不改配置文件）。
+    private const val PREFS = "engine_cfg"
+    private const val KEY_THREADS = "search_threads"
+    private const val KEY_SEARCH_N = "search_n"
+    const val DEF_THREADS = 4
+    const val DEF_SEARCH_N = 8192
+    @Volatile private var appCtx: Context? = null
+    @Volatile private var engineFile: File? = null
+
+    fun getThreads(ctx: Context): Int =
+        ctx.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+            .getInt(KEY_THREADS, DEF_THREADS).coerceIn(1, 32)
+
+    fun getSearchN(ctx: Context): Int =
+        ctx.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+            .getInt(KEY_SEARCH_N, DEF_SEARCH_N).coerceIn(0, 200000)
+
+    /** 保存设置并重启两档引擎（局数/线程只在进程启动时生效） */
+    fun applyConfig(ctx: Context, threads: Int, searchN: Int) {
+        ctx.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
+            .putInt(KEY_THREADS, threads.coerceIn(1, 32))
+            .putInt(KEY_SEARCH_N, searchN.coerceIn(0, 200000))
+            .apply()
+        restart(ctx)
+    }
+
+    /** 重启两档引擎进程（设置变更 / 卡死恢复用） */
+    @Synchronized
+    fun restart(ctx: Context) {
+        val app = ctx.applicationContext
+        for (t in arrayOf("matsuri", "search")) {
+            val s = slot(t)
+            try { s.proc?.destroy() } catch (e: Throwable) { }
+            s.proc = null
+            s.status = "restarting"
+            s.lines = 0
+            s.restarts = 0
+        }
+        Thread {
+            try {
+                val eng = engineFile
+                if (eng != null) {
+                    startOne(app, eng, "matsuri")
+                    startOne(app, eng, "search")
+                } else startEngines(app)
+            } catch (e: Throwable) {
+                slot("matsuri").status = "restart_failed: " + (e.message ?: "")
+            }
+        }.start()
+    }
 
     /** [AI-WIRE] 决策回调：引擎每出一条 decision 就回调（trainer, 决策JSON）。
      *  NativeEngine 注册后把期望/运气/候选回写进最新帧，浮窗才有数据可渲染。 */
@@ -96,6 +151,8 @@ object EngineBridge {
             slot("search").status = "engine_missing"
             return
         }
+        appCtx = ctx.applicationContext
+        engineFile = engine
         if (!engine.canExecute()) engine.setExecutable(true)
         slot("matsuri").status = "extracting_data"
         copyAssetDir(ctx, "engine/data", dataDir(ctx))
@@ -111,6 +168,11 @@ object EngineBridge {
 
     private fun startOne(ctx: Context, engine: File, trainer: String) {
         val s = slot(trainer)
+        // [APP-CFG-3294] search 档按用户设置启动；search_n = 0 = 手写档（不浪费一个进程）
+        if (trainer == "search" && getSearchN(ctx) <= 0) {
+            s.status = "disabled: search_n=0"
+            return
+        }
         s.status = "starting"
         val pb = ProcessBuilder(
             engine.absolutePath,
@@ -121,7 +183,10 @@ object EngineBridge {
         )
         pb.directory(rootDir(ctx))
         val env = pb.environment()
-        env["RAYON_NUM_THREADS"] = if (trainer == "search") "4" else "1"
+        // [APP-CFG-3294] 上游官方环境变量：RAYON_NUM_THREADS 优先于 [search].threads；
+        // MATSURI_SEARCH_N 覆盖 [search].search_n（matsuri-cli online.rs）
+        env["RAYON_NUM_THREADS"] = if (trainer == "search") getThreads(ctx).toString() else "1"
+        if (trainer == "search") env["MATSURI_SEARCH_N"] = getSearchN(ctx).toString()
         env["MATSURI_ROOT"] = rootDir(ctx).absolutePath
         val p = pb.start()
         s.proc = p
@@ -130,7 +195,21 @@ object EngineBridge {
         Thread { drain(p.errorStream) { line -> s.lastError = line } }.start()
         Thread {
             val code = try { p.waitFor() } catch (e: Throwable) { -1 }
-            if (s.status == "running") s.status = "exited: " + code
+            if (s.status == "running") {
+                s.status = "exited: " + code
+                // [APP-CFG-3294] 崩溃自恢复：意外退出自动重拉（最多 3 次，间隔 2s）
+                if (s.restarts < 3) {
+                    s.restarts++
+                    val app = appCtx
+                    val eng = engineFile
+                    if (app != null && eng != null) {
+                        Thread {
+                            Thread.sleep(2000)
+                            if (s.proc === p) startOne(app, eng, trainer)
+                        }.start()
+                    }
+                }
+            }
         }.start()
     }
 
@@ -173,6 +252,7 @@ object EngineBridge {
             val d = org.json.JSONObject()
             d.put("trainer", trainer)
             d.put("turn", o.optInt("turn", 0))
+            d.put("kind", o.optString("decision_kind", ""))
             d.put("score", o.optDouble("score", 0.0))
             d.put("action_index", o.optInt("action_index", 0))
             d.put("expected_score", ex?.optInt("expected_score", 0) ?: 0)
@@ -207,6 +287,10 @@ object EngineBridge {
         sb.append("{")
         sb.append("\"frames\":").append(frames).append(",")
         sb.append("\"engine_note\":").append(q(extractNote)).append(",")
+        appCtx?.let { c ->
+            sb.append("\"threads\":").append(getThreads(c)).append(",")
+            sb.append("\"search_n\":").append(getSearchN(c)).append(",")
+        }
         sb.append("\"hand\":").append(slotJson(slot("matsuri"))).append(",")
         sb.append("\"search\":").append(slotJson(slot("search")))
         sb.append("}")

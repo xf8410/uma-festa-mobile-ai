@@ -10,7 +10,7 @@
 | 目录 | 内容 | 当前版本 |
 |---|---|---|
 | `so/` | SO 内存直读插件（Rust，hachimi 插件，**纯采集**：不算分、不推荐、不投影）| **v3.29.3** |
-| `app/` | Android 浮窗 App（Kotlin + WebView；**算分/彩圈/决策全部在 App 侧**）| v0.9.26-dsh35 |
+| `app/` | Android 浮窗 App（Kotlin + WebView；**算分/彩圈/决策全部在 App 侧**）| v0.9.28-dsh37 |
 | `ai-engine/umaai-matsuri/` | 祭典杯模拟器核心（Rust，上游 matsuri-core 路线）| 移植中 |
 | `ai-engine/umaai_next/` | AI 决策引擎（umaai_next，运气分/训练建议口径来源）| 移植中 |
 
@@ -39,27 +39,36 @@
   LUCK 运气投影、SHINING 彩圈规则（3.29.2 及以前在 SO 里算，3.29.3 起全部剥离）
 
 **App = 算分 + 决策**（对应 PC 版 AI 侧）：
-- `ScoreTable.kt` 本地算分：五维查定 + PT×1.9（上游 GameConstants 同口径）
+- `ScoreTable.kt` 本地评价分 = **上游官方口径**（umaai-core score.rs）：
+  五维逐项 `status_point(min(属性, 剧本上限))` 求和（0–2803 与旧表逐位一致、2800+ 外推不封顶）
+  ＋ PT×2.0 ＋ 技能分（SO mdb 评价值和），附 rank 档次表（G…LS24）
+- 运气分 PC 口径（umaai luck.rs）：显示分 E 由引擎投影（raw+(77−t)×100），
+  本轮 = E_t−E_{t−1}，本局 = E_t−E_首−首回合×100
 - 彩圈/固有本地推导：`train_type == 当前训练 && bond >= 80` / `bond >= bond_threshold`
   （引擎 umaai-next traits.rs:362 口径，SO 只出口原始 train_type/bond/threshold）
 - 引擎决策：EngineBridge 双档（matsuri/search）子进程 → mergeDecision 回写
-  （score=搜索档期望、luck_turn/luck_game、train_advice、ai_candidates）
+  （expected=搜索档期望、luck_turn/luck_game、train_advice（仅 train 决策）、ai_candidates；
+  hand 档无 detail 时回退 candidate_scores 打分表原始分展示）
+- **引擎参数用户可调**（浮窗齿轮 ⚙）：搜索线程数（RAYON_NUM_THREADS，默认 4）与
+  搜索局数（MATSURI_SEARCH_N，默认 8192，0 = 纯手写档），保存即重启引擎；
+  引擎崩溃自动重拉（≤3 次）；arm64 必带、armeabi-v7a 尽力构建（32 位兼容）
+- 浮窗交互：右下角 ◢ 把手自由缩放（无级）、折叠迷你条**点按恢复**、透明度 30–100% 可调
 
 ```
 游戏内存 ─SO(:18765 /summary+POST推送，18766被占自动改推18764/18772/18773)
   → App接收端 NativeEngine(:18766…) ─WebView浮窗轮询 /api/snapshot
-  │    normalize(): 本地算分(ScoreTable) + 本地彩圈推导(APP-SHINE-3293)
+  │    normalize(): 本地评价分(ScoreTable 官方口径) + 本地彩圈推导(APP-SHINE-3293)
   └→ EngineBridge（APK 内置 matsuri 引擎子进程，online 双档 matsuri/search）
        每帧 /summary → FrameAdapter → thisTurn.json → 引擎
        引擎 decision ─[AI-WIRE] onDecision 回调→ mergeDecision 回写最新帧
-       （score=搜索档期望、luck_turn/luck_game=umaai_review 口径、
+       （expected=搜索档期望终局分、luck_turn/luck_game=umaai luck.rs 口径、
          train_advice[5列]、ai_candidates 候选榜、ai_top 首选）
 ```
 
-- 引擎 = 上游 umaai-matsuri main + **PR#3**（在线按帧内卡组选档 / 自选比赛期限修复）CI 现合现编
+- 引擎 = 上游 umaai-matsuri **main**（PR#3 已于 2026-11-09 合入，1914a18）CI 现合现编
 - 真机 SIGSEGV 已根修（arrayfix：`read_il2cpp_int_list` 把内联 ObscuredInt[] 误当指针数组解引用）
 - festa 已接线：sid=15 走 `WorkSingleModeCharaData.<ScenarioFesta>@1232` 字段直读，acts/教诲/检查点进 /summary
-- 源码 = 仓库内权威版本（SO 3.29.3 / App 0.9.26-dsh35）；CI **不再重放任何 apply_\* 补丁**
+- 源码 = 仓库内权威版本（SO 3.29.3 / App 0.9.28-dsh37）；CI **不再重放任何 apply_\* 补丁**
   （旧 3.29.2 工作流已全部退役，防已删除的启发式代码被补丁注回）；CI 发布步骤禁止 force-push
 
 ## 编译

@@ -60,6 +60,8 @@ object NativeEngine {
     @Volatile private var lastSummaryError: String = ""
 
     private const val UNKNOWN = -1L
+    /** [APP-SCORE-3294] 运气分显示投影加成（上游 ai_config.toml luck_turn_bonus = 100） */
+    private const val LUCK_BONUS = 100L
     /** 主动拉取检查周期：只检查「推送是否静默」，不必然发起 HTTP 请求。 */
     private const val PULL_TICK_MS = 2000L
     /** 推送静默多久才触发一次兜底拉取，同时也是两次兜底拉取之间的最小间隔。
@@ -74,6 +76,7 @@ object NativeEngine {
 
     // [AI-WIRE] 引擎决策回写状态。运气分口径 = umaai_review：本局 = T(n)−T(首回合)，本轮 = T(n)−T(n−1)
     @Volatile private var aiFirstExpected: Long? = null
+    @Volatile private var aiFirstTurn: Int = 0
     @Volatile private var aiLastExpected: Long? = null
     @Volatile private var aiLastTurn: Int = -1
     @Volatile private var aiSearchTurn: Int = -1  // search 档已覆盖的回合（hand 档不覆盖它）
@@ -95,13 +98,20 @@ object NativeEngine {
                 aiSearchTurn = dTurn
                 val expected = d.optLong("expected_score", 0L)
                 if (expected > 0) {
-                    if (aiFirstExpected == null || dTurn <= aiLastTurn) aiFirstExpected = expected
+                    // [APP-SCORE-3294] 运气分对齐 PC（umaai luck.rs）：JSON 的 expected 已是
+                    // 显示分投影 E = raw + (77−turn)×bonus；本轮 = E_t − E_{t−1}（投影差分互消），
+                    // 本局 = E_t − E_首 − 首回合×bonus（初始基线按 turn=0 投影）。
+                    if (aiFirstExpected == null || dTurn <= aiLastTurn) {
+                        aiFirstExpected = expected
+                        aiFirstTurn = dTurn
+                    }
                     val prev = aiLastExpected
                     f.put("luck_turn", if (prev != null && dTurn > aiLastTurn) expected - prev else 0L)
-                    f.put("luck_game", expected - (aiFirstExpected ?: expected))
+                    f.put("luck_game", expected - (aiFirstExpected ?: expected) - aiFirstTurn.toLong() * LUCK_BONUS)
                     aiLastExpected = expected
                     aiLastTurn = dTurn
-                    f.put("score", expected)  // 预估评分 = 搜索档期望终局分（PC 面板「期望」）
+                    // 期望终局分写独立字段；score 保持本地官方口径评价分，不覆盖
+                    f.put("expected", expected)
                     f.put("expected_stdev", d.optInt("expected_stdev", 0))
                     f.put("expected_rank", d.optString("expected_rank", ""))
                 }
@@ -110,6 +120,10 @@ object NativeEngine {
             val baseline = d.optDouble("baseline", 0.0)
             val detail = d.optJSONArray("detail")
             val descs = d.optJSONArray("descriptions")
+            val scoresArr = d.optJSONArray("scores")
+            // [APP-SCORE-3294] 五列建议只在训练决策更新（kind=train）；
+            // race/event/advice 决策的候选榜照更新，但不污染 12345 训练列
+            val isTrain = d.optString("kind", "train") == "train"
             if (detail != null && detail.length() > 0) {
                 val cands = JSONArray()
                 var best: JSONObject? = null
@@ -136,11 +150,43 @@ object NativeEngine {
                     }
                     cols.put(hit ?: JSONObject())
                 }
-                f.put("train_advice", cols)
+                if (isTrain) f.put("train_advice", cols)
                 f.put("ai_candidates", cands)
+                f.put("ai_raw", false)
                 if (best != null) {
                     val bs = best!!.optLong("score")
                     f.put("ai_top", "▶ " + best!!.optString("name") + " " + (if (bs >= 0) "+" else "") + bs)
+                }
+            } else if (scoresArr != null && scoresArr.length() > 0) {
+                // [APP-SCORE-3294] hand 档兜底：手写决策没有 baseline / candidate_detail，
+                // candidate_scores 是打分表原始分（PC 小黑板口径）——原样展示（raw 标记，
+                // 前端不做 delta 正负着色与 ≈ 置信标注），手写逻辑照样传导到 12345 五列。
+                val cands = JSONArray()
+                var best: JSONObject? = null
+                for (k in 0 until scoresArr.length()) {
+                    if (scoresArr.isNull(k)) continue
+                    val sc = Math.round(scoresArr.optDouble(k, 0.0))
+                    val nm = descs?.optString(k, "")?.takeIf { it.isNotEmpty() }
+                        ?: ACTION_NAMES.getOrElse(k) { "动作$k" }
+                    val item = JSONObject()
+                        .put("index", k).put("name", nm).put("score", sc).put("raw", true)
+                    cands.put(item)
+                    if (best == null || sc > best!!.optLong("score")) best = item
+                }
+                val cols = JSONArray()
+                for (i in 0..4) {
+                    var hit: JSONObject? = null
+                    for (k in 0 until cands.length()) {
+                        val it = cands.optJSONObject(k)
+                        if (it != null && it.optInt("index") == i) { hit = it; break }
+                    }
+                    cols.put(hit ?: JSONObject())
+                }
+                if (isTrain) f.put("train_advice", cols)
+                f.put("ai_candidates", cands)
+                f.put("ai_raw", true)
+                if (best != null) {
+                    f.put("ai_top", "▶ " + best!!.optString("name") + " " + best!!.optLong("score"))
                 }
             }
             f.put("ai_trainer", trainer)
@@ -593,15 +639,15 @@ object NativeEngine {
         }
         if (festa != null && acts.length() == 0) notes.put("festa.acts empty")
 
-        // ── [APP-SCORE-3293] SO 3.29.3 纯采集化后算分移交 App ─────────────
-        // 口径与上游 EtherealAO/UmaAi GameConstants 一致：五维查定 + PT×1.9
-        // （切者 buff 未检测，恒按 1.9，与被替换的 SO 行为相同）。
-        // 引擎决策到达后 mergeDecision 会用期望终局分覆盖 score 字段。
-        val fiveSum = (0 until 5).sumOf { five.optLong(it, 0).coerceAtLeast(0) }.toInt()
+        // ── [APP-SCORE-3294] 评价分 = 上游官方口径（ScoreTable.kt ↔ umaai-core score.rs）──
+        // 五维逐项 status_point(min(属性, 剧本上限)) 求和 + PT×2.0 + 技能分（SO mdb 评价值和），
+        // 附 rank 档次。引擎期望终局分由 mergeDecision 写 expected 字段，不覆盖本评价分。
+        val fiveArr = IntArray(5) { five.optLong(it, 0L).coerceIn(0L, Int.MAX_VALUE.toLong()).toInt() }
         val spNow = iv(stats, "skill_point").coerceAtLeast(0).toInt()
-        val fiveScore = ScoreTable.fiveScore(fiveSum)
-        val ptScore = ScoreTable.ptScore(spNow, false)
+        val fiveScore = ScoreTable.fiveScore(fiveArr)
+        val ptScore = ScoreTable.ptScore(spNow)
         val skillEval = iv(summary.optJSONObject("skills"), "eval").coerceAtLeast(0)
+        val evalScore = fiveScore + ptScore + skillEval
 
         return JSONObject()
             .put("seq", frames.size + 1)
@@ -640,11 +686,12 @@ object NativeEngine {
             .put("missing", missing)
             .put("has_festa", festa != null)
             .put("fields_ok", stats != null)
-            // [APP-SCORE-3293] 本地算分（ScoreTable.kt）；skill_score = SO 的 mdb 技能评价值和
-            .put("score", (fiveScore + ptScore).toLong())
+            // [APP-SCORE-3294] 本地评价分（官方口径）+ 构成项 + 档次
+            .put("score", evalScore.toLong())
             .put("five_score", fiveScore.toLong())
             .put("pt_score", ptScore.toLong())
             .put("skill_score", skillEval)
+            .put("eval_rank", ScoreTable.rankOf(evalScore))
             .put("raw", summary)
     }
 

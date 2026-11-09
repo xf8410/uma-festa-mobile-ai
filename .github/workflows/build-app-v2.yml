@@ -72,6 +72,17 @@ jobs:
           mkdir -p "$GITHUB_WORKSPACE/app/app/src/main/jniLibs/arm64-v8a"
           cp target/aarch64-linux-android/release/matsuri "$GITHUB_WORKSPACE/app/app/src/main/jniLibs/arm64-v8a/libmatsuri_engine.so"
           ls -l "$GITHUB_WORKSPACE/app/app/src/main/jniLibs/arm64-v8a/"
+          # [APP-CFG-3294] 兼容性：armeabi-v7a（32 位老机）尽力构建，失败不阻塞主包（arm64 兜底）
+          rustup target add armv7-linux-androideabi || true
+          printf '[target.armv7-linux-androideabi]\nlinker = "%s/armv7a-linux-androideabi24-clang"\n' "$TC" >> .cargo/config.toml
+          { echo "CC_armv7_linux_androideabi=$TC/armv7a-linux-androideabi24-clang"; echo "AR_armv7_linux_androideabi=$TC/llvm-ar"; } >> "$GITHUB_ENV"
+          if cargo build --release --target armv7-linux-androideabi -p matsuri-cli 2>&1 | tail -3; then
+            mkdir -p "$GITHUB_WORKSPACE/app/app/src/main/jniLibs/armeabi-v7a"
+            cp target/armv7-linux-androideabi/release/matsuri "$GITHUB_WORKSPACE/app/app/src/main/jniLibs/armeabi-v7a/libmatsuri_engine.so" \
+              && echo "armv7 engine bundled" || echo "armv7 copy skipped"
+          else
+            echo "armv7 build failed（非阻塞，arm64 照常）"
+          fi
 
       - name: Bundle data
         run: |
@@ -113,7 +124,11 @@ jobs:
           : > app-capture.txt
           K=app/app/src/main/java/com/ranko/matsuricapture
           grep -qF '[APP-SHINE-3293]' $K/NativeEngine.kt
-          grep -qF '[APP-SCORE-3293]' $K/NativeEngine.kt
+          grep -qF '[APP-SCORE-3294]' $K/ScoreTable.kt
+          grep -qF '[APP-SCORE-3294]' $K/NativeEngine.kt
+          grep -qF '[APP-CFG-3294]' $K/EngineBridge.kt
+          grep -qF '[APP-FIX-106]' $K/FloatingWindowService.kt
+          grep -qF '[APP-CFG-3294]' app/app/src/main/assets/float.html
           ! grep -qF 'iv(summary, "score")' $K/NativeEngine.kt
           grep -qF '[APP-FIX-089]' app/app/src/main/assets/index.html
           grep -qF '[APP-FIX-090]' $K/FrameAdapter.kt
@@ -131,8 +146,8 @@ jobs:
           grep -qF '[APP-FIX-103]' app/app/src/main/assets/index.html
           grep -qF '[APP-FIX-104]' app/app/src/main/assets/index.html
           grep -qF 'startOne' $K/EngineBridge.kt
-          sed -i 's/versionName = "[^"]*"/versionName = "0.9.27-dsh36"/' app/app/build.gradle.kts
-          sed -i 's/versionCode = [0-9]\+/versionCode = 52/' app/app/build.gradle.kts
+          sed -i 's/versionName = "[^"]*"/versionName = "0.9.28-dsh37"/' app/app/build.gradle.kts
+          sed -i 's/versionCode = [0-9]\+/versionCode = 53/' app/app/build.gradle.kts
           grep -E 'versionCode|versionName' app/app/build.gradle.kts
 
       - uses: gradle/actions/setup-gradle@v4
@@ -151,15 +166,15 @@ jobs:
           set -euo pipefail
           mkdir -p app/dist
           SRC=$(find app/app/build/outputs/apk/release -name "*.apk" | head -1)
-          cp "$SRC" app/dist/matsuri-ai-0.9.27-dsh36.apk
+          cp "$SRC" app/dist/matsuri-ai-0.9.28-dsh37.apk
           cp "$SRC" app/dist/matsuri-ai-latest.apk
           ls -l app/dist/
           git config user.name dsh-bot
           git config user.email dsh-bot@users.noreply.github.com
-          git add -f app/dist/matsuri-ai-0.9.27-dsh36.apk app/dist/matsuri-ai-latest.apk
+          git add -f app/dist/matsuri-ai-0.9.28-dsh37.apk app/dist/matsuri-ai-latest.apk
           git add -f app/app/src/main/java app/app/src/main/assets/index.html app/app/build.gradle.kts 2>/dev/null || true
           git add -u  # tracked 修改全暂存，否则 rebase 报 unstaged changes
-          git commit -m "build(app): 0.9.27-dsh36 候选置信标注+引擎构建切纯main" || echo nothing
+          git commit -m "build(app): 0.9.28-dsh37 PC同步评价分运气分+引擎设置+浮窗交互" || echo nothing
           git fetch origin main || true
           git rebase origin/main || git rebase --abort || true
           git push origin HEAD:main || echo "push failed（禁止 force，防吞并提）"
