@@ -42,20 +42,65 @@ const CARD_DB = (() => {
   if (!p) return null;
   try { return JSON.parse(fs.readFileSync(p, 'utf8')); } catch (e) { notes.push('cardDB unreadable'); return null; }
 })();
-const persons = (src.support_cards || []).map(c => {
+// [APP-FIX-105] 羁绊双源：Festa 布局 partners 恒空 → 主源 evaluation 段（target_id→bond），
+// target_id 由 festa.persons 的 chara_id 匹配卡位反查；partners 路径兜底。
+const bondByTarget = {};
+(src.evaluation || []).forEach(e => {
+  const tid = Number(e.target_id || e.partner_id || 0);
+  if (tid > 0) bondByTarget[tid] = Number(e.current_bond || e.evaluation || 0);
+});
+const festaSrcEarly = src.festa || {};
+const festaPersons = (festaSrcEarly.persons || []).map(p => ({
+  targetId: Number(p.target_id || p.targetId || 0),
+  charaId: Number(p.chara_id || p.charaId || 0),
+  actType: Number(p.act_type || p.actType || 0)
+})).filter(p => p.targetId > 0);
+const cardChara = cid => Number((CARD_DB && CARD_DB[cid] && CARD_DB[cid].charaId) || 0);
+const slotByChara = {};
+(src.support_cards || []).forEach((c, i) => {
+  const cid = Number(c.support_card_id || c.id || 0);
+  const ch = cardChara(cid);
+  if (ch > 0) slotByChara[ch] = i;
+});
+const targetBySlot = {};
+festaPersons.forEach(fp => {
+  // targetId>=1000 = 神驹段（restore.rs PROTOCOL_GUEST_ID_MIN）；卡角色 charaId 本身可 ≥1000
+  if (fp.targetId >= 1 && fp.targetId <= 999) {
+    const slot = slotByChara[fp.charaId];
+    if (slot !== undefined && targetBySlot[slot] === undefined) targetBySlot[slot] = fp.targetId;
+  }
+});
+const persons = (src.support_cards || []).map((c, i) => {
   const cid = Number(c.support_card_id || c.id || 0);
   const p = partnerByCard[cid] || {};
+  const bondViaFesta = targetBySlot[i] !== undefined ? bondByTarget[targetBySlot[i]] : undefined;
   return {
     personType: FRIEND_CARDS.includes(cid) ? 1 : 2,
-    charaId: Number((CARD_DB && CARD_DB[cid] && CARD_DB[cid].charaId) || p.partner_id || 0),
-    friendship: Number(p.current_bond || 0)
+    charaId: cardChara(cid) || Number(p.partner_id || 0),
+    friendship: Number(bondViaFesta !== undefined ? bondViaFesta : (p.current_bond || 0))
   };
 });
-// personDistribution：5 训练位 × 5 槽，元素是 persons 的下标，-1 = 空
+// personDistribution：5 训练位 × 5 槽，元素是 persons 的下标（卡位）/ chara_id（神驹≥1000），-1 = 空
+// [APP-FIX-105] 主源 = festa.persons（按 target_id 升序，restore.rs 落位口径）；partners 反推兜底
 const cardIndexByCard = {};
 (src.support_cards || []).forEach((c, i) => { cardIndexByCard[Number(c.support_card_id || c.id || 0)] = i; });
 const personDistribution = [0, 1, 2, 3, 4].map(() => [-1, -1, -1, -1, -1]);
-(src.trainings || []).forEach(t => {
+let distFromFesta = false;
+{
+  const counts = [0, 0, 0, 0, 0];
+  [...festaPersons].sort((a, b) => a.targetId - b.targetId).forEach(fp => {
+    if (fp.actType < 1 || fp.actType > 5) return;
+    if (fp.targetId >= 101 && fp.targetId <= 115) return; // NPC 占位
+    const row = fp.actType - 1;
+    if (counts[row] >= 5) return;
+    let v;
+    if (fp.targetId >= 1000) v = fp.charaId;
+    else { const s = slotByChara[fp.charaId]; if (s === undefined) return; v = s; }
+    personDistribution[row][counts[row]++] = v;
+    distFromFesta = true;
+  });
+}
+if (!distFromFesta) (src.trainings || []).forEach(t => {
   const ci = Number(t.command_id || 0) - 5101;
   if (ci < 0 || ci > 4) return;
   let slot = 0;
@@ -77,18 +122,20 @@ const acts = (festaSrc.acts || []).map(a => ({
   outingGainLevel: Number(a.friend_outing_gain_act_level || 0)
 }));
 const cps = (festaSrc.checkpoints || []).map(c => ({ scheduleId: Number(c.schedule_id || 0), resultType: Number(c.result_type || 0) }));
-// festa.persons 只能含「卡位人头」（不含友人卡），按 personDistribution 反推；targetId = persons 下标
-const friendIndex = new Set();
-(src.support_cards || []).forEach((c, i) => {
-  const cid = Number(c.support_card_id || c.id || 0);
-  if (FRIEND_CARDS.includes(cid)) friendIndex.add(i);
-});
+// [APP-FIX-105] 帧 festa.persons 直传 SO 剧本段（上游 FestaPerson：targetId/actType/origin）：
+// 卡位 chara_id 命中卡组 → card（吾妻 → friend）；chara_id>=1000 → guest；101..115 占位丢弃
 const fPersons = [];
-personDistribution.forEach((row, actIdx) => {
-  row.forEach(pi => {
-    if (pi < 0 || friendIndex.has(pi)) return;
-    fPersons.push({ targetId: pi, actType: actIdx + 1, origin: 'card' });
-  });
+[...festaPersons].sort((a, b) => a.targetId - b.targetId).forEach(fp => {
+  if (fp.targetId >= 101 && fp.targetId <= 115) return;
+  let origin;
+  if (fp.targetId >= 1000) origin = 'guest';
+  else {
+    const slot = slotByChara[fp.charaId];
+    if (slot === undefined) return;
+    const cid = Number((src.support_cards || [])[slot] && ((src.support_cards || [])[slot].support_card_id || (src.support_cards || [])[slot].id) || 0);
+    origin = FRIEND_CARDS.includes(cid) ? 'friend' : 'card';
+  }
+  fPersons.push({ targetId: fp.targetId, actType: fp.actType, origin });
 });
 const baseGame = {
   scenarioId: 15,
@@ -115,8 +162,8 @@ const baseGame = {
   persons,
   personDistribution,
   lockedTrainingId: -1,
-  friendship_noncard_yayoi: 0,
-  friendship_noncard_reporter: 0,
+  friendship_noncard_yayoi: bondByTarget[102] || 0,   // [APP-FIX-105] 102=理事长
+  friendship_noncard_reporter: bondByTarget[103] || 0, // [APP-FIX-105] 103=记者
   friend_stage: 0,
   friend_outgoingUsed: 0,
   playing_state: 1,

@@ -87,13 +87,24 @@ object NativeEngine {
      *  只收与当前帧同回合的决策（决策天然滞后于帧）；search 档优先，hand 档先到先用。 */
     private fun mergeDecision(trainer: String, d: JSONObject) {
         val f = latest ?: return
+        // [APP-FIX-105] 引擎拒帧原因透传：error 行不带回合号，不按回合对齐，直接写当前帧
+        if (d.optString("kind") == "engine_error") {
+            synchronized(gate) {
+                if (latest !== f) return
+                f.put("engine_error", d.optString("error", ""))
+                f.put("engine_error_trainer", trainer)
+            }
+            return
+        }
         val dTurn = d.optInt("turn", -1)
-        val fTurn = f.optInt("turn", -1)
+        // [APP-FIX-105] 对齐用引擎口径（turn_engine）；老帧没有该字段时退回 turn（可能错位，仅兜底）
+        val fTurn = if (f.has("turn_engine")) f.optInt("turn_engine", -1) else f.optInt("turn", -1)
         if (dTurn < 0 || fTurn < 0 || dTurn != fTurn) return
         val isSearch = trainer == "search"
         if (!isSearch && aiSearchTurn == dTurn) return
         synchronized(gate) {
             if (latest !== f) return  // 帧已换新，旧帧不回写
+            f.remove("engine_error")  // [APP-FIX-105] 出决策 = 拒帧已翻篇
             if (isSearch) {
                 aiSearchTurn = dTurn
                 val expected = d.optLong("expected_score", 0L)
@@ -616,6 +627,65 @@ object NativeEngine {
             o.put("gains", gains)
             trainings.put(o)
         }
+        // [APP-FIX-105] Festa 布局下 SO 读不了 TrainingPartnerArray → trainings[].partners 恒空。
+        // 用 festa.persons（剧本段直读，含担当 act_type）+ evaluation（羁绊）合成站位人头，
+        // 让五列人头/羁绊恢复显示；彩圈/固有因无 train_type 判不出来（shining=-1 未知，不硬猜）。
+        run {
+            val fPersons = festa?.optJSONArray("persons") ?: return@run
+            if (fPersons.length() == 0) return@run
+            // chara_id → 支援卡 id（summary support_cards 自带 chara_id，不依赖 cardDB）
+            val cardByChara = HashMap<Long, Long>()
+            val scArr = listOf(summary, "support_cards")
+            for (i in 0 until scArr.length()) {
+                val s = scList.optJSONObject(i) ?: continue
+                val ch = iv(s, "chara_id"); val cid = iv(s, "support_card_id")
+                if (ch > 0 && cid > 0 && !cardByChara.containsKey(ch)) cardByChara[ch] = cid
+            }
+            // target_id → current_bond（evaluation 段与 festa.persons 同 id 空间）
+            val bondByTarget = HashMap<Long, Long>()
+            val evArr = summary.optJSONArray("evaluation")
+            if (evArr != null) for (i in 0 until evArr.length()) {
+                val e = evArr.optJSONObject(i) ?: continue
+                val tid = iv(e, "target_id")
+                if (tid > 0) bondByTarget[tid] = iv(e, "current_bond")
+            }
+            for (i in 0 until trainings.length()) {
+                val t = trainings.optJSONObject(i) ?: continue
+                val idx = trainIndexOfCmd(iv(t, "command_id").toInt())
+                if (idx < 0) continue
+                val existing = t.optJSONArray("partners")
+                if (existing != null && existing.length() > 0) continue // 有人头数据不覆盖
+                val synth = JSONArray()
+                for (j in 0 until fPersons.length()) {
+                    val fp = fPersons.optJSONObject(j) ?: continue
+                    if (iv(fp, "act_type").toInt() != idx + 1) continue
+                    val tid = iv(fp, "target_id")
+                    if (tid in 101..115) continue // NPC 占位
+                    val ch = iv(fp, "chara_id")
+                    val bond = bondByTarget[tid] ?: 0L
+                    if (tid >= 1000) { // 神驹看 target_id 段；chara_id 本身可 ≥1000（1022 美妙等）
+                        synth.put(JSONObject()
+                            .put("partner_id", tid).put("support_card_id", UNKNOWN)
+                            .put("current_bond", bond)
+                            .put("is_shining", UNKNOWN).put("is_unique_active", UNKNOWN)
+                            .put("bond_threshold", UNKNOWN).put("support_card_type", UNKNOWN)
+                            .put("is_tips_event", 0L).put("partner_type", 0L)
+                            .put("train_type", UNKNOWN).put("name", "神驹#" + ch))
+                    } else {
+                        val cid = cardByChara[ch] ?: continue
+                        synth.put(JSONObject()
+                            .put("partner_id", tid).put("support_card_id", cid)
+                            .put("current_bond", bond)
+                            .put("is_shining", UNKNOWN).put("is_unique_active", UNKNOWN)
+                            .put("bond_threshold", UNKNOWN).put("support_card_type", UNKNOWN)
+                            .put("is_tips_event", 0L).put("partner_type", 2L)
+                            .put("train_type", UNKNOWN).put("name", ""))
+                    }
+                }
+                t.put("partners", synth)
+                if (synth.length() > 0) t.put("heads", synth.length())
+            }
+        }
         val supportCards = JSONArray()
         val scList = listOf(summary, "support_cards")
         for (i in 0 until scList.length()) {
@@ -654,6 +724,9 @@ object NativeEngine {
             .put("ts_ms", System.currentTimeMillis())
             .put("source", source)
             .put("turn", iv(summary, "turn"))
+            // [APP-FIX-105] 引擎口径回合（0..77 推进制）：summary.turn 是 countdown 剩余回合，
+            // 与引擎决策行的 turn 差 1+，mergeDecision 对齐必须用这个
+            .put("turn_engine", ((iv(summary, "month").toInt().coerceAtLeast(1) - 1) * 2 + (iv(summary, "half").toInt().coerceAtLeast(1) - 1)).coerceIn(0, 77))
             .put("raw_total_turn_num", iv(summary, "raw_total_turn_num"))
             .put("year", iv(summary, "year"))
             .put("month", iv(summary, "month"))

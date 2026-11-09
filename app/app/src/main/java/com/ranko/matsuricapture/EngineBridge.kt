@@ -29,7 +29,11 @@ object EngineBridge {
         @Volatile var lines: Int = 0,
         @Volatile var decision: String = "",
         @Volatile var decisionJson: org.json.JSONObject? = null,
-        @Volatile var restarts: Int = 0
+        @Volatile var restarts: Int = 0,
+        // [APP-FIX-105] 引擎健康三连：connected=握手已到；engineError=最近拒帧原因；lastSkip=最近跳帧原因
+        @Volatile var connected: Boolean = false,
+        @Volatile var engineError: String = "",
+        @Volatile var lastSkip: String = ""
     )
 
     private val slots = ConcurrentHashMap<String, Slot>()
@@ -241,12 +245,38 @@ object EngineBridge {
         }
     }
 
-    /** 解析引擎 stdout 的决策行（type=decision） */
+    /** 解析引擎 stdout 行：decision=决策；error=拒帧原因（[APP-FIX-105] 透传 UI，不再静默丢）；
+     *  info(connected)=启动握手（标记已就绪，区分「进程没起」与「帧被拒」） */
     private fun onEngineLine(line: String, trainer: String) {
         try {
             if (!line.contains("\"type\"")) return
             val o = org.json.JSONObject(line)
-            if (o.optString("type") != "decision") return
+            val ty = o.optString("type")
+            val s0 = slot(trainer)
+            if (ty == "info") {
+                when (o.optString("event")) {
+                    "connected" -> { s0.connected = true; if (s0.status == "running" || s0.status == "starting") s0.status = "connected" }
+                    // 跳帧（重复帧 / 事件帧无数据 / 结算中间态）：记状态不进帧——重复帧是常态
+                    "frame_skipped" -> s0.lastSkip = o.optString("reason", "")
+                }
+                return
+            }
+            if (ty == "error") {
+                val msg = o.optString("message", o.optString("reason", ""))
+                if (msg.isNotEmpty()) {
+                    s0.engineError = msg
+                    s0.lastError = msg
+                    // 走决策通道回写帧：UI 显示「引擎：原因」而不是永远「等待引擎决策」
+                    val d = org.json.JSONObject()
+                    d.put("trainer", trainer)
+                    d.put("kind", "engine_error")
+                    d.put("error", msg)
+                    try { onDecision?.invoke(trainer, d) } catch (e: Throwable) { }
+                }
+                return
+            }
+            if (ty != "decision") return
+            s0.engineError = "" // 出新决策 = 上一帧的拒绝已翻篇
             val ex = o.optJSONObject("scenario_extra")
             // [AI-WIRE] 直接组 JSONObject（原来是拼字符串），顺带回调给 NativeEngine 回写帧
             val d = org.json.JSONObject()
@@ -275,6 +305,9 @@ object EngineBridge {
         sb.append("{")
         sb.append("\"status\":").append(q(s.status)).append(",")
         sb.append("\"lines\":").append(s.lines).append(",")
+        sb.append("\"connected\":").append(s.connected).append(",")
+        sb.append("\"engine_error\":").append(q(trim(s.engineError))).append(",")
+        sb.append("\"last_skip\":").append(q(trim(s.lastSkip))).append(",")
         sb.append("\"last_line\":").append(q(trim(s.lastLine))).append(",")
         sb.append("\"last_error\":").append(q(trim(s.lastError))).append(",")
         sb.append("\"decision\":").append(if (s.decision.isEmpty()) "null" else s.decision)
