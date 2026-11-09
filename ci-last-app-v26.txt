@@ -1,4 +1,4 @@
-job_status=success
+job_status=failure
 To honour the JVM settings for this build a single-use Daemon process will be forked. For more on this, please refer to https://docs.gradle.org/8.11.1/userguide/gradle_daemon.html#sec:disabling_the_daemon in the Gradle documentation.
 Daemon will be stopped at the end of the build 
 > Task :app:buildKotlinToolingMetadata
@@ -10,17 +10,17 @@ Daemon will be stopped at the end of the build
 > Task :app:mapReleaseSourceSetPaths
 > Task :app:generateReleaseResources
 > Task :app:packageReleaseResources
+> Task :app:mergeReleaseResources
 > Task :app:createReleaseCompatibleScreenManifests
 > Task :app:extractDeepLinksRelease
 > Task :app:parseReleaseLocalResources
-> Task :app:mergeReleaseResources
 > Task :app:processReleaseMainManifest
 > Task :app:processReleaseManifest
 > Task :app:javaPreCompileRelease
+> Task :app:processReleaseManifestForPackage
 > Task :app:extractProguardFiles
 > Task :app:mergeReleaseJniLibFolders
 > Task :app:mergeReleaseNativeLibs
-> Task :app:processReleaseManifestForPackage
 > Task :app:checkReleaseDuplicateClasses
 > Task :app:desugarReleaseFileDependencies
 > Task :app:mergeReleaseStartupProfile
@@ -34,38 +34,36 @@ Unable to strip the following libraries, packaging them as they are: libmatsuri_
 > Task :app:mergeReleaseShaders
 > Task :app:compileReleaseShaders NO-SOURCE
 > Task :app:generateReleaseAssets UP-TO-DATE
+> Task :app:processReleaseResources
 > Task :app:mergeReleaseAssets
 > Task :app:extractReleaseVersionControlInfo
-> Task :app:processReleaseResources
 > Task :app:compressReleaseAssets
 > Task :app:collectReleaseDependencies
 > Task :app:sdkReleaseDependencyData
-> Task :app:validateSigningRelease
 > Task :app:optimizeReleaseResources
+> Task :app:validateSigningRelease
 > Task :app:writeReleaseAppMetadata
 > Task :app:writeReleaseSigningConfigVersions
 > Task :app:mergeExtDexRelease
 
 > Task :app:compileReleaseKotlin
-w: file:///home/runner/work/uma-festa-mobile-ai/uma-festa-mobile-ai/app/app/src/main/java/com/ranko/matsuricapture/FloatingWindowService.kt:109:22 'var allowUniversalAccessFromFileURLs: Boolean' is deprecated. Deprecated in Java.
-w: file:///home/runner/work/uma-festa-mobile-ai/uma-festa-mobile-ai/app/app/src/main/java/com/ranko/matsuricapture/FloatingWindowService.kt:162:40 'static field TYPE_PHONE: Int' is deprecated. Deprecated in Java.
-w: file:///home/runner/work/uma-festa-mobile-ai/uma-festa-mobile-ai/app/app/src/main/java/com/ranko/matsuricapture/MainActivity.kt:41:22 'var allowUniversalAccessFromFileURLs: Boolean' is deprecated. Deprecated in Java.
+e: file:///home/runner/work/uma-festa-mobile-ai/uma-festa-mobile-ai/app/app/src/main/java/com/ranko/matsuricapture/NativeEngine.kt:694:49 Argument type mismatch: actual type is 'kotlin.Long', but 'kotlin.Int' was expected.
 
-> Task :app:compileReleaseJavaWithJavac NO-SOURCE
-> Task :app:generateReleaseLintVitalReportModel
-> Task :app:dexBuilderRelease
-> Task :app:mergeReleaseGlobalSynthetics
-> Task :app:processReleaseJavaRes
-> Task :app:mergeReleaseJavaResource
-> Task :app:mergeDexRelease
-> Task :app:compileReleaseArtProfile
-> Task :app:packageRelease
-> Task :app:createReleaseApkListingFileRedirect
-> Task :app:lintVitalAnalyzeRelease
-> Task :app:lintVitalReportRelease
-> Task :app:lintVitalRelease
-> Task :app:assembleRelease
-gradle/actions: Writing build results to /home/runner/work/_temp/.gradle-actions/build-results/__run_5-1794192681052.json
+> Task :app:compileReleaseKotlin FAILED
+gradle/actions: Writing build results to /home/runner/work/_temp/.gradle-actions/build-results/__run_5-1794195188526.json
 
-BUILD SUCCESSFUL in 39s
-48 actionable tasks: 48 executed
+FAILURE: Build failed with an exception.
+
+* What went wrong:
+Execution failed for task ':app:compileReleaseKotlin'.
+> A failure occurred while executing org.jetbrains.kotlin.compilerRunner.GradleCompilerRunnerWithWorkers$GradleKotlinCompilerWorkAction
+   > Compilation error. See log for more details
+
+* Try:
+> Run with --stacktrace option to get the stack trace.
+> Run with --info or --debug option to get more log output.
+> Run with --scan to get full insights.
+> Get more help at https://help.gradle.org.
+
+BUILD FAILED in 18s
+36 actionable tasks: 36 executed
