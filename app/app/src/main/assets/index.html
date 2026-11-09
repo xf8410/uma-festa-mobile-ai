@@ -214,11 +214,13 @@ h1.big{font-size:33px;line-height:1.3;font-weight:700;margin:0 0 6px;letter-spac
 /* ===== 电脑版原样盘面（1:1 复刻 FestaDisplayRenderer.cs） ===== */
 .board-overlay{position:absolute;inset:0;z-index:80;background:#000;display:none;flex-direction:column;color:#d8dedb}
 .board-overlay.show{display:flex}
-.bo-bar{flex:0 0 auto;display:flex;align-items:center;gap:6px;padding:8px 10px 8px 14px;border-bottom:1px solid #2d3a33;font-size:11px;color:#9fb3a8}
+.bo-bar{flex:0 0 auto;display:flex;align-items:center;gap:8px;
+  padding:max(calc(env(safe-area-inset-top,0px) + 10px),30px) 12px 10px 14px;
+  border-bottom:1px solid #2d3a33;font-size:12px;color:#9fb3a8}
 .bo-bar b{color:#39e07a;font-size:12px;margin-right:auto}
-.bo-bar button{background:#0d1a13;color:#9fe8bd;border:1px solid #2f6f4e;border-radius:5px;padding:4px 8px;font:inherit;font-size:11px;cursor:pointer}
+.bo-bar button{background:#0d1a13;color:#9fe8bd;border:1px solid #2f6f4e;border-radius:6px;padding:10px 14px;min-height:40px;font:inherit;font-size:13px;cursor:pointer}
 .bo-scroll{flex:1;overflow:auto;background:#000;padding:10px}
-.bo-tip{flex:0 0 auto;padding:6px 14px;border-top:1px solid #2d3a33;color:#6f8a7a;font-size:10px}
+.bo-tip{flex:0 0 auto;padding:6px 14px max(calc(env(safe-area-inset-bottom,0px) + 6px),10px);border-top:1px solid #2d3a33;color:#6f8a7a;font-size:10px}
 .badge.off{background:#4a2a28;color:#f0c8c2}
 .badge.warn{background:#4a4026;color:#f0dfae}
 
@@ -1496,11 +1498,13 @@ function setBoardZoom(z){
   document.getElementById('board-root').style.zoom = boardZ;
 }
 function fitBoard(){
-  const root = document.getElementById('board-root');
-  root.style.zoom = 1;
-  const nat = root.scrollWidth || 900;
+  const main = document.getElementById('boMain') || document.getElementById('board-root');
+  main.style.zoom = '';
+  document.getElementById('board-root').style.zoom = 1;
+  const nat = main.scrollWidth || 900;   // 只适配五列主区，右栏信息列不参与（[APP-FIX-108]）
   const w = (document.getElementById('boScroll').clientWidth || 370) - 20;
-  setBoardZoom(Math.max(.1, Math.min(3.0, w / nat))); // [APP-FIX-093] 适配也能放大
+  setBoardZoom(Math.max(.45, Math.min(3.0, w / nat))); // 下限 0.45：再小字没法读，装不下走横滑
+  const sc = document.getElementById('boScroll'); sc.scrollLeft = 0; sc.scrollTop = 0;
 }
 function boardZoom(d){ setBoardZoom(boardZ + d * .08); }
 function showBoard(){
