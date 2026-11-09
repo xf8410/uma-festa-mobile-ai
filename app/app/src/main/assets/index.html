@@ -505,21 +505,22 @@ h1.big{font-size:33px;line-height:1.3;font-weight:700;margin:0 0 6px;letter-spac
         <div class="hint">每次渲染配置前由 assert_real() 硬校验：禁止灌种马、灌 PT、换专项马娘、盾超过 5 次。两次继承 ≈ 2400 属性属真实可及量级。</div>
       </div>
 
+      <!-- [APP-CFG-3295] 引擎参数：MCTS 局数 + 线程数（与浮窗 ⚙ 面板同源同存储） -->
       <div class="card">
-        <h2>冠军手写档 <span class="badge">gp_pi</span></h2>
-        <div class="kpi"><div><b>+485.0</b><i>合并 Δ</i></div><div><b>4.30</b><i>t 值</i></div><div><b>0.00002</b><i>p 值</i></div></div>
-        <div class="row"><span class="k">pt_favor_rate</span><span class="v mono">2.9778</span></div>
-        <div class="row"><span class="k">advice.route</span><span class="v mono">951.2</span></div>
-        <div class="row"><span class="k">weights.motivation</span><span class="v mono">49.1485</span></div>
-        <div class="row"><span class="k">weights.gauge</span><span class="v mono">40.3740</span></div>
-        <div class="row"><span class="k">dynamic.keiko_tempo</span><span class="v mono">1.6904</span></div>
-        <div class="row"><span class="k">dynamic.status_catchup</span><span class="v mono">2.1144</span></div>
-        <div class="hint">31 族算法大比武唯一通过 Bonferroni 校正者，T/U/V 三块全正。FlatSearch 序列决策族 8 对配对 0 胜 8 负，已止损。</div>
+        <h2>引擎参数 <span class="badge">MCTS</span></h2>
+        <div class="field"><label>MCTS 局数（0 = 纯手写档）</label>
+          <input id="s-searchn" value="8192" inputmode="numeric">
+          <div class="tip">默认 8192；改成 0 则只跑冠军手写档基策略，不启动搜索进程（省电）</div></div>
+        <div class="field"><label>搜索线程数（1–32）</label>
+          <input id="s-threads" value="4" inputmode="numeric">
+          <div class="tip">手机建议 4–8；线程越高越耗电发热，超过核心数无收益</div></div>
+        <button class="btn" onclick="applyEngineCfg()">应用引擎参数</button>
+        <div class="hint">保存后立即重启引擎生效；浮窗标题栏 ⚙ 面板改的是同一份设置。</div>
       </div>
 
       <button class="btn" onclick="saveSettings()">保存设置</button>
       <div class="hint" style="margin-top:12px">
-        当前版本使用真实局面 gp_pi 手写档，不依赖云端账号；搜索训练员在真实局面下为重度负收益，已停用。
+        引擎 = 上游 umaai-matsuri main：搜索档（MCTS）与手写档（冠军基策略）双进程并行，局数/线程见上方「引擎参数」。
       </div>
       <div class="sec-gap"></div>
     </section>
@@ -1424,17 +1425,24 @@ function saveSettings(){
 }
 function sw(el){el.classList.toggle('on');}
 function dragStart(e,el){
+  let lastP=0;
   const move=ev=>{
     const r=el.getBoundingClientRect();
     const cx=(ev.touches?ev.touches[0].clientX:ev.clientX);
     let p=Math.max(0,Math.min(100,(cx-r.left)/r.width*100));
+    lastP=p;
     el.querySelector('.fill').style.width=p+'%';
     el.querySelector('.knob').style.left=p+'%';
     if(el.id==='sl-op')document.getElementById('lb-op').textContent=Math.round(p);
     else document.getElementById('lb-bl').textContent=Math.round(p*32/100);
   };
   const end=()=>{document.removeEventListener('mousemove',move);document.removeEventListener('mouseup',end);
-    document.removeEventListener('touchmove',move);document.removeEventListener('touchend',end);};
+    document.removeEventListener('touchmove',move);document.removeEventListener('touchend',end);
+    /* [APP-CFG-3295] 不透明度滑杆松手即持久化，浮窗在跑则即时刷新 */
+    if(el.id==='sl-op'&&window.Android&&Android.setOpacity){
+      Android.setOpacity(Math.max(30,Math.round(lastP)));
+      toast('浮窗不透明度 '+Math.max(30,Math.round(lastP))+'%');
+    }};
   document.addEventListener('mousemove',move);document.addEventListener('mouseup',end);
   document.addEventListener('touchmove',move);document.addEventListener('touchend',end);
   move(e);
@@ -1459,6 +1467,34 @@ function toast(msg){
   const e=document.getElementById('toast');e.textContent=msg;e.classList.add('show');
   clearTimeout(tt);tt=setTimeout(()=>e.classList.remove('show'),1800);
 }
+
+/* ===== [APP-CFG-3295] 引擎参数（MCTS 局数 / 线程）===== */
+function applyEngineCfg(){
+  const n=Math.max(0,Math.min(200000,parseInt(document.getElementById('s-searchn').value)||0));
+  const t=Math.max(1,Math.min(32,parseInt(document.getElementById('s-threads').value)||4));
+  if(window.Android&&Android.setEngineCfg){
+    const r=String(Android.setEngineCfg(t,n)).split(',');
+    document.getElementById('s-threads').value=r[0];
+    document.getElementById('s-searchn').value=r[1];
+    toast(`引擎已重启 · ${r[0]} 线程 / 局数 ${r[1]}${r[1]==='0'?'（纯手写档）':''}`);
+  }else toast('引擎参数仅 APK 内可调');
+}
+(function initEngineCfg(){
+  try{
+    if(window.Android&&Android.getEngineCfg){
+      const r=String(Android.getEngineCfg()).split(',');
+      document.getElementById('s-threads').value=r[0];
+      document.getElementById('s-searchn').value=r[1];
+    }
+    if(window.Android&&Android.getOpacity){
+      const p=Android.getOpacity();
+      const sl=document.getElementById('sl-op');
+      sl.querySelector('.fill').style.width=p+'%';
+      sl.querySelector('.knob').style.left=p+'%';
+      document.getElementById('lb-op').textContent=p;
+    }
+  }catch(e){}
+})();
 
 /* 初始渲染：不铺演示帧，等真实数据；归档帧由接收端自动恢复 */
 syncConnectUI();

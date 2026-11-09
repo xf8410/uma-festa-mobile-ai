@@ -154,6 +154,32 @@ class MainActivity : AppCompatActivity() {
         fun toast(msg: String?) = runOnUiThread {
             android.widget.Toast.makeText(this@MainActivity, msg ?: "", android.widget.Toast.LENGTH_SHORT).show()
         }
+
+        // ── [APP-CFG-3295] 主页面设置：引擎参数（线程/局数）＋浮窗透明度 ──
+        @JavascriptInterface
+        fun getEngineCfg(): String =
+            EngineBridge.getThreads(this@MainActivity).toString() + "," +
+                EngineBridge.getSearchN(this@MainActivity)
+
+        /** 保存线程/局数并重启引擎；返回实际生效值 "t,n"（与浮窗 ⚙ 面板同源同存储） */
+        @JavascriptInterface
+        fun setEngineCfg(threads: Int, searchN: Int): String {
+            EngineBridge.applyConfig(this@MainActivity, threads, searchN)
+            return EngineBridge.getThreads(this@MainActivity).toString() + "," +
+                EngineBridge.getSearchN(this@MainActivity)
+        }
+
+        @JavascriptInterface
+        fun getOpacity(): Int =
+            getSharedPreferences("float_cfg", MODE_PRIVATE)
+                .getInt("opacity_pct", 80).coerceIn(30, 100)
+
+        @JavascriptInterface
+        fun setOpacity(pct: Int) {
+            getSharedPreferences("float_cfg", MODE_PRIVATE).edit()
+                .putInt("opacity_pct", pct.coerceIn(30, 100)).apply()
+            FloatingWindowService.refreshOpacity()
+        }
     }
 
     companion object {

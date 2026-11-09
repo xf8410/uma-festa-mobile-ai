@@ -61,6 +61,7 @@ class FloatingWindowService : Service() {
     override fun onCreate() {
         super.onCreate()
         running = true
+        instance = this
         // 确保接收端在跑（冷启动只开了浮窗服务时也能拿到数据）
         val dir = File(filesDir, "sessions/latest").apply { mkdirs() }.absolutePath
         NativeEngine.start(MainActivity.BIND, dir, this)
@@ -319,6 +320,7 @@ class FloatingWindowService : Service() {
         web?.destroy()
         root = null; web = null; wm = null; lp = null; headerBar = null; gripView = null
         running = false
+        instance = null
         super.onDestroy()
     }
 
@@ -392,7 +394,17 @@ class FloatingWindowService : Service() {
         }
         private val SCALES = floatArrayOf(1.0f, 0.70f, 0.45f)
         @Volatile private var running = false
+        @Volatile private var instance: FloatingWindowService? = null
         fun isRunning(): Boolean = running
+        // [APP-CFG-3295] 主页面改透明度时，浮窗在跑则即时刷新标题栏+页面
+        fun refreshOpacity() {
+            val s = instance ?: return
+            Handler(Looper.getMainLooper()).post {
+                val op = s.opacityPct()
+                s.headerBar?.setBackgroundColor(s.headerColor(op))
+                s.web?.evaluateJavascript("window.setPageOpacity&&setPageOpacity($op)", null)
+            }
+        }
         private val FOREGROUND_TYPE =
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q)
                 ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC
