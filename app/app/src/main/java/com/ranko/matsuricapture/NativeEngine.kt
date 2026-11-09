@@ -543,7 +543,7 @@ object NativeEngine {
                 val trainType = iv(p, "train_type")
                 val isSupport = iv(p, "support_card_id") != UNKNOWN
                 val isShining: Long = if (isSupport && curTrainIdx >= 0 && trainType >= 0 && bond != UNKNOWN)
-                    (if (trainType == curTrainIdx && bond >= 80) 1L else 0L) else UNKNOWN
+                    (if (trainType == curTrainIdx.toLong() && bond >= 80) 1L else 0L) else UNKNOWN
                 val isUnique: Long = if (isSupport && bond != UNKNOWN && threshold != UNKNOWN && threshold < 999999)
                     (if (bond >= threshold) 1L else 0L) else UNKNOWN
                 if (isShining == 1L) shiningCnt++

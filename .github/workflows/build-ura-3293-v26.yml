@@ -59,7 +59,7 @@ jobs:
           git commit -m "build(so): 3.29.3 pure-capture (决策/算分/彩圈移交 App)" || echo nothing
           git fetch origin main || true
           git rebase origin/main || git rebase --abort || true
-          git push origin HEAD:main || git push -f origin HEAD:main || echo "push failed"
+          git push origin HEAD:main || echo "push failed（禁止 force，防吞并提）"
       - name: Report
         if: always()
         run: |

@@ -167,7 +167,7 @@ jobs:
           git commit -m "build(app): 0.9.26-dsh35 SO纯采集+App本地算分彩圈" || echo nothing
           git fetch origin main || true
           git rebase origin/main || git rebase --abort || true
-          git push origin HEAD:main || git push -f origin HEAD:main || echo "push failed"
+          git push origin HEAD:main || echo "push failed（禁止 force，防吞并提）"
 
       - name: Report (always)
         if: always()
