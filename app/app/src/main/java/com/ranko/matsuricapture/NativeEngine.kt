@@ -637,7 +637,7 @@ object NativeEngine {
             val cardByChara = HashMap<Long, Long>()
             val scArr = listOf(summary, "support_cards")
             for (i in 0 until scArr.length()) {
-                val s = scList.optJSONObject(i) ?: continue
+                val s = scArr.optJSONObject(i) ?: continue
                 val ch = iv(s, "chara_id"); val cid = iv(s, "support_card_id")
                 if (ch > 0 && cid > 0 && !cardByChara.containsKey(ch)) cardByChara[ch] = cid
             }
