@@ -56,6 +56,7 @@ jobs:
           git config user.name dsh-bot
           git config user.email dsh-bot@users.noreply.github.com
           git add -f so/dist/libhachimi_ura-3.29.3-pure.so
+          git add -u  # tracked 修改全暂存，否则 rebase 报 unstaged changes
           git commit -m "build(so): 3.29.3 pure-capture (决策/算分/彩圈移交 App)" || echo nothing
           git fetch origin main || true
           git rebase origin/main || git rebase --abort || true

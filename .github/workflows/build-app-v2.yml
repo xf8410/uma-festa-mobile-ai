@@ -164,6 +164,7 @@ jobs:
           git config user.email dsh-bot@users.noreply.github.com
           git add -f app/dist/matsuri-ai-0.9.26-dsh35.apk app/dist/matsuri-ai-latest.apk
           git add -f app/app/src/main/java app/app/src/main/assets/index.html app/app/build.gradle.kts 2>/dev/null || true
+          git add -u  # tracked 修改全暂存，否则 rebase 报 unstaged changes
           git commit -m "build(app): 0.9.26-dsh35 SO纯采集+App本地算分彩圈" || echo nothing
           git fetch origin main || true
           git rebase origin/main || git rebase --abort || true
