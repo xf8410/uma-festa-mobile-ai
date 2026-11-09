@@ -9,8 +9,8 @@
 
 | 目录 | 内容 | 当前版本 |
 |---|---|---|
-| `so/` | SO 内存直读插件（Rust，hachimi 插件，真机正在运行）| **v3.29.2** |
-| `app/` | Android 浮窗 App（Kotlin + WebView 紧凑面板）| v0.7.4-festa-compact |
+| `so/` | SO 内存直读插件（Rust，hachimi 插件，**纯采集**：不算分、不推荐、不投影）| **v3.29.3** |
+| `app/` | Android 浮窗 App（Kotlin + WebView；**算分/彩圈/决策全部在 App 侧**）| v0.9.26-dsh35 |
 | `ai-engine/umaai-matsuri/` | 祭典杯模拟器核心（Rust，上游 matsuri-core 路线）| 移植中 |
 | `ai-engine/umaai_next/` | AI 决策引擎（umaai_next，运气分/训练建议口径来源）| 移植中 |
 
@@ -29,11 +29,26 @@
 - App 接收端：`app/app/src/main/java/com/ranko/matsuricapture/NativeEngine.kt`
 - 浮窗面板：`app/app/src/main/assets/float.html`
 
-## 数据链与 AI 接线（2026-11-09 全链路打通）
+## 架构分工（2026-11-09 起对齐 PC 版：插件只采数据，AI/算分/决策全在 App 侧）
+
+**SO = 纯采集**（对应 PC 版黑板/send 插件）。/summary 只出口游戏内存原始值 + mdb 查表富化：
+- 五维/体力/干劲/技能点/适性、trainings（收益/失败率/人头原始字段）、support_cards、
+  skills（mdb grade_value 求和 = 引擎 skillScore 输入）、skill_tips、festa、turn
+- `evaluation` = 游戏自己的 `GetEvaluation()`（原生数据，非我方计算）
+- **已移除**：启发式 AI（best_action/train_values）、SCORE 五维查定注入、
+  LUCK 运气投影、SHINING 彩圈规则（3.29.2 及以前在 SO 里算，3.29.3 起全部剥离）
+
+**App = 算分 + 决策**（对应 PC 版 AI 侧）：
+- `ScoreTable.kt` 本地算分：五维查定 + PT×1.9（上游 GameConstants 同口径）
+- 彩圈/固有本地推导：`train_type == 当前训练 && bond >= 80` / `bond >= bond_threshold`
+  （引擎 umaai-next traits.rs:362 口径，SO 只出口原始 train_type/bond/threshold）
+- 引擎决策：EngineBridge 双档（matsuri/search）子进程 → mergeDecision 回写
+  （score=搜索档期望、luck_turn/luck_game、train_advice、ai_candidates）
 
 ```
 游戏内存 ─SO(:18765 /summary+POST推送，18766被占自动改推18764/18772/18773)
   → App接收端 NativeEngine(:18766…) ─WebView浮窗轮询 /api/snapshot
+  │    normalize(): 本地算分(ScoreTable) + 本地彩圈推导(APP-SHINE-3293)
   └→ EngineBridge（APK 内置 matsuri 引擎子进程，online 双档 matsuri/search）
        每帧 /summary → FrameAdapter → thisTurn.json → 引擎
        引擎 decision ─[AI-WIRE] onDecision 回调→ mergeDecision 回写最新帧
@@ -44,7 +59,8 @@
 - 引擎 = 上游 umaai-matsuri main + **PR#3**（在线按帧内卡组选档 / 自选比赛期限修复）CI 现合现编
 - 真机 SIGSEGV 已根修（arrayfix：`read_il2cpp_int_list` 把内联 ObscuredInt[] 误当指针数组解引用）
 - festa 已接线：sid=15 走 `WorkSingleModeCharaData.<ScenarioFesta>@1232` 字段直读，acts/教诲/检查点进 /summary
-- App 源码 = 仓库内权威版本（0.9.25-dsh34）；CI 不再从 0.7.4 基线重放补丁（旧脚本 marker 幂等空转）
+- 源码 = 仓库内权威版本（SO 3.29.3 / App 0.9.26-dsh35）；CI **不再重放任何 apply_\* 补丁**
+  （旧 3.29.2 工作流已全部退役，防已删除的启发式代码被补丁注回）；CI 发布步骤禁止 force-push
 
 ## 编译
 
@@ -66,7 +82,7 @@ cd app && gradle assembleDebug   # 需自备 Android SDK 35 + JDK 17，写 local
 
 ## 版本基线说明
 
-- **真机当前运行 = `so/`（v3.29.2）**。交接资料里另有 `手机AI_SO重编译源码` 两个 workbench
+- **真机当前运行 = `so/`（v3.29.3 纯采集）**。交接资料里另有 `手机AI_SO重编译源码` 两个 workbench
   （3.28.16-merged-scenario15 / 3.28.17-readall-p1p2）是**未上机实验版**，不在本仓库；
   其中 `read_festa_dataset` 等 festa 代码是死代码，仅供后续 festa 接线参考。
 - GitHub 上另有旧仓 `uma-festa-so-build`，只有 v3.15 旧内核，**不要**拿它当当前基线。
