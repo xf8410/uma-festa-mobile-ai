@@ -10,7 +10,7 @@
 | 目录 | 内容 | 当前版本 |
 |---|---|---|
 | `so/` | SO 内存直读插件（Rust，hachimi 插件，**纯采集**：不算分、不推荐、不投影）| **v3.29.3** |
-| `app/` | Android 浮窗 App（Kotlin + WebView；**算分/彩圈/决策全部在 App 侧**）| v0.9.29-dsh38 |
+| `app/` | Android 浮窗 App（Kotlin + WebView；**算分/彩圈/决策全部在 App 侧**）| v0.9.30-dsh39 |
 | `ai-engine/umaai-matsuri/` | 祭典杯模拟器核心（Rust，上游 matsuri-core 路线）| 移植中 |
 | `ai-engine/umaai_next/` | AI 决策引擎（umaai_next，运气分/训练建议口径来源）| 移植中 |
 
@@ -68,7 +68,7 @@
 - 引擎 = 上游 umaai-matsuri **main**（PR#3 已于 2026-11-09 合入，1914a18）CI 现合现编
 - 真机 SIGSEGV 已根修（arrayfix：`read_il2cpp_int_list` 把内联 ObscuredInt[] 误当指针数组解引用）
 - festa 已接线：sid=15 走 `WorkSingleModeCharaData.<ScenarioFesta>@1232` 字段直读，acts/教诲/检查点进 /summary
-- 源码 = 仓库内权威版本（SO 3.29.3 / App 0.9.29-dsh38）；CI **不再重放任何 apply_\* 补丁**
+- 源码 = 仓库内权威版本（SO 3.29.3 / App 0.9.30-dsh39）；CI **不再重放任何 apply_\* 补丁**
   （旧 3.29.2 工作流已全部退役，防已删除的启发式代码被补丁注回）；CI 发布步骤禁止 force-push
 
 ## 编译

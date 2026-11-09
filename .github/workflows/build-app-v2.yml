@@ -131,6 +131,9 @@ jobs:
           grep -qF '[APP-CFG-3294]' app/app/src/main/assets/float.html
           grep -qF '[APP-CFG-3295]' $K/MainActivity.kt
           grep -qF '[APP-CFG-3295]' app/app/src/main/assets/index.html
+          grep -qF '[APP-FIX-107]' app/app/src/main/assets/float.html
+          grep -qF '[APP-FIX-107]' app/app/src/main/assets/index.html
+          grep -qF '[APP-BOARD-3295]' app/app/src/main/assets/index.html
           ! grep -qF '冠军手写档 <span class="badge">gp_pi' app/app/src/main/assets/index.html
           ! grep -qF 'iv(summary, "score")' $K/NativeEngine.kt
           grep -qF '[APP-FIX-089]' app/app/src/main/assets/index.html
@@ -149,8 +152,8 @@ jobs:
           grep -qF '[APP-FIX-103]' app/app/src/main/assets/index.html
           grep -qF '[APP-FIX-104]' app/app/src/main/assets/index.html
           grep -qF 'startOne' $K/EngineBridge.kt
-          sed -i 's/versionName = "[^"]*"/versionName = "0.9.29-dsh38"/' app/app/build.gradle.kts
-          sed -i 's/versionCode = [0-9]\+/versionCode = 54/' app/app/build.gradle.kts
+          sed -i 's/versionName = "[^"]*"/versionName = "0.9.30-dsh39"/' app/app/build.gradle.kts
+          sed -i 's/versionCode = [0-9]\+/versionCode = 55/' app/app/build.gradle.kts
           grep -E 'versionCode|versionName' app/app/build.gradle.kts
 
       - uses: gradle/actions/setup-gradle@v4
@@ -169,15 +172,15 @@ jobs:
           set -euo pipefail
           mkdir -p app/dist
           SRC=$(find app/app/build/outputs/apk/release -name "*.apk" | head -1)
-          cp "$SRC" app/dist/matsuri-ai-0.9.29-dsh38.apk
+          cp "$SRC" app/dist/matsuri-ai-0.9.30-dsh39.apk
           cp "$SRC" app/dist/matsuri-ai-latest.apk
           ls -l app/dist/
           git config user.name dsh-bot
           git config user.email dsh-bot@users.noreply.github.com
-          git add -f app/dist/matsuri-ai-0.9.29-dsh38.apk app/dist/matsuri-ai-latest.apk
+          git add -f app/dist/matsuri-ai-0.9.30-dsh39.apk app/dist/matsuri-ai-latest.apk
           git add -f app/app/src/main/java app/app/src/main/assets/index.html app/app/build.gradle.kts 2>/dev/null || true
           git add -u  # tracked 修改全暂存，否则 rebase 报 unstaged changes
-          git commit -m "build(app): 0.9.29-dsh38 主页引擎设置+删手写档展示卡" || echo nothing
+          git commit -m "build(app): 0.9.30-dsh39 修BASE冻屏bug+盘面实时化" || echo nothing
           git fetch origin main || true
           git rebase origin/main || git rebase --abort || true
           git push origin HEAD:main || echo "push failed（禁止 force，防吞并提）"

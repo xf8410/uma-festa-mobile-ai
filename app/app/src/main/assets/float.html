@@ -222,13 +222,19 @@ const MAX_ATTR={spd:2200,sta:1850,pow:1800,gut:1700,wis:1800};
 const advName=id=>ADV[+id]||(+id>0?'#'+id:'—');
 // [APP-FIX-099] 卡册：支援卡名 / 得意训练（cardType 0速1耐2力3根4智）
 let CARDD={};
+/* [APP-FIX-107] BASE 必须先于一切 fetch 定义：const 有 TDZ，
+   在定义前引用会抛 ReferenceError 并中止整个 script 块——浮窗永远停在「等待游戏连接」 */
+const BASE=(location&&location.origin&&location.origin!=='null')?location.origin:'http://127.0.0.1:18766';
+/* [APP-FIX-107] 渲染错误上屏：任何 JS 异常直接显示在状态行，不再静默冻屏 */
+window.onerror=function(m,s,l){try{var e=document.getElementById('stL');
+  if(e)e.innerHTML='<b class="off">脚本错误: '+String(m).slice(0,80)+(l?' @'+l:'')+'</b>';}catch(_){}
+  return false;};
 fetch(BASE+'/api/carddb',{cache:'force-cache'}).then(function(r){return r.json();}).then(function(j){CARDD=j;}).catch(function(){});
 const cardMeta=function(id){return CARDD[String(id)]||null;};
 const cardShort=function(id){const c=cardMeta(id);if(!c)return '';const n=String(c.cardName||'');const m=n.match(/^\[([^\]]+)\]/);return m?m[1]+' '+n.replace(/^\[[^\]]+\]/,''):n;};
 // [APP-FIX-100] 彩圈直接用 SO 的 is_shining（引擎规则），不再用卡册推算
 const isShiningNow=function(p){return p&&p.is_shining===true;};
-// [APP-FIX-098] 同源：App 的 HTTP 端口可能不是 18766
-const BASE=(location&&location.origin&&location.origin!=='null')?location.origin:'http://127.0.0.1:18766';
+// [APP-FIX-098] 同源：App 的 HTTP 端口可能不是 18766（BASE 已上移至首次 fetch 之前，[APP-FIX-107]）
 let timer=null,paused=false,lastRec={txt:'等待游戏连接',wait:true};
 
 /* 五属性训练 command_id（SO lib.rs：101速/105耐/102力/103根/106智；URA 决赛 601-605 同序） */

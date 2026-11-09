@@ -666,154 +666,10 @@ h1.big{font-size:33px;line-height:1.3;font-weight:700;margin:0 0 6px;letter-spac
 </style>
 
 <div id="board-root">
+ <!-- [APP-BOARD-3295] 实时盘面：全部由 boardRenderLive(f) 按真实帧渲染，不再放静态演示 -->
  <div class="tui">
-  <div class="main">
-   <!-- AddHeaders: festa-date / festa-total / festa-vital / festa-motivation -->
-   <div class="headers">
-    <div class="hd w30" data-src="FestaDisplayRenderer.cs:158 · Strings.resx:Date / FirstHalf / SecondHalf">2年 10月后半 · 第44回合</div>
-    <div class="hd w27" data-src="FestaDisplayRenderer.cs:159 · Strings.resx:TotalStats"><span class="cy">五围 5359 · Pt 2825</span></div>
-    <div class="hd w24" data-src="FestaDisplayRenderer.cs:161 · Strings.resx:VitalLabel / VitalLimit">体力:<span class="gr">108</span>/108</div>
-    <div class="hd w14" data-src="FestaDisplayRenderer.cs:166 · Strings.resx:Motivation5"><span class="gr">绝好调</span></div>
-   </div>
-   <!-- 五列 FrameView：CardWidth=19，Shining 列用 palette.Selected 绿框 -->
-   <div class="cards">
-
-    <div class="card sel" title="该列含彩圈支援卡 → 绿框（FestaDisplayRenderer.cs:123）">
-     <div class="ttl" data-src="Strings.resx:TrainingTitle / Stat0">速度</div>
-     <div class="marks"></div>
-     <div class="sep"></div>
-     <div class="g-cap">
-      <div class="row" data-src="Strings.resx:CurrentRemainStat">当前:可获得</div>
-      <div class="row" data-src="Strings.resx:CurrentStatValue + remaining">1726:1622</div>
-     </div>
-     <div class="sep"></div>
-     <div class="g-cost">
-      <div class="row" data-src="Strings.resx:VitalLabel / VitalLimit">体力:<span class="gr">86</span>/108</div>
-      <div class="row" data-src="Strings.resx:TrainingLevel">Lv3 | +2</div>
-     </div>
-     <div class="sep"></div>
-     <div class="g-gain">
-      <div class="row" data-src="Strings.resx:TrainingGainLabel / TrainingPt">属:44|Pt:19</div>
-      <div class="row"><span class="cy">[速]杳目</span></div>
-      <div class="row"></div><div class="row"></div><div class="row"></div><div class="row"></div>
-     </div>
-     <div class="sep"></div>
-    </div>
-
-    <div class="card sel" title="该列含彩圈支援卡 → 绿框（FestaDisplayRenderer.cs:123）">
-     <div class="ttl" data-src="Strings.resx:ActTrainingTitle"><span class="cy">神旗  Lv6</span></div>
-     <div class="marks" data-src="Strings.resx:AssistMark · CreateCard:247"><span class="yl">助力支撑</span></div>
-     <div class="sep"></div>
-     <div class="g-cap">
-      <div class="row">当前:可获得</div>
-      <div class="row">903:1597</div>
-     </div>
-     <div class="sep"></div>
-     <div class="g-cost">
-      <div class="row">体力:<span class="gr">92</span>/108</div>
-      <div class="row">Lv1 | +0</div>
-     </div>
-     <div class="sep"></div>
-     <div class="g-gain">
-      <div class="row">属:<span class="cy">227</span>|Pt:129</div>
-      <div class="row"><span class="gr">[友]吾妻</span></div>
-      <div class="row"><span class="rd">!</span>[力]美妙</div>
-      <div class="row"><span class="rd">!</span><span class="cy">[耐]怒涛</span></div>
-      <div class="row"><span class="rd">!</span>[速]乐透</div>
-      <div class="row"><span class="dim">莫名</span></div>
-     </div>
-     <div class="sep"></div>
-    </div>
-
-    <div class="card">
-     <div class="ttl" data-src="Strings.resx:TrainingTitle / Stat2">力量</div>
-     <div class="marks" data-src="Strings.resx:KensanMark · CreateCard:249"><span class="pu">追加稽古</span></div>
-     <div class="sep"></div>
-     <div class="g-cap">
-      <div class="row">当前:可获得</div>
-      <div class="row">1158:1278</div>
-     </div>
-     <div class="sep"></div>
-     <div class="g-cost">
-      <div class="row">体力:<span class="gr">86</span>/108</div>
-      <div class="row">Lv2 | +1</div>
-     </div>
-     <div class="sep"></div>
-     <div class="g-gain">
-      <div class="row">属:21|Pt:8</div>
-      <div class="row"><span class="dim">记者</span></div>
-      <div class="row">防爆</div>
-      <div class="row"></div><div class="row"></div><div class="row"></div>
-     </div>
-     <div class="sep"></div>
-    </div>
-
-    <div class="card">
-     <div class="ttl" data-src="Strings.resx:TrainingTitle / Stat3">根性</div>
-     <div class="marks"></div>
-     <div class="sep"></div>
-     <div class="g-cap">
-      <div class="row">当前:可获得</div>
-      <div class="row">702:1536</div>
-     </div>
-     <div class="sep"></div>
-     <div class="g-cost">
-      <div class="row">体力:<span class="gr">86</span>/108</div>
-      <div class="row">Lv2 | +2</div>
-     </div>
-     <div class="sep"></div>
-     <div class="g-gain">
-      <div class="row">属:23|Pt:9</div>
-      <div class="row">大和</div>
-      <div class="row">雪美</div>
-      <div class="row"></div><div class="row"></div><div class="row"></div>
-     </div>
-     <div class="sep"></div>
-    </div>
-
-    <div class="card sel" title="该列含彩圈支援卡 → 绿框（FestaDisplayRenderer.cs:123）">
-     <div class="ttl" data-src="Strings.resx:TrainingTitle / Stat4">智力</div>
-     <div class="marks"><span class="pu">追加稽古</span></div>
-     <div class="sep"></div>
-     <div class="g-cap">
-      <div class="row">当前:可获得</div>
-      <div class="row">870:1530</div>
-     </div>
-     <div class="sep"></div>
-     <div class="g-cost">
-      <div class="row">体力:<span class="gr">108</span>/108</div>
-      <div class="row">Lv3 | +1</div>
-     </div>
-     <div class="sep"></div>
-     <div class="g-gain">
-      <div class="row">属:35|Pt:18</div>
-      <div class="row"><span class="cy">[智]太子</span></div>
-      <div class="row"><span class="dim">理事</span></div>
-      <div class="row"></div><div class="row"></div><div class="row"></div>
-     </div>
-     <div class="sep"></div>
-    </div>
-
-   </div>
-  </div>
-
-  <!-- festa-extra：AdviceRows + FestaTrainingDisplay 挂接的 EventLogger part -->
-  <div class="extra" data-src="FestaDisplayRenderer.cs:78 · FestaTrainingDisplay.cs:16 · FestaScenarioDisplayBridge.cs:7">
-   <div class="r"><span class="cy" data-src="Strings.resx:AdviceHeader">教诲/转成</span></div>
-   <div class="r"><span class="cy">速度</span>  特化<span class="cy">→</span><span class="gr">牵绊</span></div>
-   <div class="r"><span class="cy">耐力</span>  体力</div>
-   <div class="r"><span class="cy">力量</span>  助力</div>
-   <div class="r"><span class="cy">根性</span>  灵感</div>
-   <div class="r"><span class="cy">智力</span>  研习<span class="cy">→</span><span class="gr">擅长率</span></div>
-   <div class="sp"></div>
-   <div class="r"><span class="cy" data-src="FestaScenarioDisplayBridge.cs:7 RegisterPartProducer(&quot;EventLogger&quot;)">EventLogger</span></div>
-   <div class="r"><span class="yl" data-src="EventLogger.PrintCardEventPerf">连续事件出现  3  次</span></div>
-   <div class="r"><span class="yl">走完  1  张卡</span></div>
-   <div class="r"><span class="yl">连续事件运气： −77%</span></div>
-   <div class="r">事件数： 25</div>
-   <div class="r">继承属性： <span class="cy">247</span>, PT： <span class="cy">0</span></div>
-   <div class="r">胜场： <span class="yl">4</span></div>
-  </div>
+  <div class="main" id="boMain"></div>
+  <div class="extra" id="boExtra"></div>
  </div>
 </div>
       </div>
@@ -989,6 +845,15 @@ const V5_EVO=[{id:601,name:'特化',eff:'主属性获得 +5~25 / 上限 +5~25',w
   {id:1001,name:'兼修',eff:'副属性获得 +1~25 · 稽古效果 +1~15',when:'T47 默认与 401 融合'}];
 const V5_KEYS=['spd','sta','pow','gut','wis'];
 // [APP-FIX-099] 卡册：支援卡名 / 得意训练（cardType 0速1耐2力3根4智）
+/* [APP-FIX-107] BASE 必须先于一切 fetch 定义：本页从未定义 BASE，
+   引用未声明变量抛 ReferenceError 并中止 script 块顶层执行——
+   v5 盘面渲染器抛错、applyFrame 半途而死（数值有、建议永远「等待当前盘面的建议」） */
+const BASE=(location&&location.origin&&location.origin!=='null')?location.origin:'http://127.0.0.1:18766';
+/* [APP-FIX-107] 渲染错误上屏：任何 JS 异常直接显示在建议副标题，不再静默冻结 */
+window.onerror=function(m,s,l){try{var e=document.getElementById('adv-sub');
+  if(e&&e.textContent.indexOf('脚本错误')<0)e.textContent='脚本错误: '+String(m).slice(0,80)+(l?' @'+l:'');
+  var t=document.getElementById('toast');if(t){t.textContent='脚本错误: '+String(m).slice(0,60);t.classList.add('show');}}catch(_){}
+  return false;};
 let CARDD={};
 fetch(BASE+'/api/carddb',{cache:'force-cache'}).then(function(r){return r.json();}).then(function(j){CARDD=j;}).catch(function(){});
 const cardMeta=function(id){return CARDD[String(id)]||null;};
@@ -1211,6 +1076,7 @@ function applyFrame(f){
   document.getElementById('f-pt').textContent=fmt(n(f.skill_point));
   document.getElementById('f-next').textContent=(f.checkpoints&&f.checkpoints.length)?`sched ${n(f.checkpoints[0].schedule_id)}`:'—';
 
+  if(document.getElementById('boardOverlay').classList.contains('show'))boardRenderLive(f); // [APP-BOARD-3295] 盘面开着就随帧刷新
   document.getElementById('adv-eyebrow').textContent='当前盘面';
   document.getElementById('adv-title').textContent=f?`骏大祭 T${n(f.turn)}/77`:'等待你的育成';
   document.getElementById('adv-sub').textContent=f
@@ -1507,6 +1373,122 @@ window.setZoom = function(z){
   const v = Math.max(.35, Math.min(2.0, +z || 1));
   document.documentElement.style.zoom = v;
 };
+/* ===== [APP-BOARD-3295] 电脑版原样盘面：实时渲染（面板语义照 panel.rs / FestaDisplayRenderer） ===== */
+/* 评价分算分表 JS 移植 = ScoreTable.kt / umaai-core score.rs 官方口径（分段公式，逐项 min(属性,上限)） */
+const BOARD_LIMIT=[2200,1850,1800,1700,1800]; // 祭典杯五维上限（速耐力根智）
+const LOW_RATES=[5,8,10,13,16,18,21,24,26,28,29,30,31,33,34,35,39,41,42,43,52,55,66,68];
+function spLow(step){let rem=step+1,sc=0;for(let b=0;b<LOW_RATES.length&&rem>0;b++){const c=Math.min(rem,b+1===LOW_RATES.length?51:50);sc+=c*LOW_RATES[b];rem-=c;}return Math.floor(sc/10);}
+function spMid(step){let rem=step-1200,sc=38418,band=0;while(rem>0){const w=band===0?9:(band===79?11:10);const c=Math.min(rem,w);sc+=c*Math.floor((7910+131*band)/100);rem-=c;band++;}return Math.floor(sc/10);}
+function spHigh(step){const d=step-2000,bands=Math.floor(d/25),rem=d%25;return 14280+Math.floor((183*d+25*bands*(bands-1)/2+bands*rem+1)/10);}
+function statusPoint(st){st=Math.floor(+st)||0;if(st<=0)return 0;const step=st<=1200?st:1200+Math.floor((st-1200)/2);return step<=1200?spLow(step):(step<=2000?spMid(step):spHigh(step));}
+function fiveScoreJs(fv){let s=0;for(let i=0;i<5;i++)s+=statusPoint(Math.min(+fv[i]||0,BOARD_LIMIT[i]));return s;}
+/* 评价分预测 = 五维(上限夹取) + PT×2.0 + 技能分（当前值） */
+function evalOf(fv,pt,skill){return fiveScoreJs(fv)+Math.max(0,Math.round((+pt||0)*2))+(+skill||0);}
+
+const MOT_CN={Best:'绝好调',Good:'好调',Normal:'普通',Bad:'不调',Worst:'绝不调',GREAT:'绝好调',GOOD:'好调',NORMAL:'普通',BAD:'不调',WORST:'绝不调'};
+const PTYPE_NAME_BOARD={1:'友人',2:'支援卡',3:'NPC',4:'理事长',5:'记者',6:'佐岳'};
+function boardRenderLive(f){
+  const main=document.getElementById('boMain'),ext=document.getElementById('boExtra');
+  if(!main)return;
+  if(!f||!f.five){
+    main.innerHTML='<div class="hd w30" style="margin:8px">等待游戏数据 · 进入育成后此处显示实时盘面</div>';
+    if(ext)ext.innerHTML='';
+    return;
+  }
+  const five=f.five||[],pt=+f.skill_point||0;
+  const total=five.reduce((s,v)=>s+(+v||0),0);
+  const turn=+f.turn||0,mon=+f.month||0,half=+f.half||1;
+  const year=(+f.year>0)?+f.year:Math.max(1,Math.floor((turn-1)/24)+1);
+  const halfTxt=half===2?'后半':'前半';
+  const mot=MOT_CN[f.motivation]||f.motivation||'—';
+  const vital='体力:<span class="gr">'+n(f.vital)+'</span>/'+n(f.max_vital);
+  const acts=f.acts||[],byT={};acts.forEach(a=>byT[+a.act_type]=a);
+  const trs=f.trainings||[];
+  const ta=f.train_advice||[];
+  const curEval=+f.score||0,skill=+f.skill_score||0;
+  const ATTRNAME=['速度','耐力','力量','根性','智力'],ATTRS=['速','耐','力','根','智'];
+
+  // 表头：第X年 Y月前/后半 · 第N回合 ｜ 五围共计+Pt ｜ 体力 ｜ 干劲
+  let html='<div class="headers">'+
+    '<div class="hd w30">第'+year+'年 '+(mon||'—')+'月'+halfTxt+' · 第'+(turn||'—')+'回合</div>'+
+    '<div class="hd w27"><span class="cy">五围 '+total+' · Pt '+pt+'</span></div>'+
+    '<div class="hd w24">'+vital+'</div>'+
+    '<div class="hd w14"><span class="gr">'+esc(mot)+'</span></div></div>';
+
+  // 五列训练卡：稽古亮起→演目名+Lv；含彩圈人头→绿框（panel.rs Shining 口径）
+  html+='<div class="cards">'+ACTS.map((a,i)=>{
+    const it=byT[a.t]||{},g=+it.gauge||0,nd=+it.need_gauge||0,lv=+it.level||0;
+    const lit=nd>0&&g>=nd;
+    const tr=trs.find(t=>+t.command_id===5101+i)||{};
+    const ps=tr.partners||[];
+    const shining=ps.some(p=>+p.is_shining===1);
+    const col=ta[i]||{};
+    const pred=(col.five&&col.five.length===5)?evalOf(col.five,col.pt,skill):null;
+    const aid=+it.advice_id||0;
+    const title=lit?(esc(fullAct(a))+(lv?(' Lv'+lv):'')):ATTRNAME[i];
+    const marks=lit?('稽古·'+esc(adviceName(aid))):'';
+    const predCls=pred==null?'dim':(pred>=curEval?'gr':'rd');
+    const ai=(col.score!==undefined&&col.score!==null&&col.score!==''&&col.name)?
+      ('<span class="'+(+col.score>=0?'gr':'rd')+'">AI '+(+col.score>=0?'+':'')+col.score+'</span>'):'<span class="dim">AI —</span>';
+    const heads=ps.length?ps.slice(0,5).map(p=>{
+      const pt2=+p.partner_type,sh=+p.is_shining===1,tip=+p.is_tips_event===1;
+      let nm;
+      if(+p.support_card_id>0){nm=cardShort(p.support_card_id)||p.name||('#'+p.support_card_id);}
+      else nm=PTYPE_NAME_BOARD[pt2]||p.name||'NPC';
+      const cls=sh?'cy':(pt2===1||pt2===2?'':'dim');
+      return '<div class="row"><span class="'+cls+'">['+ATTRS[i]+']'+esc(nm)+(tip?'<span class="rd">!</span>':'')+(sh?' <span class="gr">彩</span>':'')+(+p.current_bond>0?(' <span class="dim">'+p.current_bond+'</span>'):'')+'</span></div>';
+    }).join(''):'<div class="row"><span class="dim">本轮无站位</span></div>';
+    const pad=Math.max(0,5-ps.length);
+    return '<div class="card'+(shining?' sel':'')+'">'+
+     '<div class="ttl">'+title+'</div>'+
+     '<div class="marks">'+marks+'</div>'+
+     '<div class="sep"></div>'+
+     '<div class="g-cap">'+
+      '<div class="row">当前:可获得</div>'+
+      '<div class="row">'+curEval+'<span class="dim"> : </span><span class="'+predCls+'">'+(pred==null?'—':pred)+'</span></div>'+
+     '</div>'+
+     '<div class="sep"></div>'+
+     '<div class="g-cost">'+
+      '<div class="row">'+vital+'</div>'+
+      '<div class="row">Lv'+(lv||'—')+' | 槽 '+g+'/'+(nd||'—')+'</div>'+
+     '</div>'+
+     '<div class="sep"></div>'+
+     '<div class="g-gain">'+
+      '<div class="row">失败率:'+n(tr.failure_rate)+'% '+ai+'</div>'+
+      heads+'<div class="row"></div>'.repeat(pad)+
+     '</div>'+
+     '<div class="sep"></div>'+
+    '</div>';
+  }).join('')+'</div>';
+  main.innerHTML=html;
+
+  // 右栏：运气分 / 评价分预测（期望终局）/ 当前评价分构成 / 动作选择分数 / 稽古槽
+  if(ext){
+    const sg=v=>(+v>0?'+':'')+n(v);
+    const cs=[...(f.ai_candidates||[])].sort((a,b)=>+b.score-+a.score).slice(0,5);
+    const rawMode=!!f.ai_raw;
+    let gS=0,nS=0,on=0;acts.forEach(a=>{const g=+a.gauge||0,nd=+a.need_gauge||0;if(g>0)gS+=g;if(nd>0)nS+=nd;if(nd>0&&g>=nd)on++;});
+    ext.innerHTML=
+      '<div class="r"><span class="cy">运气分</span></div>'+
+      '<div class="r">本局 <span class="yl">'+sg(f.luck_game)+'</span> · 本轮 <span class="yl">'+sg(f.luck_turn)+'</span></div>'+
+      '<div class="sp"></div>'+
+      '<div class="r"><span class="cy">评价分预测（期望终局）</span></div>'+
+      '<div class="r">'+(n(f.expected)||'—')+(+f.expected_stdev>0?(' <span class="dim">±'+n(f.expected_stdev)+'</span>'):'')+(f.expected_rank?(' <span class="gr">'+esc(f.expected_rank)+'</span>'):'')+'</div>'+
+      '<div class="sp"></div>'+
+      '<div class="r"><span class="cy">当前评价分</span> '+n(f.score)+(f.eval_rank?(' <span class="gr">'+esc(f.eval_rank)+'</span>'):'')+'</div>'+
+      '<div class="r"><span class="dim">五维'+n(f.five_score)+'＋PT'+n(f.pt_score)+'＋技能'+n(f.skill_score)+'</span></div>'+
+      '<div class="sp"></div>'+
+      '<div class="r"><span class="cy">动作选择分数'+(rawMode?'（手写档原分）':'')+'</span></div>'+
+      (cs.length?cs.map((c,i)=>{
+        const cl=rawMode?'dim':(+c.score>=0?'gr':'rd');
+        return '<div class="r">'+(i===0?'▶':'　')+esc(c.name)+' <span class="'+cl+'">'+(rawMode?n(c.score):((+c.score>=0?'+':'')+n(c.score)))+'</span></div>';
+      }).join(''):'<div class="r"><span class="dim">等待引擎决策</span></div>')+
+      '<div class="sp"></div>'+
+      '<div class="r"><span class="cy">稽古槽</span> '+gS+'/'+(nS||'—')+' · 亮起 '+on+'/5</div>'+
+      '<div class="r"><span class="dim">满 5 触发稽古 · 演目 Lv 上限 '+n(f.max_act_level)+'</span></div>';
+  }
+}
+
 /* ===== 电脑版原样盘面（1:1 复刻视图） ===== */
 let boardZ = 0.42;
 function setBoardZoom(z){
@@ -1523,6 +1505,7 @@ function fitBoard(){
 function boardZoom(d){ setBoardZoom(boardZ + d * .08); }
 function showBoard(){
   document.getElementById('boardOverlay').classList.add('show');
+  boardRenderLive(state.frame);   /* [APP-BOARD-3295] 打开即渲染真实帧 */
   setBoardZoom(0.75);   /* 可读缩放；横向滑动对应原版 ScrollHorizontal */
 }
 function hideBoard(){ document.getElementById('boardOverlay').classList.remove('show'); }
