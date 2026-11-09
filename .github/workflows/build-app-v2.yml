@@ -1,9 +1,11 @@
-name: "Build matsuri AI app v26 (连接语义)"
+name: "Build matsuri AI app v27 (SO纯采集+App算分)"
 on:
   push:
     branches: [main]
     paths:
       - ".github/workflows/build-app-v2.yml"
+      - "app/app/src/main/java/com/ranko/matsuricapture/NativeEngine.kt"
+      - "app/app/src/main/java/com/ranko/matsuricapture/ScoreTable.kt"
       - ".github/scripts/apply_appfix_081.js"
       - ".github/scripts/apply_appfix_082.js"
       - ".github/scripts/apply_appfix_083.js"
@@ -109,38 +111,16 @@ jobs:
           mkdir -p "$HOME/.android"
           cp app/ci/debug.keystore "$HOME/.android/debug.keystore"
 
-      - name: Rank table (from bundled constants.json)
-        run: |
-          set -euo pipefail
-          node -e "const fs=require('fs');const c=JSON.parse(fs.readFileSync('app/app/src/main/assets/engine/data/constants.json','utf8'));fs.writeFileSync('.github/scripts/rank_table.json',JSON.stringify({rank_scores:c.rank_scores,rank_names:c.rank_names}));console.log('rank table',c.rank_scores.length);"
-
-      - name: Apply app fixes
+      # [APP-SCORE-3293] 仓库源码即权威，不再重放 apply_appfix_* 补丁。
+      # 080（SO 算分接入）已被 3293 本地算分取代，重放会因锚点缺失而失败并把旧代码注回来。
+      - name: Verify app fixes present
         run: |
           set -euo pipefail
           : > app-capture.txt
           K=app/app/src/main/java/com/ranko/matsuricapture
-          run() { node ".github/scripts/apply_appfix_$1.js" "${@:2}" 2>&1 | tee -a app-capture.txt; }
-          run 080 $K/NativeEngine.kt app/app/src/main/assets/index.html app/app/build.gradle.kts
-          run 081 $K/NativeEngine.kt app/app/src/main/assets/index.html app/app/build.gradle.kts
-          run 082 $K/NativeEngine.kt
-          run 083 $K/NativeEngine.kt
-          run 084 $K/MainActivity.kt $K/FloatingWindowService.kt
-          run 085 app/app/build.gradle.kts
-          run 089 app/app/src/main/assets/index.html
-          run 090 $K/FrameAdapter.kt
-          run 091 $K/FrameAdapter.kt
-          run 092 $K/EngineBridge.kt
-          run 093 app/app/src/main/assets/index.html
-          run 094 $K/FloatingWindowService.kt
-          run 095 app/app/src/main/assets/index.html
-          run 096 $K/EngineBridge.kt $K/NativeEngine.kt
-          run 097 $K/FrameAdapter.kt
-          run 098 app/app/src/main/assets/float.html
-          run 099 $K/NativeEngine.kt app/app/src/main/assets/float.html app/app/src/main/assets/index.html
-          run 100 app/app/src/main/assets/float.html app/app/src/main/assets/index.html
-          run 102 $K/NativeEngine.kt
-          run 103 app/app/src/main/assets/index.html
-          run 104 app/app/src/main/assets/index.html
+          grep -qF '[APP-SHINE-3293]' $K/NativeEngine.kt
+          grep -qF '[APP-SCORE-3293]' $K/NativeEngine.kt
+          ! grep -qF 'iv(summary, "score")' $K/NativeEngine.kt
           grep -qF '[APP-FIX-089]' app/app/src/main/assets/index.html
           grep -qF '[APP-FIX-090]' $K/FrameAdapter.kt
           grep -qF '[APP-FIX-091]' $K/FrameAdapter.kt
@@ -157,8 +137,8 @@ jobs:
           grep -qF '[APP-FIX-103]' app/app/src/main/assets/index.html
           grep -qF '[APP-FIX-104]' app/app/src/main/assets/index.html
           grep -qF 'startOne' $K/EngineBridge.kt
-          sed -i 's/versionName = "[^"]*"/versionName = "0.9.25-dsh34"/' app/app/build.gradle.kts
-          sed -i 's/versionCode = [0-9]\+/versionCode = 50/' app/app/build.gradle.kts
+          sed -i 's/versionName = "[^"]*"/versionName = "0.9.26-dsh35"/' app/app/build.gradle.kts
+          sed -i 's/versionCode = [0-9]\+/versionCode = 51/' app/app/build.gradle.kts
           grep -E 'versionCode|versionName' app/app/build.gradle.kts
 
       - uses: gradle/actions/setup-gradle@v4
@@ -177,14 +157,14 @@ jobs:
           set -euo pipefail
           mkdir -p app/dist
           SRC=$(find app/app/build/outputs/apk/release -name "*.apk" | head -1)
-          cp "$SRC" app/dist/matsuri-ai-0.9.25-dsh34.apk
+          cp "$SRC" app/dist/matsuri-ai-0.9.26-dsh35.apk
           cp "$SRC" app/dist/matsuri-ai-latest.apk
           ls -l app/dist/
           git config user.name dsh-bot
           git config user.email dsh-bot@users.noreply.github.com
-          git add -f app/dist/matsuri-ai-0.9.25-dsh34.apk app/dist/matsuri-ai-latest.apk
+          git add -f app/dist/matsuri-ai-0.9.26-dsh35.apk app/dist/matsuri-ai-latest.apk
           git add -f app/app/src/main/java app/app/src/main/assets/index.html app/app/build.gradle.kts 2>/dev/null || true
-          git commit -m "build(app): 0.9.25-dsh34 AI决策回写+PR3引擎" || echo nothing
+          git commit -m "build(app): 0.9.26-dsh35 SO纯采集+App本地算分彩圈" || echo nothing
           git fetch origin main || true
           git rebase origin/main || git rebase --abort || true
           git push origin HEAD:main || git push -f origin HEAD:main || echo "push failed"

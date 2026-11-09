@@ -418,6 +418,16 @@ object NativeEngine {
 
     private fun sv(o: JSONObject?, key: String): String = o?.optString(key, "") ?: ""
 
+    /** [APP-SHINE-3293] 训练命令 → 训练下标（速0 耐1 力2 根3 智4；非训练 -1），与 SO train_index_of_cmd 同口径 */
+    private fun trainIndexOfCmd(cmdId: Int): Int = when (cmdId) {
+        5101, 101, 601 -> 0
+        5102, 105, 602 -> 1
+        5103, 102, 603 -> 2
+        5104, 103, 604 -> 3
+        5105, 106, 605 -> 4
+        else -> -1
+    }
+
     /** 兼容「裸数组」与插件常见的 {len, list:[...]} 包装 */
     private fun listOf(o: JSONObject?, key: String): JSONArray {
         if (o == null) return JSONArray()
@@ -502,9 +512,11 @@ object NativeEngine {
         val evaluationCount = evList.length()
 
         // ── v0.7.2：接住 SO /summary 已推、旧版丢弃的两块真实数据 ─────────────
-        // trainings[].partners[]：人头全字段（partner_id/support_card_id/current_bond
-        //   /is_shining/is_unique_active/bond_threshold/support_card_type/is_tips_event
-        //   /partner_type/name），依据 SO lib.rs partners_json 组包（v3.24.x）。
+        // trainings[].partners[]：人头原始字段（partner_id/support_card_id/current_bond
+        //   /bond_threshold/support_card_type/is_tips_event/partner_type/name/train_type）。
+        // [APP-SHINE-3293] SO 3.29.3 纯采集化后 is_shining/is_unique_active 恒 null，
+        //   彩圈与固有发动在 App 本地推导（引擎规则 umaai-next traits.rs:362：
+        //   卡位 && 得意训练==当前训练 && 羁绊>=80；固有 = bond >= bond_threshold）。
         // support_cards[]：装备卡组（position/support_card_id/chara_id/kizuna/
         //   limit_break_count/exp/rental_type），依据 SO lib.rs sc_json 组包。
         val trainings = JSONArray()
@@ -512,30 +524,46 @@ object NativeEngine {
         for (i in 0 until trList.length()) {
             val t = trList.optJSONObject(i) ?: continue
             val o = JSONObject()
-            o.put("command_id", iv(t, "command_id"))
+            val cmdId = iv(t, "command_id")
+            val curTrainIdx = trainIndexOfCmd(cmdId.toInt())
+            o.put("command_id", cmdId)
             o.put("cmd_type", iv(t, "cmd_type"))
             o.put("name", sv(t, "name"))
             o.put("is_enable", iv(t, "is_enable"))
             o.put("failure_rate", iv(t, "failure_rate"))
             o.put("heads", iv(t, "heads"))
-            o.put("shining", iv(t, "shining"))
             val partners = JSONArray()
             val pList = t.optJSONArray("partners") ?: JSONArray()
+            var shiningCnt = 0L
+            var shiningUnknown = false
             for (j in 0 until pList.length()) {
                 val p = pList.optJSONObject(j) ?: continue
+                val bond = iv(p, "current_bond")
+                val threshold = iv(p, "bond_threshold")
+                val trainType = iv(p, "train_type")
+                val isSupport = iv(p, "support_card_id") != UNKNOWN
+                val isShining: Long = if (isSupport && curTrainIdx >= 0 && trainType >= 0 && bond != UNKNOWN)
+                    (if (trainType == curTrainIdx && bond >= 80) 1L else 0L) else UNKNOWN
+                val isUnique: Long = if (isSupport && bond != UNKNOWN && threshold != UNKNOWN && threshold < 999999)
+                    (if (bond >= threshold) 1L else 0L) else UNKNOWN
+                if (isShining == 1L) shiningCnt++
+                if (isSupport && curTrainIdx >= 0 && isShining == UNKNOWN) shiningUnknown = true
                 partners.put(JSONObject()
                     .put("partner_id", iv(p, "partner_id"))
                     .put("support_card_id", iv(p, "support_card_id"))
-                    .put("current_bond", iv(p, "current_bond"))
-                    .put("is_shining", iv(p, "is_shining"))
-                    .put("is_unique_active", iv(p, "is_unique_active"))
-                    .put("bond_threshold", iv(p, "bond_threshold"))
+                    .put("current_bond", bond)
+                    .put("is_shining", isShining)
+                    .put("is_unique_active", isUnique)
+                    .put("bond_threshold", threshold)
                     .put("support_card_type", iv(p, "support_card_type"))
                     .put("is_tips_event", iv(p, "is_tips_event"))
                     .put("partner_type", iv(p, "partner_type"))
+                    .put("train_type", trainType)
                     .put("name", sv(p, "name")))
             }
             o.put("partners", partners)
+            // 训练级彩圈数：非训练命令或有卡位判不出来时为 -1
+            o.put("shining", if (curTrainIdx < 0 || shiningUnknown) UNKNOWN else shiningCnt)
             val gains = JSONObject()
             val gObj = t.optJSONObject("gains")
             gObj?.keys()?.forEach { k -> gains.put(k, gObj.optLong(k)) }
@@ -564,6 +592,16 @@ object NativeEngine {
             notes.put("festa.ok=false " + festa.optString("error"))
         }
         if (festa != null && acts.length() == 0) notes.put("festa.acts empty")
+
+        // ── [APP-SCORE-3293] SO 3.29.3 纯采集化后算分移交 App ─────────────
+        // 口径与上游 EtherealAO/UmaAi GameConstants 一致：五维查定 + PT×1.9
+        // （切者 buff 未检测，恒按 1.9，与被替换的 SO 行为相同）。
+        // 引擎决策到达后 mergeDecision 会用期望终局分覆盖 score 字段。
+        val fiveSum = (0 until 5).sumOf { five.optLong(it, 0).coerceAtLeast(0) }.toInt()
+        val spNow = iv(stats, "skill_point").coerceAtLeast(0).toInt()
+        val fiveScore = ScoreTable.fiveScore(fiveSum)
+        val ptScore = ScoreTable.ptScore(spNow, false)
+        val skillEval = iv(summary.optJSONObject("skills"), "eval").coerceAtLeast(0)
 
         return JSONObject()
             .put("seq", frames.size + 1)
@@ -602,11 +640,11 @@ object NativeEngine {
             .put("missing", missing)
             .put("has_festa", festa != null)
             .put("fields_ok", stats != null)
-            // [APP-FIX-080] SO 算好的评价分（五维查定 + PT×倍率）
-            .put("score", iv(summary, "score"))
-            .put("five_score", iv(summary, "five_score"))
-            .put("pt_score", iv(summary, "pt_score"))
-            .put("skill_score", iv(summary, "skill_score"))
+            // [APP-SCORE-3293] 本地算分（ScoreTable.kt）；skill_score = SO 的 mdb 技能评价值和
+            .put("score", (fiveScore + ptScore).toLong())
+            .put("five_score", fiveScore.toLong())
+            .put("pt_score", ptScore.toLong())
+            .put("skill_score", skillEval)
             .put("raw", summary)
     }
 

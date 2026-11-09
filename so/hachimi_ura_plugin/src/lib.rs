@@ -3781,223 +3781,8 @@ fn breeders_buff_desc(group_type: i32, level: i32) -> (&'static str, String) {
 // Handwritten evaluation logic ported from UmaAi
 // ============================================================
 
-/// Per-stat evaluation score lookup table (stat value → 評価点)
-/// 0-1200: gamewith実測値 (https://gamewith.jp/uma-musume/article/show/279308)
-/// 1201-2300: cubic外推 f(x)=2.346e-9·x³+6.537e-3·x²-7.890·x+3891.8
-const STAT_EVAL_SCORE: [i32; 2301] = [
-    0, 1, 1, 2, 2, 3, 3, 4, 4, 5, 5, 6, 6, 7, 7, 8, 8, 9, 9, 10, 10, 11, 11, 12, 12, 13, 13, 14,
-    14, 15, 15, 16, 16, 17, 17, 18, 18, 19, 19, 20, 20, 21, 21, 22, 22, 23, 23, 24, 24, 25, 25, 26,
-    27, 28, 29, 29, 30, 31, 32, 33, 33, 34, 35, 36, 37, 37, 38, 39, 40, 41, 41, 42, 43, 44, 45, 45,
-    46, 47, 48, 49, 49, 50, 51, 52, 53, 53, 54, 55, 56, 57, 57, 58, 59, 60, 61, 61, 62, 63, 64, 65,
-    66, 67, 68, 69, 70, 71, 72, 73, 74, 75, 76, 77, 78, 79, 80, 81, 82, 83, 84, 85, 86, 87, 88, 89,
-    90, 91, 92, 93, 94, 95, 96, 97, 98, 99, 100, 101, 102, 103, 104, 105, 106, 107, 108, 109, 110,
-    111, 112, 113, 114, 115, 116, 117, 118, 120, 121, 122, 124, 125, 126, 128, 129, 130, 131, 133,
-    134, 135, 137, 138, 139, 141, 142, 143, 144, 146, 147, 148, 150, 151, 152, 154, 155, 156, 157,
-    159, 160, 161, 163, 164, 165, 167, 168, 169, 170, 172, 173, 174, 176, 177, 178, 180, 181, 183,
-    184, 186, 188, 189, 191, 192, 194, 196, 197, 199, 200, 202, 204, 205, 207, 208, 210, 212, 213,
-    215, 216, 218, 220, 221, 223, 224, 226, 228, 229, 231, 232, 234, 236, 237, 239, 240, 242, 244,
-    245, 247, 248, 250, 252, 253, 255, 256, 258, 260, 261, 263, 265, 267, 269, 270, 272, 274, 276,
-    278, 279, 281, 283, 285, 287, 288, 290, 292, 294, 296, 297, 299, 301, 303, 305, 306, 308, 310,
-    312, 314, 315, 317, 319, 321, 323, 324, 326, 328, 330, 332, 333, 335, 337, 339, 341, 342, 344,
-    346, 348, 350, 352, 354, 356, 358, 360, 362, 364, 366, 368, 371, 373, 375, 377, 379, 381, 383,
-    385, 387, 389, 392, 394, 396, 398, 400, 402, 404, 406, 408, 410, 413, 415, 417, 419, 422, 423,
-    425, 427, 429, 431, 434, 436, 438, 440, 442, 444, 446, 448, 450, 452, 455, 457, 459, 462, 464,
-    467, 469, 471, 474, 476, 479, 481, 483, 486, 488, 491, 493, 495, 498, 500, 503, 505, 507, 510,
-    512, 515, 517, 519, 522, 524, 527, 529, 531, 534, 536, 539, 541, 543, 546, 548, 551, 553, 555,
-    558, 560, 563, 565, 567, 570, 572, 575, 577, 580, 582, 585, 588, 590, 593, 595, 598, 601, 603,
-    606, 608, 611, 614, 616, 619, 621, 624, 627, 629, 632, 634, 637, 640, 642, 645, 647, 650, 653,
-    655, 658, 660, 663, 666, 668, 671, 673, 676, 679, 681, 684, 686, 689, 692, 694, 697, 699, 702,
-    705, 707, 710, 713, 716, 719, 721, 724, 727, 730, 733, 735, 738, 741, 744, 747, 749, 752, 755,
-    758, 761, 763, 766, 769, 772, 775, 777, 780, 783, 786, 789, 791, 794, 797, 800, 803, 805, 808,
-    811, 814, 817, 819, 822, 825, 828, 831, 833, 836, 839, 842, 845, 847, 850, 853, 856, 859, 862,
-    865, 868, 871, 874, 876, 879, 882, 885, 888, 891, 894, 897, 900, 903, 905, 908, 911, 914, 917,
-    920, 923, 926, 929, 931, 934, 937, 940, 943, 946, 949, 952, 955, 958, 961, 963, 966, 969, 972,
-    975, 978, 981, 984, 987, 990, 993, 996, 999, 1002, 1005, 1008, 1011, 1014, 1017, 1020, 1023,
-    1026, 1029, 1032, 1035, 1038, 1041, 1044, 1047, 1050, 1053, 1056, 1059, 1062, 1065, 1068, 1071,
-    1074, 1077, 1080, 1083, 1086, 1089, 1092, 1095, 1098, 1101, 1104, 1107, 1110, 1113, 1116, 1119,
-    1122, 1125, 1128, 1131, 1134, 1137, 1140, 1143, 1146, 1149, 1152, 1155, 1158, 1161, 1164, 1167,
-    1171, 1174, 1177, 1180, 1183, 1186, 1189, 1192, 1195, 1198, 1202, 1205, 1208, 1211, 1214, 1217,
-    1220, 1223, 1226, 1229, 1233, 1236, 1239, 1242, 1245, 1248, 1251, 1254, 1257, 1260, 1264, 1267,
-    1270, 1273, 1276, 1279, 1282, 1285, 1288, 1291, 1295, 1298, 1301, 1304, 1308, 1311, 1314, 1318,
-    1321, 1324, 1328, 1331, 1334, 1337, 1341, 1344, 1347, 1351, 1354, 1357, 1361, 1364, 1367, 1370,
-    1374, 1377, 1380, 1384, 1387, 1390, 1394, 1397, 1400, 1403, 1407, 1410, 1413, 1417, 1420, 1423,
-    1427, 1430, 1433, 1436, 1440, 1443, 1446, 1450, 1453, 1456, 1460, 1463, 1466, 1470, 1473, 1477,
-    1480, 1483, 1487, 1490, 1494, 1497, 1500, 1504, 1507, 1511, 1514, 1517, 1521, 1524, 1528, 1531,
-    1534, 1538, 1541, 1545, 1548, 1551, 1555, 1558, 1562, 1565, 1568, 1572, 1575, 1579, 1582, 1585,
-    1589, 1592, 1596, 1599, 1602, 1606, 1609, 1613, 1616, 1619, 1623, 1626, 1630, 1633, 1637, 1640,
-    1644, 1647, 1651, 1654, 1658, 1661, 1665, 1668, 1672, 1675, 1679, 1682, 1686, 1689, 1693, 1696,
-    1700, 1703, 1707, 1710, 1714, 1717, 1721, 1724, 1728, 1731, 1735, 1738, 1742, 1745, 1749, 1752,
-    1756, 1759, 1763, 1766, 1770, 1773, 1777, 1780, 1784, 1787, 1791, 1794, 1798, 1801, 1805, 1808,
-    1812, 1816, 1820, 1824, 1828, 1832, 1836, 1840, 1844, 1847, 1851, 1855, 1859, 1863, 1867, 1871,
-    1875, 1879, 1883, 1886, 1890, 1894, 1898, 1902, 1906, 1910, 1914, 1918, 1922, 1925, 1929, 1933,
-    1937, 1941, 1945, 1949, 1953, 1957, 1961, 1964, 1968, 1972, 1976, 1980, 1984, 1988, 1992, 1996,
-    2000, 2004, 2008, 2012, 2016, 2020, 2024, 2028, 2032, 2036, 2041, 2045, 2049, 2053, 2057, 2061,
-    2065, 2069, 2073, 2077, 2082, 2086, 2090, 2094, 2098, 2102, 2106, 2110, 2114, 2118, 2123, 2127,
-    2131, 2135, 2139, 2143, 2147, 2151, 2155, 2159, 2164, 2168, 2172, 2176, 2180, 2184, 2188, 2192,
-    2196, 2200, 2205, 2209, 2213, 2217, 2221, 2226, 2230, 2234, 2238, 2242, 2247, 2251, 2255, 2259,
-    2263, 2268, 2272, 2276, 2280, 2284, 2289, 2293, 2297, 2301, 2305, 2310, 2314, 2318, 2322, 2326,
-    2331, 2335, 2339, 2343, 2347, 2352, 2356, 2360, 2364, 2368, 2373, 2377, 2381, 2385, 2389, 2394,
-    2398, 2402, 2406, 2410, 2415, 2419, 2423, 2427, 2432, 2436, 2440, 2445, 2449, 2453, 2458, 2462,
-    2466, 2470, 2475, 2479, 2483, 2488, 2492, 2496, 2501, 2505, 2509, 2513, 2518, 2522, 2526, 2531,
-    2535, 2539, 2544, 2548, 2552, 2556, 2561, 2565, 2569, 2574, 2578, 2582, 2587, 2591, 2595, 2599,
-    2604, 2608, 2612, 2617, 2621, 2625, 2630, 2635, 2640, 2645, 2650, 2656, 2661, 2666, 2671, 2676,
-    2682, 2687, 2692, 2697, 2702, 2708, 2713, 2718, 2723, 2728, 2734, 2739, 2744, 2749, 2754, 2760,
-    2765, 2770, 2775, 2780, 2786, 2791, 2796, 2801, 2806, 2812, 2817, 2822, 2827, 2832, 2838, 2843,
-    2848, 2853, 2858, 2864, 2869, 2874, 2879, 2884, 2890, 2895, 2901, 2906, 2912, 2917, 2923, 2928,
-    2934, 2939, 2945, 2950, 2956, 2961, 2967, 2972, 2978, 2983, 2989, 2994, 3000, 3005, 3011, 3016,
-    3022, 3027, 3033, 3038, 3044, 3049, 3055, 3060, 3066, 3071, 3077, 3082, 3088, 3093, 3099, 3104,
-    3110, 3115, 3121, 3126, 3132, 3137, 3143, 3148, 3154, 3159, 3165, 3171, 3178, 3184, 3191, 3198,
-    3204, 3211, 3217, 3224, 3231, 3237, 3244, 3250, 3257, 3264, 3270, 3277, 3283, 3290, 3297, 3303,
-    3310, 3316, 3323, 3330, 3336, 3343, 3349, 3356, 3363, 3369, 3376, 3382, 3389, 3396, 3402, 3409,
-    3415, 3422, 3429, 3435, 3442, 3448, 3455, 3462, 3468, 3475, 3481, 3488, 3495, 3501, 3508, 3515,
-    3522, 3529, 3535, 3542, 3549, 3556, 3563, 3569, 3576, 3583, 3590, 3597, 3603, 3610, 3617, 3624,
-    3631, 3637, 3644, 3651, 3658, 3665, 3671, 3678, 3685, 3692, 3699, 3705, 3712, 3719, 3726, 3733,
-    3739, 3746, 3753, 3760, 3767, 3773, 3780, 3787, 3794, 3801, 3807, 3814, 3821, 3828, 3835, 3841,
-    3849, 3857, 3865, 3873, 3881, 3889, 3896, 3904, 3912, 3920, 3928, 3936, 3944, 3952, 3960, 3968,
-    3976, 3984, 3992, 4000, 4008, 4016, 4025, 4033, 4041, 4049, 4057, 4065, 4073, 4082, 4090, 4098,
-    4106, 4115, 4123, 4131, 4139, 4148, 4156, 4164, 4173, 4181, 4189, 4198, 4206, 4215, 4223, 4231,
-    4240, 4248, 4257, 4265, 4274, 4282, 4291, 4299, 4308, 4316, 4325, 4334, 4342, 4351, 4359, 4368,
-    4377, 4385, 4394, 4403, 4411, 4420, 4429, 4438, 4446, 4455, 4464, 4473, 4482, 4490, 4499, 4508,
-    4517, 4526, 4535, 4544, 4553, 4561, 4570, 4579, 4588, 4597, 4606, 4615, 4624, 4633, 4642, 4651,
-    4661, 4670, 4679, 4688, 4697, 4706, 4715, 4724, 4734, 4743, 4752, 4761, 4770, 4780, 4789, 4798,
-    4808, 4817, 4826, 4835, 4845, 4854, 4863, 4873, 4882, 4892, 4901, 4910, 4920, 4929, 4939, 4948,
-    4958, 4967, 4977, 4986, 4996, 5005, 5015, 5025, 5034, 5044, 5053, 5063, 5073, 5082, 5092, 5102,
-    5111, 5121, 5131, 5141, 5150, 5160, 5170, 5180, 5190, 5199, 5209, 5219, 5229, 5239, 5249, 5259,
-    5268, 5278, 5288, 5298, 5308, 5318, 5328, 5338, 5348, 5358, 5368, 5378, 5388, 5398, 5409, 5419,
-    5429, 5439, 5449, 5459, 5469, 5480, 5490, 5500, 5510, 5520, 5531, 5541, 5551, 5562, 5572, 5582,
-    5593, 5603, 5613, 5624, 5634, 5644, 5655, 5665, 5676, 5686, 5697, 5707, 5717, 5728, 5739, 5749,
-    5760, 5770, 5781, 5791, 5802, 5812, 5823, 5834, 5844, 5855, 5866, 5876, 5887, 5898, 5908, 5919,
-    5930, 5941, 5952, 5962, 5973, 5984, 5995, 6006, 6016, 6027, 6038, 6049, 6060, 6071, 6082, 6093,
-    6104, 6115, 6126, 6137, 6148, 6159, 6170, 6181, 6192, 6203, 6214, 6225, 6236, 6247, 6259, 6270,
-    6281, 6292, 6303, 6314, 6326, 6337, 6348, 6359, 6371, 6382, 6393, 6405, 6416, 6427, 6439, 6450,
-    6461, 6473, 6484, 6496, 6507, 6518, 6530, 6541, 6553, 6564, 6576, 6587, 6599, 6610, 6622, 6634,
-    6645, 6657, 6668, 6680, 6692, 6703, 6715, 6727, 6738, 6750, 6762, 6773, 6785, 6797, 6809, 6821,
-    6832, 6844, 6856, 6868, 6880, 6891, 6903, 6915, 6927, 6939, 6951, 6963, 6975, 6987, 6999, 7011,
-    7023, 7035, 7047, 7059, 7071, 7083, 7095, 7107, 7119, 7131, 7144, 7156, 7168, 7180, 7192, 7204,
-    7217, 7229, 7241, 7253, 7266, 7278, 7290, 7303, 7315, 7327, 7340, 7352, 7364, 7377, 7389, 7402,
-    7414, 7426, 7439, 7451, 7464, 7476, 7489, 7501, 7514, 7526, 7539, 7551, 7564, 7577, 7589, 7602,
-    7615, 7627, 7640, 7652, 7665, 7678, 7691, 7703, 7716, 7729, 7742, 7754, 7767, 7780, 7793, 7806,
-    7818, 7831, 7844, 7857, 7870, 7883, 7896, 7909, 7922, 7935, 7948, 7961, 7974, 7987, 8000, 8013,
-    8026, 8039, 8052, 8065, 8078, 8091, 8104, 8117, 8131, 8144, 8157, 8170, 8183, 8197, 8210, 8223,
-    8236, 8250, 8263, 8276, 8290, 8303, 8316, 8330, 8343, 8356, 8370, 8383, 8397, 8410, 8423, 8437,
-    8450, 8464, 8477, 8491, 8504, 8518, 8531, 8545, 8559, 8572, 8586, 8599, 8613, 8627, 8640, 8654,
-    8668, 8681, 8695, 8709, 8723, 8736, 8750, 8764, 8778, 8791, 8805, 8819, 8833, 8847, 8861, 8874,
-    8888, 8902, 8916, 8930, 8944, 8958, 8972, 8986, 9000, 9014, 9028, 9042, 9056, 9070, 9084, 9098,
-    9112, 9127, 9141, 9155, 9169, 9183, 9197, 9212, 9226, 9240, 9254, 9268, 9283, 9297, 9311, 9326,
-    9340, 9354, 9369, 9383, 9397, 9412, 9426, 9440, 9455, 9469, 9484, 9498, 9513, 9527, 9542, 9556,
-    9571, 9585, 9600, 9614, 9629, 9643, 9658, 9673, 9687, 9702, 9717, 9731, 9746, 9761, 9775, 9790,
-    9805, 9819, 9834, 9849, 9864, 9879, 9893, 9908, 9923, 9938, 9953, 9968, 9982, 9997, 10012,
-    10027, 10042, 10057, 10072, 10087, 10102, 10117, 10132, 10147, 10162, 10177, 10192, 10207,
-    10222, 10238, 10253, 10268, 10283, 10298, 10313, 10329, 10344, 10359, 10374, 10389, 10405,
-    10420, 10435, 10450, 10466, 10481, 10496, 10512, 10527, 10543, 10558, 10573, 10589, 10604,
-    10620, 10635, 10650, 10666, 10681, 10697, 10712, 10728, 10744, 10759, 10775, 10790, 10806,
-    10821, 10837, 10853, 10868, 10884, 10900, 10915, 10931, 10947, 10963, 10978, 10994, 11010,
-    11026, 11041, 11057, 11073, 11089, 11105, 11120, 11136, 11152, 11168, 11184, 11200, 11216,
-    11232, 11248, 11264, 11280, 11296, 11312, 11328, 11344, 11360, 11376, 11392, 11408, 11424,
-    11440, 11457, 11473, 11489, 11505, 11521, 11537, 11554, 11570, 11586, 11602, 11619, 11635,
-    11651, 11667, 11684, 11700, 11716, 11733, 11749, 11765, 11782, 11798, 11815, 11831, 11848,
-    11864, 11881, 11897, 11914, 11930, 11947, 11963, 11980, 11996, 12013, 12029, 12046, 12063,
-    12079, 12096, 12113, 12129, 12146, 12163, 12179, 12196, 12213, 12229, 12246, 12263, 12280,
-    12297, 12313, 12330, 12347, 12364, 12381, 12398, 12415, 12431, 12448, 12465, 12482, 12499,
-    12516, 12533, 12550, 12567, 12584, 12601, 12618, 12635, 12652, 12670, 12687, 12704, 12721,
-    12738, 12755, 12772, 12789, 12807, 12824, 12841, 12858, 12876, 12893, 12910, 12927, 12945,
-    12962, 12979, 12997, 13014, 13031, 13049, 13066, 13084, 13101, 13118, 13136, 13153, 13171,
-    13188, 13206, 13223, 13241, 13258, 13276, 13293, 13311, 13329, 13346, 13364, 13381, 13399,
-    13417, 13434, 13452, 13470, 13487, 13505, 13523, 13541, 13558, 13576, 13594, 13612, 13630,
-    13647, 13665, 13683, 13701, 13719, 13737, 13755, 13772, 13790, 13808, 13826, 13844, 13862,
-    13880, 13898, 13916, 13934, 13952, 13970, 13988, 14007, 14025, 14043, 14061, 14079, 14097,
-    14115, 14133, 14152, 14170, 14188, 14206, 14225, 14243, 14261, 14279, 14298, 14316, 14334,
-    14353, 14371, 14389, 14408, 14426, 14444, 14463, 14481, 14500, 14518, 14537, 14555, 14574,
-    14592, 14611, 14629, 14648, 14666, 14685, 14703, 14722, 14741, 14759, 14778, 14797, 14815,
-    14834, 14853, 14871, 14890, 14909, 14927, 14946, 14965, 14984, 15003, 15021, 15040, 15059,
-    15078, 15097, 15116, 15134, 15153, 15172, 15191, 15210, 15229, 15248, 15267, 15286, 15305,
-    15324, 15343, 15362, 15381, 15400, 15419, 15438, 15457, 15477, 15496, 15515, 15534, 15553,
-    15572, 15592, 15611, 15630, 15649, 15668, 15688, 15707, 15726, 15746, 15765, 15784, 15804,
-    15823, 15842, 15862, 15881, 15900, 15920, 15939, 15959, 15978, 15998, 16017, 16037, 16056,
-    16076, 16095, 16115, 16134, 16154, 16174, 16193, 16213, 16232, 16252, 16272, 16291, 16311,
-    16331, 16350, 16370, 16390, 16410, 16429, 16449, 16469, 16489, 16509, 16528, 16548, 16568,
-    16588, 16608, 16628, 16648, 16668, 16688, 16707, 16727, 16747, 16767, 16787, 16807, 16827,
-    16847, 16867, 16888, 16908, 16928, 16948, 16968, 16988, 17008, 17028, 17049, 17069, 17089,
-    17109, 17129, 17150, 17170, 17190, 17210, 17231, 17251, 17271, 17292, 17312, 17332, 17353,
-    17373, 17393, 17414, 17434, 17455, 17475, 17496, 17516, 17536, 17557, 17577, 17598, 17619,
-    17639, 17660, 17680, 17701, 17721, 17742, 17763, 17783, 17804, 17825, 17845, 17866, 17887,
-    17907, 17928, 17949, 17970, 17990, 18011, 18032, 18053, 18074, 18094, 18115, 18136, 18157,
-    18178, 18199, 18220, 18241, 18262, 18283, 18303, 18324, 18345, 18366, 18387, 18409, 18430,
-    18451, 18472, 18493, 18514, 18535, 18556, 18577, 18598, 18620, 18641, 18662, 18683, 18704,
-    18726, 18747, 18768, 18789, 18811, 18832, 18853, 18875, 18896, 18917, 18939, 18960, 18981,
-    19003, 19024, 19046, 19067, 19088, 19110, 19131, 19153, 19174, 19196, 19217, 19239, 19261,
-    19282, 19304, 19325, 19347, 19369, 19390, 19412, 19433, 19455, 19477, 19499, 19520, 19542,
-    19564, 19585, 19607, 19629, 19651, 19673, 19694, 19716, 19738, 19760, 19782, 19804, 19826,
-    19848, 19869, 19891, 19913, 19935, 19957, 19979, 20001, 20023, 20045, 20067, 20089, 20111,
-    20134, 20156, 20178, 20200, 20222, 20244, 20266, 20288, 20311, 20333, 20355,
-];
-
-const BASIC_FIVE_STATUS_LIMIT: [i32; 5] = [2300, 2200, 1800, 1400, 1400];
-// === AI Evaluation Named Constants ===
-// Vital evaluation piecewise: slopes and breakpoints
-const VITAL_EVAL_LOW_SLOPE: f64 = 2.0; // vital ≤50: steep slope
-const VITAL_EVAL_MID_SLOPE: f64 = 1.5; // vital 50-70: moderate slope
-const VITAL_EVAL_HIGH_SLOPE: f64 = 1.0; // vital >70: flat slope
-const VITAL_EVAL_LOW_THRESH: i32 = 50; // low→mid breakpoint
-const VITAL_EVAL_MID_THRESH: i32 = 70; // mid→high breakpoint
-                                       // Derived intercepts (precomputed to avoid recomputation)
-const VITAL_EVAL_MID_INTERCEPT: f64 = 100.0; // VITAL_EVAL_LOW_SLOPE * VITAL_EVAL_LOW_THRESH = 2.0*50
-const VITAL_EVAL_HIGH_INTERCEPT: f64 = 130.0; // 100.0 + 1.5*(70-50) = mid_intercept + mid_slope*(mid_thresh-low_thresh)
-
-// Vital factor: controls how much we value vitality
-const VITAL_FACTOR_BASE: f64 = 3.5; // starting vital factor
-const VITAL_FACTOR_RANGE: f64 = 3.5; // added over full game (base→7.0 at end)
-
-// Soft constraint: reserve multiplier for stat overflow penalty
-const RESERVE_MULTIPLIER: f64 = 40.0;
-const RESERVE_MIN: f64 = 0.1; // avoid division by zero
-
-// URA event final bonus (stats gained from non-training events)
-const URA3_BONUS: i32 = 45; // URA scenario 3rd event
-const URA_FINAL_EVENT_BONUS: i32 = 30; // final event after training
-const URA_EVENT_BONUS: i32 = 20; // URA1/URA2 event bonus
-
-// Training evaluation parameters
-const STATUS_WEIGHT: f64 = 6.0; // per-stat weight (uniform for all 5)
-const SMALL_FAIL_VALUE: f64 = -150.0; // minor failure penalty
-const BIG_FAIL_VALUE: f64 = -500.0; // major failure (大失敗) penalty
-const PT_SCORE_RATE: f64 = 2.0; // skill point → evaluation value rate
-const FAIL_RATE_TO_PROB: f64 = 0.01; // convert percentage (0-100) to probability
-const BIG_FAIL_THRESHOLD: i32 = 20; // fail_rate below this → no 大失敗
-
-// Shining (彩圈) and heads (相伴) bonus
-const SHINING_BONUS_PER: f64 = 200.0; // expected value per 彩圈 partner
-const HEADS_BONUS_PER: f64 = 20.0; // small bonus per extra partner
-
-// Rest/Outgoing vital gain
-const REST_VITAL_GAIN: i32 = 50; // vital gained from rest
-const OUTGOING_VITAL_GAIN: i32 = 50; // vital gained from outgoing
-
-// Motivation factor: scales training value by current mood
-// 1=絶不調, 2=不調, 3=普通, 4=好調, 5=絶好調
-const MOT_FACTOR_WORST: f64 = 0.6; // motivation 1
-const MOT_FACTOR_BAD: f64 = 0.75; // motivation 2
-const MOT_FACTOR_NORMAL: f64 = 0.9; // motivation 3
-const MOT_FACTOR_GOOD: f64 = 1.0; // motivation 4
-const MOT_FACTOR_BEST: f64 = 1.1; // motivation 5
-
-// Outgoing motivation bonus (motivation level → value of raising it)
-const OUTGOING_BONUS_MOT1: f64 = 80.0; // 絶不調→不調: urgent
-const OUTGOING_BONUS_MOT2: f64 = 50.0; // 不調→普通: important
-const OUTGOING_BONUS_MOT3: f64 = 25.0; // 普通→好調: moderate
-const OUTGOING_BONUS_MOT4: f64 = 10.0; // 好調→絶好調: minor
-
-// Game scenario total turns
-const URA_TOTAL_TURNS: i32 = 78; // URA scenario has 78 training turns
-                                 // Scenario 14 UI is countdown-based and _totalTurnNum mapping is unverified.
-                                 // Do not assign a total-turn constant or derive a year/remaining turn from it.
-const DEFAULT_TOTAL_TURNS: i32 = 72; // Standard scenarios have 72 turns
-
-// ★ v3.24.69/70: 拉面杯评分参数 [候选权重, 待实测校准]
-const RAMEN_GAUGE_HEAD_VALUE: f64 = 25.0; // 拉面杯每个人头的素材边际价值(人头→3种素材各+1) [候选]
-const RAMEN_KAKUSHIMI_CAP: i32 = 4; // 隠し味上限 [截图]
-const RAMEN_OUTING_KAKUSHIMI_VALUE: f64 = 60.0; // 外出给隠し味的单价 [MDB outing_effect + 候选权重]
-const NEXT_RACE_OUTING_FACTOR: f64 = 0.3; // 下回合比赛时外出价值折扣(体力溢出) [用户规则]
+// [PURE-CAPTURE-3293] 启发式 AI 常量/查定表已移除：算分与决策全部移交 App 侧
+//   （五维查定表 → App ScoreTable.kt；训练估值/最优动作 → App 内置引擎 matsuri/search）
 
 // Game CommandId constants (IL2CPP method identifiers)
 // 2026-07-17 修正: 102=力量(Power), 105=耐力(Stamina) — 游戏内ID与UI顺序速耐力根智相反
@@ -4068,13 +3853,6 @@ fn train_index_of_cmd(command_id: i32) -> i32 {
         _ => -1,
     }
 }
-// URA turn thresholds for max vital equivalent calculation
-const URA_LAST_TURN: i32 = 76; // URA finals: no vital needed
-const URA_PRE_FINAL_TURN: i32 = 71; // just before URA: minimal vital
-const URA_PRE_FINAL_VITAL: i32 = 10; // vital needed at pre-final turn
-const URA_FINAL_VITAL: i32 = 30; // vital needed at final training turn
-const URA_MAX_NON_RACE_TURNS: i32 = 6; // max non-race turns before URA
-const URA_VITAL_PER_NON_RACE: i32 = 15; // vital equivalent per non-race turn
 const TEXT_DATA_CATEGORY_CHARA_NAME: i32 = 6; // text_data.category=6: character name
 const TEXT_DATA_CATEGORY_RACE_NAME: i32 = 32; // text_data.category=32: race name
 const TEXT_DATA_CATEGORY_STORY_TITLE: i32 = 45; // text_data.category=45: single mode story title
@@ -4122,68 +3900,6 @@ const IL2CPP_OBSCURED_INT_PAIR2_KEY_OFF: usize = 0x24; // Second ObscuredInt in 
 const IL2CPP_OBSCURED_INT_PAIR2_HIDDEN_OFF: usize = 0x28; // Second ObscuredInt in pair: hiddenValue (offset=0x28)
 const IL2CPP_LIST_ARRAY_OFF: usize = 0x10; // Il2CppList._items array pointer (offset=0x10)
 
-/// Compute current evaluation score from five stats (per-stat lookup then sum)
-/// 評価点 = STAT_EVAL_SCORE[speed] + STAT_EVAL_SCORE[stamina] + ... + STAT_EVAL_SCORE[wiz]
-fn compute_score(speed: i32, stamina: i32, power: i32, guts: i32, wiz: i32) -> i32 {
-    let lookup = |x: i32| -> i32 {
-        if x <= 0 {
-            return 0;
-        }
-        let idx = x as usize;
-        if idx >= STAT_EVAL_SCORE.len() {
-            return STAT_EVAL_SCORE[STAT_EVAL_SCORE.len() - 1];
-        }
-        STAT_EVAL_SCORE[idx]
-    };
-    lookup(speed) + lookup(stamina) + lookup(power) + lookup(guts) + lookup(wiz)
-}
-
-/// Soft constraint function for stat overflow control
-/// When stat gain would exceed remaining space, reduce its effective value
-fn status_soft_function(x: f64, reserve: f64) -> f64 {
-    if x >= 0.0 {
-        return 0.0;
-    }
-    if x > -reserve {
-        return -x * x / (2.0 * reserve);
-    }
-    x + 0.5 * reserve
-}
-
-/// Vital evaluation: low vital is very valuable, high vital less so
-/// ≤VITAL_EVAL_LOW_THRESH: steep, LOW_THRESH-MID_THRESH: moderate, >MID_THRESH: flat
-fn vital_evaluation(vital: i32, max_vital: i32) -> f64 {
-    let v = if vital > max_vital { max_vital } else { vital };
-    if v <= VITAL_EVAL_LOW_THRESH {
-        VITAL_EVAL_LOW_SLOPE * v as f64
-    } else if v <= VITAL_EVAL_MID_THRESH {
-        VITAL_EVAL_MID_SLOPE * (v - VITAL_EVAL_LOW_THRESH) as f64 + VITAL_EVAL_MID_INTERCEPT
-    } else {
-        VITAL_EVAL_HIGH_SLOPE * (v - VITAL_EVAL_MID_THRESH) as f64 + VITAL_EVAL_HIGH_INTERCEPT
-    }
-}
-
-/// Calculate max vital equivalent for vital evaluation
-/// Late game: less vital needed (fewer turns remain)
-fn calculate_max_vital_eq(turn: i32, max_vital: i32) -> i32 {
-    if turn >= URA_LAST_TURN {
-        return 0;
-    }
-    if turn > URA_PRE_FINAL_TURN {
-        return URA_PRE_FINAL_VITAL;
-    }
-    if turn == URA_PRE_FINAL_TURN {
-        return URA_FINAL_VITAL;
-    }
-    let non_race_turns = std::cmp::min(URA_MAX_NON_RACE_TURNS, URA_PRE_FINAL_TURN - turn);
-    let eq = URA_FINAL_VITAL + URA_VITAL_PER_NON_RACE * non_race_turns;
-    if eq > max_vital {
-        max_vital
-    } else {
-        eq
-    }
-}
-
 /// CommandId → training index (0=Speed, 1=Stamina, 2=Power, 3=Guts, 4=Wisdom)
 fn cmd_id_to_train_idx(cmd_id: i32) -> Option<usize> {
     match cmd_id {
@@ -4194,282 +3910,6 @@ fn cmd_id_to_train_idx(cmd_id: i32) -> Option<usize> {
         CMD_WISDOM | CMD_URA_WISDOM => Some(4),
         _ => None,
     }
-}
-
-/// AI evaluation result
-struct AiResult {
-    score: i32,                       // Current evaluation score (attribute + skill)
-    skill_eval: i32,                  // Skill evaluation value
-    skill_count: i32,                 // Number of learned skills
-    total_stats: i32,                 // Total revised stats
-    best_action: String,              // Recommended action name
-    best_value: f64,                  // Best action value
-    train_values: Vec<(String, f64)>, // Per-training values
-    rest_value: f64,                  // Rest value
-    outgoing_value: f64,              // Outgoing value
-}
-
-/// Run handwritten AI evaluation for current game state
-/// Input: all data from read_summary_inner
-fn evaluate_ai(
-    turn: i32,
-    stats: [i32; 5], // [speed, stamina, power, guts, wiz]
-    vital: i32,
-    max_vital: i32,
-    motivation: i32, // 1-5
-    scenario_id: i32,
-    // Per-training data: (command_id, [5 stat gains], skill_pt_gain, vital_cost, failure_rate, is_enable, shining, heads)
-    trainings: &[(i32, [i32; 5], i32, i32, i32, i32, i32, i32)],
-    // Buff effects
-    _has_ai_jiao: bool,       // 愛嬌 buff (TODO: implement buff effect)
-    _has_renshou_jouzu: bool, // 練習上手 buff (TODO: implement buff effect)
-    skill_eval: i32,          // ★ v3.22.0: skill evaluation value
-    skill_count: i32,         // ★ v3.22.0: learned skill count
-    // ★ v3.24.69: 拉面杯剧本感知参数
-    ramen_gauge_gains: &std::collections::HashMap<i32, i32>, // 各训练素材进度增益
-    kakushimi_num: i32,                                      // 当前隠し味持有数
-    next_turn_race: bool, // 下回合是否比赛回合 [MDB single_mode_turn]
-) -> AiResult {
-    // Total turns per scenario
-    // v3.27.10: All scenarios use verified turn mapping.
-    let temporal_turn_verified = true;
-    let total_turn: i32 = match scenario_id {
-        1 => URA_TOTAL_TURNS,
-        14 => 78, // Ramen: 78 turns (0-77), matching upstream umaai-rs
-        _ => DEFAULT_TOTAL_TURNS,
-    };
-
-    // Ramen: disable projections that require mapping the raw field to an
-    // increasing career turn. Immediate observed gains remain usable.
-    let remain_turn = if temporal_turn_verified {
-        (total_turn - turn - 1).max(0)
-    } else {
-        0
-    };
-
-    // === Current Score ===
-    let attr_score = compute_score(stats[0], stats[1], stats[2], stats[3], stats[4]);
-    let score = attr_score + skill_eval; // ★ v3.22.0: attribute + skill evaluation
-    let total_stats = stats[0] + stats[1] + stats[2] + stats[3] + stats[4];
-
-    // === Evaluation Parameters ===
-    let status_weights = [
-        STATUS_WEIGHT,
-        STATUS_WEIGHT,
-        STATUS_WEIGHT,
-        STATUS_WEIGHT,
-        STATUS_WEIGHT,
-    ];
-    let small_fail_value = SMALL_FAIL_VALUE;
-    let big_fail_value = BIG_FAIL_VALUE;
-    let pt_score_rate = PT_SCORE_RATE;
-
-    // Vital factor: increases from 3.5 to 7.0 as game progresses
-    let vital_factor = if temporal_turn_verified {
-        VITAL_FACTOR_BASE + (turn as f64 / total_turn as f64) * VITAL_FACTOR_RANGE
-    } else {
-        VITAL_FACTOR_BASE
-    };
-
-    // Reserve for soft constraint: controls stat overflow penalty
-    let reserve = RESERVE_MULTIPLIER
-        * remain_turn as f64
-        * (1.0 - remain_turn as f64 / (total_turn as f64 * 2.0));
-    let reserve = if reserve > RESERVE_MIN {
-        reserve
-    } else {
-        RESERVE_MIN
-    };
-
-    // URA final bonus (events that add stats after training)
-    let mut final_bonus = URA3_BONUS + URA_FINAL_EVENT_BONUS;
-    if remain_turn >= 1 {
-        final_bonus += URA_EVENT_BONUS;
-    } // URA2
-    if remain_turn >= 2 {
-        final_bonus += URA_EVENT_BONUS;
-    } // URA1
-
-    // Remaining space per stat
-    let mut remain = [0.0f64; 5];
-    for i in 0..5 {
-        remain[i] = (BASIC_FIVE_STATUS_LIMIT[i] - stats[i] - final_bonus) as f64;
-    }
-
-    // Vital evaluation baseline
-    let max_vital_eq = calculate_max_vital_eq(turn, max_vital);
-    let vital_before = vital_evaluation(std::cmp::min(vital, max_vital_eq), max_vital);
-
-    let mut train_values = Vec::new();
-    let mut best_value = std::f64::NEG_INFINITY;
-    let mut best_action = "Rest".to_string();
-
-    // === Evaluate each training ===
-    for &(cmd_id, ref gains, skill_pt, vital_cost, fail_rate, is_enable, shining, heads) in
-        trainings
-    {
-        let name = match cmd_id {
-            CMD_SPEED => "Speed",
-            CMD_STAMINA => "Stamina",
-            CMD_GUTS => "Guts",
-            CMD_POWER => "Power",
-            CMD_WISDOM => "Wisdom",
-            CMD_URA_SPEED => "Speed",
-            CMD_URA_STAMINA => "Stamina",
-            CMD_URA_GUTS => "Guts",
-            CMD_URA_POWER => "Power",
-            CMD_URA_WISDOM => "Wisdom",
-            CMD_KAKUSHIMI => "Kakushimi",
-            _ => "Unknown",
-        };
-
-        if is_enable == 0 || name == "Unknown" {
-            train_values.push((name.to_string(), std::f64::NEG_INFINITY));
-            continue;
-        }
-
-        // Status gain evaluation with soft constraints
-        let mut value = 0.0;
-        for sta in 0..5 {
-            let s0 = status_soft_function(-remain[sta], reserve);
-            let s1 = status_soft_function(gains[sta] as f64 - remain[sta], reserve);
-            value += status_weights[sta] * (s1 - s0);
-        }
-
-        // Skill point value
-        value += pt_score_rate * skill_pt as f64;
-
-        // ★ v3.15.3: Motivation factor — higher mood = more future training value
-        // Low motivation reduces effective training value; high motivation boosts it
-        // mot_factor: 1=0.6, 2=0.75, 3=0.9, 4=1.0, 5=1.1
-        let mot_factor = match motivation {
-            1 => MOT_FACTOR_WORST,
-            2 => MOT_FACTOR_BAD,
-            3 => MOT_FACTOR_NORMAL,
-            4 => MOT_FACTOR_GOOD,
-            _ => MOT_FACTOR_BEST,
-        };
-        value *= mot_factor;
-
-        // Vital change effect
-        let vital_after = std::cmp::min(max_vital_eq, vital + vital_cost);
-        value += vital_factor * (vital_evaluation(vital_after, max_vital) - vital_before);
-
-        // Failure penalty
-        if fail_rate > 0 {
-            let big_fail_prob = if fail_rate < BIG_FAIL_THRESHOLD {
-                0.0
-            } else {
-                fail_rate as f64
-            };
-            let fail_value_avg = FAIL_RATE_TO_PROB * big_fail_prob * big_fail_value
-                + (1.0 - FAIL_RATE_TO_PROB * big_fail_prob) * small_fail_value;
-            value = FAIL_RATE_TO_PROB * fail_rate as f64 * fail_value_avg
-                + (1.0 - FAIL_RATE_TO_PROB * fail_rate as f64) * value;
-        }
-
-        // ★ v3.15.3: Shining (彩圈) bonus — friend/group card event expected value
-        // Each 彩圈 partner gives a training event with extra stats + skill hint
-        if shining > 0 {
-            let shining_bonus = SHINING_BONUS_PER * shining as f64;
-            value += shining_bonus;
-        }
-        // Heads bonus: more partners = faster relationship building
-        if heads > 1 {
-            let heads_bonus = HEADS_BONUS_PER * (heads - 1) as f64;
-            value += heads_bonus;
-        }
-        // ★ v3.24.70: 拉面杯素材价值改按"人头边际进度"算（用户反馈：总推荐1人头力量）
-        // 训练自带的基础进度（+7图标类）谁都有，不该加分；
-        // 每个人头给三种素材各+1=3点边际进度 [候选公式]，这才是人头价值
-        if scenario_id == 14 && heads > 0 {
-            value += RAMEN_GAUGE_HEAD_VALUE * heads as f64;
-        }
-        train_values.push((name.to_string(), value));
-
-        if value > best_value {
-            best_value = value;
-            best_action = name.to_string();
-        }
-    }
-
-    // === Evaluate Rest ===
-    let rest_vital_gain = REST_VITAL_GAIN;
-    let vital_after_rest = std::cmp::min(max_vital_eq, vital + rest_vital_gain);
-    let rest_value = vital_factor * (vital_evaluation(vital_after_rest, max_vital) - vital_before);
-
-    if rest_value > best_value {
-        best_value = rest_value;
-        best_action = "Rest".to_string();
-    }
-
-    // === Evaluate Outgoing ===
-    // ★ v3.15.3: outgoing bonus scales with motivation deficit
-    // Only recommend外出 when motivation is low (≤3 = 普通 or worse)
-    // mot 1→2: big value (80), mot 2→3: medium (50), mot 3→4: small (25), mot 4→5: negligible (10)
-    let outgoing_bonus = match motivation {
-        1 => OUTGOING_BONUS_MOT1,
-        2 => OUTGOING_BONUS_MOT2,
-        3 => OUTGOING_BONUS_MOT3,
-        4 => OUTGOING_BONUS_MOT4,
-        _ => 0.0,
-    };
-    let outgoing_vital_gain = OUTGOING_VITAL_GAIN;
-    let vital_after_outgoing = std::cmp::min(max_vital_eq, vital + outgoing_vital_gain);
-    let mut outgoing_value = vital_factor
-        * (vital_evaluation(vital_after_outgoing, max_vital) - vital_before)
-        + outgoing_bonus;
-
-    // ★ v3.24.69: 拉面杯外出思考逻辑 [用户规则]
-    // 1) 隠し味缺口价值: 外出给隠し味 [MDB outing_effect]，库存越少越值，满4=0（防溢出/防过度外出）
-    // 2) 年度节奏: 第1年少外出(系数0.6)，第2/3年正常（用户口径: 1年1次/2年2次/3年2次，
-    //    无状态计数，用库存缺口×年度系数近似）
-    // 3) 下回合比赛: 外出体力溢出，价值×0.3 [MDB single_mode_turn.race_entry_type]
-    if scenario_id == 14 {
-        let deficit = std::cmp::max(0, RAMEN_KAKUSHIMI_CAP - kakushimi_num) as f64;
-        // Runtime turn mapping is unverified for Ramen. Do not apply the old
-        // 24/48 year thresholds or next-turn race discount. Only the immediate
-        // observed Kakushimi deficit term remains enabled.
-        outgoing_value += RAMEN_OUTING_KAKUSHIMI_VALUE * deficit;
-    }
-
-    if outgoing_value > best_value {
-        best_value = outgoing_value;
-        best_action = "Outgoing".to_string();
-    }
-
-    AiResult {
-        score,
-        skill_eval,
-        skill_count,
-        total_stats,
-        best_action,
-        best_value,
-        train_values,
-        rest_value,
-        outgoing_value,
-    }
-}
-
-/// Format AI result as compact JSON for /summary output
-fn ai_result_to_json(r: &AiResult) -> String {
-    let tv: Vec<String> = r
-        .train_values
-        .iter()
-        .map(|(n, v)| format!(r#""{}":{}"#, n, (v * 10.0).round() / 10.0))
-        .collect();
-    format!(
-        r#"{{"score":{},"skill_eval":{},"skill_count":{},"total_stats":{},"best":"{}","best_v":{},"train":{{{}}},"rest":{},"outgoing":{}}}"#,
-        r.score,
-        r.skill_eval,
-        r.skill_count,
-        r.total_stats,
-        r.best_action,
-        (r.best_value * 10.0).round() / 10.0,
-        tv.join(","),
-        (r.rest_value * 10.0).round() / 10.0,
-        (r.outgoing_value * 10.0).round() / 10.0,
-    )
 }
 
 // ★ v3.22.0: Skill Evaluation — read learned skills from game + MasterDB
@@ -5171,169 +4611,6 @@ unsafe fn festa_json(chara_obj: *const c_void) -> String {
         persons.join(","),
         info_json
     )
-}
-
-// [SCORE-3292]
-/// 五维总和 → 查定分（来源：EtherealAO/UmaAi GameConstants::FiveStatusFinalScore[2801]）
-#[rustfmt::skip]
-const FIVE_STATUS_FINAL_SCORE: [i32; 2801] = [
-    0, 1, 1, 2, 2, 3, 3, 4, 4, 5, 5, 6, 6, 7, 7, 8, 8, 9, 9, 10,
-    10, 11, 11, 12, 12, 13, 13, 14, 14, 15, 15, 16, 16, 17, 17, 18, 18, 19, 19, 20,
-    20, 21, 21, 22, 22, 23, 23, 24, 24, 25, 25, 26, 27, 28, 29, 29, 30, 31, 32, 33,
-    33, 34, 35, 36, 37, 37, 38, 39, 40, 41, 41, 42, 43, 44, 45, 45, 46, 47, 48, 49,
-    49, 50, 51, 52, 53, 53, 54, 55, 56, 57, 57, 58, 59, 60, 61, 61, 62, 63, 64, 65,
-    66, 67, 68, 69, 70, 71, 72, 73, 74, 75, 76, 77, 78, 79, 80, 81, 82, 83, 84, 85,
-    86, 87, 88, 89, 90, 91, 92, 93, 94, 95, 96, 97, 98, 99, 100, 101, 102, 103, 104, 105,
-    106, 107, 108, 109, 110, 111, 112, 113, 114, 115, 116, 117, 118, 120, 121, 122, 124, 125, 126, 128,
-    129, 130, 131, 133, 134, 135, 137, 138, 139, 141, 142, 143, 144, 146, 147, 148, 150, 151, 152, 154,
-    155, 156, 157, 159, 160, 161, 163, 164, 165, 167, 168, 169, 170, 172, 173, 174, 176, 177, 178, 180,
-    181, 183, 184, 186, 188, 189, 191, 192, 194, 196, 197, 199, 200, 202, 204, 205, 207, 208, 210, 212,
-    213, 215, 216, 218, 220, 221, 223, 224, 226, 228, 229, 231, 232, 234, 236, 237, 239, 240, 242, 244,
-    245, 247, 248, 250, 252, 253, 255, 256, 258, 260, 261, 263, 265, 267, 269, 270, 272, 274, 276, 278,
-    279, 281, 283, 285, 287, 288, 290, 292, 294, 296, 297, 299, 301, 303, 305, 306, 308, 310, 312, 314,
-    315, 317, 319, 321, 323, 324, 326, 328, 330, 332, 333, 335, 337, 339, 341, 342, 344, 346, 348, 350,
-    352, 354, 356, 358, 360, 362, 364, 366, 368, 371, 373, 375, 377, 379, 381, 383, 385, 387, 389, 392,
-    394, 396, 398, 400, 402, 404, 406, 408, 410, 413, 415, 417, 419, 421, 423, 425, 427, 429, 431, 434,
-    436, 438, 440, 442, 444, 446, 448, 450, 452, 455, 457, 459, 462, 464, 467, 469, 471, 474, 476, 479,
-    481, 483, 486, 488, 491, 493, 495, 498, 500, 503, 505, 507, 510, 512, 515, 517, 519, 522, 524, 527,
-    529, 531, 534, 536, 539, 541, 543, 546, 548, 551, 553, 555, 558, 560, 563, 565, 567, 570, 572, 575,
-    577, 580, 582, 585, 588, 590, 593, 595, 598, 601, 603, 606, 608, 611, 614, 616, 619, 621, 624, 627,
-    629, 632, 634, 637, 640, 642, 645, 647, 650, 653, 655, 658, 660, 663, 666, 668, 671, 673, 676, 679,
-    681, 684, 686, 689, 692, 694, 697, 699, 702, 705, 707, 710, 713, 716, 719, 721, 724, 727, 730, 733,
-    735, 738, 741, 744, 747, 749, 752, 755, 758, 761, 763, 766, 769, 772, 775, 777, 780, 783, 786, 789,
-    791, 794, 797, 800, 803, 805, 808, 811, 814, 817, 819, 822, 825, 828, 831, 833, 836, 839, 842, 845,
-    847, 850, 853, 856, 859, 862, 865, 868, 871, 874, 876, 879, 882, 885, 888, 891, 894, 897, 900, 903,
-    905, 908, 911, 914, 917, 920, 923, 926, 929, 932, 934, 937, 940, 943, 946, 949, 952, 955, 958, 961,
-    963, 966, 969, 972, 975, 978, 981, 984, 987, 990, 993, 996, 999, 1002, 1005, 1008, 1011, 1014, 1017, 1020,
-    1023, 1026, 1029, 1032, 1035, 1038, 1041, 1044, 1047, 1050, 1053, 1056, 1059, 1062, 1065, 1068, 1071, 1074, 1077, 1080,
-    1083, 1086, 1089, 1092, 1095, 1098, 1101, 1104, 1107, 1110, 1113, 1116, 1119, 1122, 1125, 1128, 1131, 1134, 1137, 1140,
-    1143, 1146, 1149, 1152, 1155, 1158, 1161, 1164, 1167, 1171, 1174, 1177, 1180, 1183, 1186, 1189, 1192, 1195, 1198, 1202,
-    1205, 1208, 1211, 1214, 1217, 1220, 1223, 1226, 1229, 1233, 1236, 1239, 1242, 1245, 1248, 1251, 1254, 1257, 1260, 1264,
-    1267, 1270, 1273, 1276, 1279, 1282, 1285, 1288, 1291, 1295, 1298, 1301, 1304, 1308, 1311, 1314, 1318, 1321, 1324, 1328,
-    1331, 1334, 1337, 1341, 1344, 1347, 1351, 1354, 1357, 1361, 1364, 1367, 1370, 1374, 1377, 1380, 1384, 1387, 1390, 1394,
-    1397, 1400, 1403, 1407, 1410, 1413, 1417, 1420, 1423, 1427, 1430, 1433, 1436, 1440, 1443, 1446, 1450, 1453, 1456, 1460,
-    1463, 1466, 1470, 1473, 1477, 1480, 1483, 1487, 1490, 1494, 1497, 1500, 1504, 1507, 1511, 1514, 1517, 1521, 1524, 1528,
-    1531, 1534, 1538, 1541, 1545, 1548, 1551, 1555, 1558, 1562, 1565, 1568, 1572, 1575, 1579, 1582, 1585, 1589, 1592, 1596,
-    1599, 1602, 1606, 1609, 1613, 1616, 1619, 1623, 1626, 1630, 1633, 1637, 1640, 1644, 1647, 1651, 1654, 1658, 1661, 1665,
-    1668, 1672, 1675, 1679, 1682, 1686, 1689, 1693, 1696, 1700, 1703, 1707, 1710, 1714, 1717, 1721, 1724, 1728, 1731, 1735,
-    1738, 1742, 1745, 1749, 1752, 1756, 1759, 1763, 1766, 1770, 1773, 1777, 1780, 1784, 1787, 1791, 1794, 1798, 1801, 1805,
-    1808, 1812, 1816, 1820, 1824, 1828, 1832, 1836, 1840, 1844, 1847, 1851, 1855, 1859, 1863, 1867, 1871, 1875, 1879, 1883,
-    1886, 1890, 1894, 1898, 1902, 1906, 1910, 1914, 1918, 1922, 1925, 1929, 1933, 1937, 1941, 1945, 1949, 1953, 1957, 1961,
-    1964, 1968, 1972, 1976, 1980, 1984, 1988, 1992, 1996, 2000, 2004, 2008, 2012, 2016, 2020, 2024, 2028, 2032, 2036, 2041,
-    2045, 2049, 2053, 2057, 2061, 2065, 2069, 2073, 2077, 2082, 2086, 2090, 2094, 2098, 2102, 2106, 2110, 2114, 2118, 2123,
-    2127, 2131, 2135, 2139, 2143, 2147, 2151, 2155, 2159, 2164, 2168, 2172, 2176, 2180, 2184, 2188, 2192, 2196, 2200, 2205,
-    2209, 2213, 2217, 2221, 2226, 2230, 2234, 2238, 2242, 2247, 2251, 2255, 2259, 2263, 2268, 2272, 2276, 2280, 2284, 2289,
-    2293, 2297, 2301, 2305, 2310, 2314, 2318, 2322, 2326, 2331, 2335, 2339, 2343, 2347, 2352, 2356, 2360, 2364, 2368, 2373,
-    2377, 2381, 2385, 2389, 2394, 2398, 2402, 2406, 2410, 2415, 2419, 2423, 2427, 2432, 2436, 2440, 2445, 2449, 2453, 2458,
-    2462, 2466, 2470, 2475, 2479, 2483, 2488, 2492, 2496, 2501, 2505, 2509, 2513, 2518, 2522, 2526, 2531, 2535, 2539, 2544,
-    2548, 2552, 2556, 2561, 2565, 2569, 2574, 2578, 2582, 2587, 2591, 2595, 2599, 2604, 2608, 2612, 2617, 2621, 2625, 2630,
-    2635, 2640, 2645, 2650, 2656, 2661, 2666, 2671, 2676, 2682, 2687, 2692, 2697, 2702, 2708, 2713, 2718, 2723, 2728, 2734,
-    2739, 2744, 2749, 2754, 2760, 2765, 2770, 2775, 2780, 2786, 2791, 2796, 2801, 2806, 2812, 2817, 2822, 2827, 2832, 2838,
-    2843, 2848, 2853, 2858, 2864, 2869, 2874, 2879, 2884, 2890, 2895, 2901, 2906, 2912, 2917, 2923, 2928, 2934, 2939, 2945,
-    2950, 2956, 2961, 2967, 2972, 2978, 2983, 2989, 2994, 3000, 3005, 3011, 3016, 3022, 3027, 3033, 3038, 3044, 3049, 3055,
-    3060, 3066, 3071, 3077, 3082, 3088, 3093, 3099, 3104, 3110, 3115, 3121, 3126, 3132, 3137, 3143, 3148, 3154, 3159, 3165,
-    3171, 3178, 3184, 3191, 3198, 3204, 3211, 3217, 3224, 3231, 3237, 3244, 3250, 3257, 3264, 3270, 3277, 3283, 3290, 3297,
-    3303, 3310, 3316, 3323, 3330, 3336, 3343, 3349, 3356, 3363, 3369, 3376, 3382, 3389, 3396, 3402, 3409, 3415, 3422, 3429,
-    3435, 3442, 3448, 3455, 3462, 3468, 3475, 3481, 3488, 3495, 3501, 3508, 3515, 3522, 3529, 3535, 3542, 3549, 3556, 3563,
-    3569, 3576, 3583, 3590, 3597, 3603, 3610, 3617, 3624, 3631, 3637, 3644, 3651, 3658, 3665, 3671, 3678, 3685, 3692, 3699,
-    3705, 3712, 3719, 3726, 3733, 3739, 3746, 3753, 3760, 3767, 3773, 3780, 3787, 3794, 3801, 3807, 3814, 3821, 3828, 3835,
-    3841, 3841, 3849, 3849, 3857, 3857, 3865, 3865, 3873, 3873, 3881, 3881, 3889, 3889, 3897, 3897, 3905, 3905, 3912, 3912,
-    3920, 3920, 3928, 3928, 3936, 3936, 3944, 3944, 3952, 3952, 3960, 3960, 3968, 3968, 3976, 3976, 3984, 3984, 3992, 3992,
-    4001, 4001, 4009, 4009, 4017, 4017, 4025, 4025, 4033, 4033, 4041, 4041, 4049, 4049, 4057, 4057, 4065, 4065, 4073, 4073,
-    4082, 4082, 4090, 4090, 4098, 4098, 4107, 4107, 4115, 4115, 4123, 4123, 4132, 4132, 4140, 4140, 4148, 4148, 4156, 4156,
-    4165, 4165, 4173, 4173, 4182, 4182, 4190, 4190, 4198, 4198, 4207, 4207, 4215, 4215, 4224, 4224, 4232, 4232, 4240, 4240,
-    4249, 4249, 4257, 4257, 4266, 4266, 4274, 4274, 4283, 4283, 4291, 4291, 4300, 4300, 4308, 4308, 4317, 4317, 4325, 4325,
-    4334, 4334, 4343, 4343, 4351, 4351, 4360, 4360, 4368, 4368, 4377, 4377, 4386, 4386, 4394, 4394, 4403, 4403, 4411, 4411,
-    4420, 4420, 4429, 4429, 4438, 4438, 4447, 4447, 4455, 4455, 4464, 4464, 4473, 4473, 4482, 4482, 4491, 4491, 4499, 4499,
-    4508, 4508, 4517, 4517, 4526, 4526, 4535, 4535, 4544, 4544, 4553, 4553, 4562, 4562, 4571, 4571, 4580, 4580, 4588, 4588,
-    4597, 4597, 4606, 4606, 4615, 4615, 4624, 4624, 4633, 4633, 4642, 4642, 4651, 4651, 4660, 4660, 4669, 4669, 4678, 4678,
-    4688, 4688, 4697, 4697, 4706, 4706, 4715, 4715, 4724, 4724, 4734, 4734, 4743, 4743, 4752, 4752, 4761, 4761, 4770, 4770,
-    4780, 4780, 4789, 4789, 4798, 4798, 4808, 4808, 4817, 4817, 4826, 4826, 4836, 4836, 4845, 4845, 4854, 4854, 4863, 4863,
-    4873, 4873, 4882, 4882, 4892, 4892, 4901, 4901, 4910, 4910, 4920, 4920, 4929, 4929, 4939, 4939, 4948, 4948, 4957, 4957,
-    4967, 4967, 4977, 4977, 4986, 4986, 4996, 4996, 5005, 5005, 5015, 5015, 5025, 5025, 5034, 5034, 5044, 5044, 5053, 5053,
-    5063, 5063, 5073, 5073, 5083, 5083, 5092, 5092, 5102, 5102, 5112, 5112, 5121, 5121, 5131, 5131, 5141, 5141, 5150, 5150,
-    5160, 5160, 5170, 5170, 5180, 5180, 5190, 5190, 5199, 5199, 5209, 5209, 5219, 5219, 5229, 5229, 5239, 5239, 5248, 5248,
-    5258, 5258, 5268, 5268, 5278, 5278, 5288, 5288, 5298, 5298, 5308, 5308, 5318, 5318, 5328, 5328, 5338, 5338, 5348, 5348,
-    5359, 5359, 5369, 5369, 5379, 5379, 5389, 5389, 5399, 5399, 5409, 5409, 5419, 5419, 5429, 5429, 5439, 5439, 5449, 5449,
-    5460, 5460, 5470, 5470, 5480, 5480, 5490, 5490, 5500, 5500, 5511, 5511, 5521, 5521, 5531, 5531, 5541, 5541, 5551, 5551,
-    5562, 5562, 5572, 5572, 5582, 5582, 5593, 5593, 5603, 5603, 5613, 5613, 5624, 5624, 5634, 5634, 5644, 5644, 5654, 5654,
-    5665, 5665, 5675, 5675, 5686, 5686, 5696, 5696, 5707, 5707, 5717, 5717, 5728, 5728, 5738, 5738, 5749, 5749, 5759, 5759,
-    5770, 5770, 5781, 5781, 5791, 5791, 5802, 5802, 5812, 5812, 5823, 5823, 5834, 5834, 5844, 5844, 5855, 5855, 5865, 5865,
-    5876, 5876, 5887, 5887, 5898, 5898, 5908, 5908, 5919, 5919, 5930, 5930, 5940, 5940, 5951, 5951, 5962, 5962, 5972, 5972,
-    5983, 5983, 5994, 5994, 6005, 6005, 6016, 6016, 6027, 6027, 6038, 6038, 6049, 6049, 6060, 6060, 6071, 6071, 6081, 6081,
-    6092, 6092, 6103, 6103, 6114, 6114, 6125, 6125, 6136, 6136, 6147, 6147, 6158, 6158, 6169, 6169, 6180, 6180, 6191, 6191,
-    6203, 6203, 6214, 6214, 6225, 6225, 6236, 6236, 6247, 6247, 6258, 6258, 6269, 6269, 6280, 6280, 6291, 6291, 6302, 6302,
-    6314, 6314, 6325, 6325, 6336, 6336, 6348, 6348, 6359, 6359, 6370, 6370, 6382, 6382, 6393, 6393, 6404, 6404, 6415, 6415,
-    6427, 6427, 6438, 6438, 6450, 6450, 6461, 6461, 6472, 6472, 6484, 6484, 6495, 6495, 6507, 6507, 6518, 6518, 6529, 6529,
-    6541, 6541, 6552, 6552, 6564, 6564, 6575, 6575, 6587, 6587, 6598, 6598, 6610, 6610, 6621, 6621, 6633, 6633, 6644, 6644,
-    6656, 6656, 6668, 6668, 6680, 6680, 6691, 6691, 6703, 6703, 6715, 6715, 6726, 6726, 6738, 6738, 6750, 6750, 6761, 6761,
-    6773, 6773, 6785, 6785, 6797, 6797, 6809, 6809, 6820, 6820, 6832, 6832, 6844, 6844, 6856, 6856, 6868, 6868, 6879, 6879,
-    6891, 6891, 6903, 6903, 6915, 6915, 6927, 6927, 6939, 6939, 6951, 6951, 6963, 6963, 6975, 6975, 6987, 6987, 6998, 6998,
-    7011, 7011, 7023, 7023, 7035, 7035, 7047, 7047, 7059, 7059, 7071, 7071, 7083, 7083, 7095, 7095, 7107, 7107, 7119, 7119,
-    7132, 7132, 7144, 7144, 7156, 7156, 7168, 7168, 7180, 7180, 7193, 7193, 7205, 7205, 7217, 7217, 7229, 7229, 7241, 7241,
-    7254, 7254, 7266, 7266, 7278, 7278, 7291, 7291, 7303, 7303, 7315, 7315, 7328, 7328, 7340, 7340, 7352, 7352, 7364, 7364,
-    7377, 7377, 7389, 7389, 7402, 7402, 7414, 7414, 7426, 7426, 7439, 7439, 7451, 7451, 7464, 7464, 7476, 7476, 7488, 7488,
-    7501, 7501, 7514, 7514, 7526, 7526, 7539, 7539, 7551, 7551, 7564, 7564, 7577, 7577, 7589, 7589, 7602, 7602, 7614, 7614,
-    7627, 7627, 7640, 7640, 7653, 7653, 7665, 7665, 7678, 7678, 7691, 7691, 7703, 7703, 7716, 7716, 7729, 7729, 7741, 7741,
-    7754, 7754, 7767, 7767, 7780, 7780, 7793, 7793, 7805, 7805, 7818, 7818, 7831, 7831, 7844, 7844, 7857, 7857, 7869, 7869,
-    7882, 7882, 7895, 7895, 7908, 7908, 7921, 7921, 7934, 7934, 7947, 7947, 7960, 7960, 7973, 7973, 7986, 7986, 7999, 7999,
-    8013, 8013, 8026, 8026, 8039, 8039, 8052, 8052, 8065, 8065, 8078, 8078, 8091, 8091, 8104, 8104, 8117, 8117, 8130, 8130,
-    8144, 8144, 8157, 8157, 8170, 8170, 8183, 8183, 8196, 8196, 8210, 8210, 8223, 8223, 8236, 8236, 8249, 8249, 8262, 8262,
-    8276, 8276, 8289, 8289, 8303, 8303, 8316, 8316, 8329, 8329, 8343, 8343, 8356, 8356, 8370, 8370, 8383, 8383, 8396, 8396,
-    8410, 8410, 8423, 8423, 8437, 8437, 8450, 8450, 8464, 8464, 8477, 8477, 8491, 8491, 8504, 8504, 8518, 8518, 8531, 8531,
-    8545, 8545, 8559, 8559, 8572, 8572, 8586, 8586, 8599, 8599, 8613, 8613, 8627, 8627, 8640, 8640, 8654, 8654, 8667, 8667,
-    8681, 8681, 8695, 8695, 8709, 8709, 8723, 8723, 8736, 8736, 8750, 8750, 8764, 8764, 8778, 8778, 8792, 8792, 8805, 8805,
-    8819, 8819, 8833, 8833, 8847, 8847, 8861, 8861, 8875, 8875, 8889, 8889, 8903, 8903, 8917, 8917, 8931, 8931, 8944, 8944,
-    8958, 8958, 8972, 8972, 8986, 8986, 9000, 9000, 9014, 9014, 9028, 9028, 9042, 9042, 9056, 9056, 9070, 9070, 9084, 9084,
-    9099, 9099, 9113, 9113, 9127, 9127, 9141, 9141, 9155, 9155, 9169, 9169, 9183, 9183, 9197, 9197, 9211, 9211, 9225, 9225,
-    9240, 9240, 9254, 9254, 9268, 9268, 9283, 9283, 9297, 9297, 9311, 9311, 9326, 9326, 9340, 9340, 9354, 9354, 9368, 9368,
-    9383, 9383, 9397, 9397, 9412, 9412, 9426, 9426, 9440, 9440, 9455, 9455, 9469, 9469, 9484, 9484, 9498, 9498, 9512, 9512,
-    9527, 9527, 9541, 9541, 9556, 9556, 9570, 9570, 9585, 9585, 9599, 9599, 9614, 9614, 9628, 9628, 9643, 9643, 9657, 9657,
-    9672, 9672, 9687, 9687, 9702, 9702, 9716, 9716, 9731, 9731, 9746, 9746, 9760, 9760, 9775, 9775, 9790, 9790, 9804, 9804,
-    9819, 9819, 9834, 9834, 9849, 9849, 9864, 9864, 9878, 9878, 9893, 9893, 9908, 9908, 9923, 9923, 9938, 9938, 9952, 9952,
-    9967, 9967, 9982, 9982, 9997, 9997, 10012, 10012, 10027, 10027, 10042, 10042, 10057, 10057, 10072, 10072, 10087, 10087, 10101, 10101,
-    10117, 10117, 10132, 10132, 10147, 10147, 10162, 10162, 10177, 10177, 10192, 10192, 10207, 10207, 10222, 10222, 10237, 10237, 10252, 10252,
-    10268, 10268, 10283, 10283, 10298, 10298, 10313, 10313, 10328, 10328, 10344, 10344, 10359, 10359, 10374, 10374, 10389, 10389, 10404, 10404,
-    10420, 10420, 10435, 10435, 10450, 10450, 10466, 10466, 10481, 10481, 10496, 10496, 10512, 10512, 10527, 10527, 10542, 10542, 10557, 10557,
-    10573, 10573, 10588, 10588, 10604, 10604, 10619, 10619, 10635, 10635, 10650, 10650, 10666, 10666, 10681, 10681, 10697, 10697, 10712, 10712,
-    10728, 10728, 10744, 10744, 10759, 10759, 10775, 10775, 10790, 10790, 10806, 10806, 10822, 10822, 10837, 10837, 10853, 10853, 10868, 10868,
-    10884, 10884, 10900, 10900, 10916, 10916, 10931, 10931, 10947, 10947, 10963, 10963, 10978, 10978, 10994, 10994, 11010, 11010, 11025, 11025,
-    11041, 11041, 11057, 11057, 11073, 11073, 11089, 11089, 11105, 11105, 11121, 11121, 11137, 11137, 11153, 11153, 11169, 11169, 11184, 11184,
-    11200, 11200, 11216, 11216, 11232, 11232, 11248, 11248, 11264, 11264, 11280, 11280, 11296, 11296, 11312, 11312, 11328, 11328, 11344, 11344,
-    11361, 11361, 11377, 11377, 11393, 11393, 11409, 11409, 11425, 11425, 11441, 11441, 11457, 11457, 11473, 11473, 11489, 11489, 11505, 11505,
-    11522, 11522, 11538, 11538, 11554, 11554, 11570, 11570, 11586, 11586, 11603, 11603, 11619, 11619, 11635, 11635, 11651, 11651, 11667, 11667,
-    11684, 11684, 11700, 11700, 11717, 11717, 11733, 11733, 11749, 11749, 11766, 11766, 11782, 11782, 11799, 11799, 11815, 11815, 11831, 11831,
-    11848, 11848, 11864, 11864, 11881, 11881, 11897, 11897, 11914, 11914, 11930, 11930, 11947, 11947, 11963, 11963, 11980, 11980, 11996, 11996,
-    12013, 12013, 12030, 12030, 12046, 12046, 12063, 12063, 12079, 12079, 12096, 12096, 12113, 12113, 12129, 12129, 12146, 12146, 12162, 12162,
-    12179, 12179, 12196, 12196, 12213, 12213, 12230, 12230, 12246, 12246, 12263, 12263, 12280, 12280, 12297, 12297, 12314, 12314, 12330, 12330,
-    12347, 12347, 12364, 12364, 12381, 12381, 12398, 12398, 12415, 12415, 12432, 12432, 12449, 12449, 12466, 12466, 12483, 12483, 12499, 12499,
-    12516, 12516, 12533, 12533, 12550, 12550, 12567, 12567, 12584, 12584, 12601, 12601, 12618, 12618, 12635, 12635, 12652, 12652, 12669, 12669,
-    12687, 12687, 12704, 12704, 12721, 12721, 12738, 12738, 12755, 12755, 12773, 12773, 12790, 12790, 12807, 12807, 12824, 12824, 12841, 12841,
-    12859, 12859, 12876, 12876, 12893, 12893, 12911, 12911, 12928, 12928, 12945, 12945, 12963, 12963, 12980, 12980, 12997, 12997, 13014, 13014,
-    13032, 13032, 13049, 13049, 13067, 13067, 13084, 13084, 13101, 13101, 13119, 13119, 13136, 13136, 13154, 13154, 13171, 13171, 13188, 13188,
-    13206, 13206, 13224, 13224, 13241, 13241, 13259, 13259, 13276, 13276, 13294, 13294, 13312, 13312, 13329, 13329, 13347, 13347, 13364, 13364,
-    13382, 13382, 13400, 13400, 13418, 13418, 13435, 13435, 13453, 13453, 13471, 13471, 13488, 13488, 13506, 13506, 13524, 13524, 13541, 13541,
-    13559, 13559, 13577, 13577, 13595, 13595, 13613, 13613, 13630, 13630, 13648, 13648, 13666, 13666, 13684, 13684, 13702, 13702, 13719, 13719,
-    13737, 13737, 13755, 13755, 13773, 13773, 13791, 13791, 13809, 13809, 13827, 13827, 13845, 13845, 13863, 13863, 13881, 13881, 13898, 13898,
-    13917, 13917, 13935, 13935, 13953, 13953, 13971, 13971, 13989, 13989, 14007, 14007, 14025, 14025, 14043, 14043, 14061, 14061, 14079, 14079,
-    14098, 14098, 14116, 14116, 14134, 14134, 14152, 14152, 14170, 14170, 14189, 14189, 14207, 14207, 14225, 14225, 14243, 14243, 14261, 14261,
-    14280,
-];
-
-fn five_status_final_score(total: i32) -> i32 {
-    if total <= 0 {
-        return 0;
-    }
-    let idx = if total as usize > 2800 { 2800 } else { total as usize };
-    FIVE_STATUS_FINAL_SCORE[idx]
-}
-
-fn pt_score_value(pt: i32, qiezhe: bool) -> i32 {
-    if pt <= 0 {
-        return 0;
-    }
-    let rate = if qiezhe { 2.1_f64 } else { 1.9_f64 };
-    (pt as f64 * rate).round() as i32
 }
 
 unsafe fn read_summary_inner() -> String {
@@ -6381,8 +5658,6 @@ unsafe fn read_summary_inner_impl() -> String {
     ura_log(3, "★ read_summary phase2: training data");
     log_predict_step("S:p2 training");
     let mut tr_json = "[]".to_string();
-    // ★ v3.15.1: collect eval_trainings in same pass (eliminate dangerous double-read)
-    let mut eval_trainings: Vec<(i32, [i32; 5], i32, i32, i32, i32, i32, i32)> = Vec::new();
     log_predict_step("S:homeinfo before getter");
     let home_info_obj = call_getter_on_instance(sm_class, sm_obj, "get_HomeInfoData"); // [INVOKE-07] get_HomeInfoData — 唯一调用
     log_predict_step("S:homeinfo after getter");
@@ -6556,45 +5831,12 @@ unsafe fn read_summary_inner_impl() -> String {
                                         .copied()
                                         .unwrap_or(999999);
 
-                                    let is_shining: Option<bool> = if is_support_card {
-                                        // [SHINING-RULE-3292] 引擎同款：卡位 && 得意训练==当前训练 && 羁绊>=80
-                                        let card_idx = support_command_by_position
-                                            .get(&partner_id)
-                                            .copied()
-                                            .map(train_index_of_cmd)
-                                            .unwrap_or(-1);
-                                        let cur_idx = train_index_of_cmd(cid);
-                                        if card_idx >= 0 && cur_idx >= 0 {
-                                            Some(
-                                                card_idx == cur_idx
-                                                    && current_bond.map_or(false, |b| b >= 80),
-                                            )
-                                        } else {
-                                            None
-                                        }
-                                    } else {
-                                        None
-                                    };
+                                    // [PURE-CAPTURE-3293] 彩圈判定移交 App（引擎规则：得意训练==当前训练 && 羁绊>=80）
+                                    // SO 只出口原始字段：train_type / current_bond / support_card_type / bond_threshold
+                                    let is_shining: Option<bool> = None;
 
-                                    // ★ v3.24.14: Unique effect active = bond >= threshold.
-                                    //   Triggers on ANY training, not just得意训练.
-                                    //   友人卡: threshold=60, 团体卡: threshold=80/100
-                                    let is_unique_active: Option<bool> = if is_support_card {
-                                        if sc_type == Some(2) {
-                                            // 友人卡固有: bond >= 60
-                                            current_bond.map(|bond| bond >= bond_threshold)
-                                        } else if sc_type == Some(3) {
-                                            // 团体卡固有: bond >= threshold (80 or 100)
-                                            current_bond.map(|bond| bond >= bond_threshold)
-                                        } else if sc_type == Some(1) {
-                                            // 普通卡固有: bond >= threshold (80 or 100)
-                                            current_bond.map(|bond| bond >= bond_threshold)
-                                        } else {
-                                            None
-                                        }
-                                    } else {
-                                        None
-                                    };
+                                    // [PURE-CAPTURE-3293] 固有发动判定移交 App（bond >= bond_threshold，字段已出口）
+                                    let is_unique_active: Option<bool> = None;
 
                                     if is_support_card && is_shining.is_none() {
                                         shining_complete = false;
@@ -6795,19 +6037,6 @@ unsafe fn read_summary_inner_impl() -> String {
                             gains.join(","),
                         ));
 
-                        // ★ v3.15.1: collect eval training data in same pass
-                        if cmd_id_to_train_idx(cid).is_some() {
-                            eval_trainings.push((
-                                cid,
-                                stat_gains,
-                                skill_pt_gain,
-                                vital_cost,
-                                failure_rate,
-                                is_enable,
-                                shining,
-                                heads,
-                            ));
-                        }
                     }
                     tr_json = format!("[{}]", trs.join(","));
                 }
@@ -7155,43 +6384,8 @@ unsafe fn read_summary_inner_impl() -> String {
 
     // ★ state field removed: get_State() doesn't exist on WorkSingleModeCharaData
     // Health condition is now detected via chara_effect_ids (top-level array)
-    // ★ AI Evaluation (v3.15.1): compute score and training recommendation
-    // FIXED: no more double-read of CommandInfoArray — eval_trainings collected in phase2
+    // [PURE-CAPTURE-3293] 启发式 AI 评估已移除（决策移交 App 引擎）
     log_predict_step("S:buffs done");
-    let ai_json = {
-        // v3.27.10: Ramen AI enabled — turn mapping follows upstream umaai-rs semantics.
-        let turn = if sid == 14 {
-            cumulative_turn
-        } else {
-            std::cmp::min((mon - 1) * 2 + (half - 1), 71)
-        };
-        let stats = [spd, sta, pow_, gut, wiz];
-
-        // Detect buffs from chara_effect_ids
-        let has_ai_jiao = chara_effect_ids.iter().any(|&id| id == 8);
-        let has_renshou_jouzu = chara_effect_ids.iter().any(|&id| id == 10 || id == 11);
-
-        // next_race lookup not yet implemented for Ramen.
-        let next_race = false;
-
-        let result = evaluate_ai(
-            turn,
-            stats,
-            vit,
-            mvit,
-            mot,
-            sid,
-            &eval_trainings,
-            has_ai_jiao,
-            has_renshou_jouzu,
-            skill_eval,
-            skill_count, // ★ v3.22.0
-            &ramen_gauge_gains_map,
-            ramen_special_feeling_num,
-            next_race,
-        );
-        ai_result_to_json(&result)
-    };
 
     // ★ Breeders team member data (v3.15.4)
     let team_json = if sid == 13 {
@@ -7300,7 +6494,7 @@ unsafe fn read_summary_inner_impl() -> String {
 
     log_predict_step("S:json");
     let __json_out = format!(
-        r#"{{"version":"{}","year":{},"turn":{},"raw_total_turn_num":{},"ui_turn_semantics":"countdown","raw_field_mapping":"verified_ramen_upstream_semantics","month":{},"half":{},"scenario":"{}","chara_id":{},"stats":{{"speed":{},"stamina":{},"power":{},"guts":{},"wiz":{},"vital":{},"max_vital":{},"motivation":"{}","skill_point":{},"fan":{}}},"max_stats":{{"speed":{},"stamina":{},"power":{},"guts":{},"wiz":{}}},"proper":{{"dist_short":{},"dist_mile":{},"dist_mid":{},"dist_long":{},"ground_turf":{},"ground_dirt":{},"style_nige":{},"style_senko":{},"style_sashi":{},"style_oikomi":{}}},"running_style":{},"scenario_progress":{},"training_event_type":{},"talent_level":{},"chara_grade":{},"difficulty":{},"fixed_turn_chara_seed":{},"trainings":{},"support_cards":{},"evaluation":{},"training_levels":{},"buffs":{},"chara_effect_ids":[{}],"skills":{{"eval":{},"count":{},"list":{}}},"skill_tips":{},"ai":{}{}{}{} }}"#,
+        r#"{{"version":"{}","year":{},"turn":{},"raw_total_turn_num":{},"ui_turn_semantics":"countdown","raw_field_mapping":"verified_ramen_upstream_semantics","month":{},"half":{},"scenario":"{}","chara_id":{},"stats":{{"speed":{},"stamina":{},"power":{},"guts":{},"wiz":{},"vital":{},"max_vital":{},"motivation":"{}","skill_point":{},"fan":{}}},"max_stats":{{"speed":{},"stamina":{},"power":{},"guts":{},"wiz":{}}},"proper":{{"dist_short":{},"dist_mile":{},"dist_mid":{},"dist_long":{},"ground_turf":{},"ground_dirt":{},"style_nige":{},"style_senko":{},"style_sashi":{},"style_oikomi":{}}},"running_style":{},"scenario_progress":{},"training_event_type":{},"talent_level":{},"chara_grade":{},"difficulty":{},"fixed_turn_chara_seed":{},"trainings":{},"support_cards":{},"evaluation":{},"training_levels":{},"buffs":{},"chara_effect_ids":[{}],"skills":{{"eval":{},"count":{},"list":{}}},"skill_tips":{}{}{}{} }}"#,
         PLUGIN_VERSION,
         year,
         cumulative_turn,
@@ -7351,7 +6545,6 @@ unsafe fn read_summary_inner_impl() -> String {
         skill_count,
         skills_json,
         tips_json,
-        ai_json,
         team_json,
         ramen_json,
         last_action_json
@@ -7372,20 +6565,11 @@ unsafe fn read_summary_inner_impl() -> String {
         let v = call_getter_int(chara_class, chara_obj, "GetEvaluation");
         if v > 0 && v < 500000 { v } else { -1 }
     };
-    // [SCORE-3292] 评价分 = 五维查定 + PT×倍率（技能分待接 mdb）
+    // [EVAL-3292] 注入游戏原生评价分（GetEvaluation；-1 = 读不到，App 用本地算分兜底）
+    // [PURE-CAPTURE-3293] score/five_score/pt_score/skill_score 已移除 → App ScoreTable.kt 本地算分
     {
-        let five_total = spd + sta + pow_ + gut + wiz;
-        let five_s = five_status_final_score(five_total);
-        let pt_s = pt_score_value(spt, false);
-        let total_s = five_s + pt_s;
         if let Some(pos) = __out.rfind('}') {
-            __out.insert_str(
-                pos,
-                &format!(
-                    ",\"score\":{},\"five_score\":{},\"pt_score\":{},\"skill_score\":0,\"evaluation\":{}",
-                    total_s, five_s, pt_s, evaluation
-                ),
-            );
+            __out.insert_str(pos, &format!(",\"evaluation\":{}", evaluation));
         }
     }
     // [FIELDS-3292] 补帧字段：playing_state / friend_outgoing_used / total_hints
@@ -7415,31 +6599,7 @@ unsafe fn read_summary_inner_impl() -> String {
             __out.insert_str(pos, &format!(",\"playing_state\":{},\"friend_outgoing_used\":{},\"total_hints\":{}", playing_state, friend_used, total_hints));
         }
     }
-    // [LUCK-3292] 上游口径：运气分显示投影 + 期望分投影（评级必须跟着投影分查表）
-    {
-        let max_turn: i32 = 77;
-        let e_raw: i32 = (mon - 1) * 2 + (half - 1);
-        let elapsed: i32 = if e_raw < 0 { 0 } else if e_raw > max_turn { max_turn } else { e_raw };
-        let remaining = max_turn - elapsed;
-        let cfg_l = unsafe { get_config() };
-        let luck_projected = remaining * cfg_l.luck_turn_bonus;
-        let base_s = five_status_final_score(spd + sta + pow_ + gut + wiz) + pt_score_value(spt, false);
-        if let Some(pos) = __out.rfind('}') {
-            __out.insert_str(
-                pos,
-                &format!(
-                    ",\"luck\":{{\"turn_elapsed\":{},\"max_turn\":{},\"bonus_per_turn\":{},\"projected\":{},\"search_threads\":{},\"semantics\":\"upstream_luck_turn_projection\"}},\"expected\":{{\"base\":{},\"base_kind\":\"chokutei\",\"projected\":{},\"projection\":\"base+remaining*luck_bonus\",\"rank\":null,\"rank_source\":\"missing_rank_table\"}}",
-                    elapsed,
-                    max_turn,
-                    cfg_l.luck_turn_bonus,
-                    luck_projected,
-                    cfg_l.search_threads,
-                    base_s,
-                    base_s + luck_projected
-                ),
-            );
-        }
-    }
+    // [PURE-CAPTURE-3293] luck/expected 投影已移除 → App 引擎决策回写 luck_turn/luck_game/expected
     log_predict_step("S:json_done");
     __out
 }
