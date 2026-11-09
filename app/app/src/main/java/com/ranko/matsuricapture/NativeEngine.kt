@@ -646,7 +646,7 @@ object NativeEngine {
         val spNow = iv(stats, "skill_point").coerceAtLeast(0).toInt()
         val fiveScore = ScoreTable.fiveScore(fiveArr)
         val ptScore = ScoreTable.ptScore(spNow)
-        val skillEval = iv(summary.optJSONObject("skills"), "eval").coerceAtLeast(0)
+        val skillEval = iv(summary.optJSONObject("skills"), "eval").coerceIn(0L, Int.MAX_VALUE.toLong()).toInt()
         val evalScore = fiveScore + ptScore + skillEval
 
         return JSONObject()
