@@ -383,10 +383,17 @@ function render(s){
   if(cs.length){
     ar.style.display='';
     document.getElementById('aiExp').textContent=n(f.score)+(+f.expected_stdev>0?(' ±'+n(f.expected_stdev)):'');
+    // [AI-CONF] 置信标注：两候选均值的 CI95 差分半径 ≈ √2·1.96·σ/√N
+    // （σ=引擎 expected_stdev 单局标准差，N=search_n=8192 见 matsuri_config.toml；
+    //   与首选差距 < 半径的候选标 ≈，统计上分不出高下，任选即可）
+    const sd=+f.expected_stdev||0;
+    const confR=sd>0?Math.round(Math.SQRT2*1.96*sd/Math.sqrt(8192)):0;
     const sorted=[...cs].sort((a,b)=>+b.score-+a.score).slice(0,5);
+    const topS=+sorted[0].score||0;
     document.getElementById('aiCands').innerHTML=sorted.map((c,i)=>{
       const s=+c.score||0,cl=s>0?'#2e7d32':(s<0?'#c62828':'#888');
-      return `<span style="color:${cl};font-weight:${i==0?'800':'400'}">${i==0?'▶':''}${esc(c.name)} ${s>=0?'+':''}${s}</span>`;
+      const noisy=confR>0&&i>0&&Math.abs(topS-s)<confR;
+      return `<span style="color:${cl};font-weight:${i==0?'800':'400'}">${i==0?'▶':''}${esc(c.name)} ${s>=0?'+':''}${s}${noisy?'<span style="font-size:9px;color:var(--dim)">≈</span>':''}</span>`;
     }).join('　');
   }else ar.style.display='none';
   // 装备卡组已解析（deck）：AI 落地后用于局面构建；友人外出由 AI 统一计算
