@@ -181,15 +181,15 @@ jobs:
           set -euo pipefail
           mkdir -p app/dist
           SRC=$(find app/app/build/outputs/apk/release -name "*.apk" | head -1)
-          cp "$SRC" app/dist/matsuri-ai-0.9.32-dsh41.apk
+          cp "$SRC" app/dist/matsuri-ai-0.9.33-dsh42.apk
           cp "$SRC" app/dist/matsuri-ai-latest.apk
           ls -l app/dist/
           git config user.name dsh-bot
           git config user.email dsh-bot@users.noreply.github.com
-          git add -f app/dist/matsuri-ai-0.9.32-dsh41.apk app/dist/matsuri-ai-latest.apk
+          git add -f app/dist/matsuri-ai-0.9.33-dsh42.apk app/dist/matsuri-ai-latest.apk
           git add -f app/app/src/main/java app/app/src/main/assets/index.html app/app/build.gradle.kts 2>/dev/null || true
           git add -u  # tracked 修改全暂存，否则 rebase 报 unstaged changes
-          git commit -m "build(app): 0.9.32-dsh41 盘面竖排布局消灭横滑" || echo nothing
+          git commit -m "build(app): 0.9.33-dsh42 引擎决策+人头合成+流式布局修复" || echo nothing
           git fetch origin main || true
           git rebase origin/main || git rebase --abort || true
           git push origin HEAD:main || echo "push failed（禁止 force，防吞并提）"
