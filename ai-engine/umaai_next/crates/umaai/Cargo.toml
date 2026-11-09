@@ -12,7 +12,7 @@ parallel = ["umasim/parallel"]
 
 [dependencies]
 umaai-core.workspace = true
-umasim.workspace = true
+umasim = { workspace = true, default-features = false }
 anyhow.workspace = true
 serde.workspace = true
 serde_json.workspace = true

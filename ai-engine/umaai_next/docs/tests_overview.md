@@ -3,19 +3,19 @@
 本文件对照源码列出全部测试：按 crate 分节、按文件分小节、一行一条，便于定位用例与评估覆盖面。
 测试分层与判定口径的设计依据见 [`plan/miko_next_plan.md`](plan/miko_next_plan.md) 的「测试策略」节。
 
-口径（2026-11-01 实测，stable 工具链 Release 模式）：`cargo test --workspace --release` → **355 passed / 0 failed / 3 ignored**；
-`cargo test --workspace --release -- --list` 共列出 **358 条**（356 个 `#[test]` + 2 个 doctest，其中 umasim 的 ignored doctest 不入清单）。
+口径（2026-11-05 实测，stable 工具链 Release 模式）：`cargo test --workspace --release` → **356 passed / 0 failed / 3 ignored**；
+`cargo test --workspace --release -- --list` 共列出 **359 条**（357 个 `#[test]` + 2 个 doctest，其中 umasim 的 ignored doctest 不入清单）。
 
 | 层 | 位置 | 判定 | 条数 |
 |---|---|---|---|
-| L1 单元 | `crates/<crate>/src/`（内联 `#[cfg(test)]`） | `assert` | 299 |
+| L1 单元 | `crates/<crate>/src/`（内联 `#[cfg(test)]`） | `assert` | 300 |
 | L2 模块集成 | `crates/<crate>/tests/` | print + `Checker` / `Checks`（失败返回 `Err`） | 35 |
 | L3 跨 crate 端到端 | `crates/umaai-tests/tests/` | print + `Checker`（失败返回 `Err`） | 21 |
 | L4 baseline | `crates/umaai-tests/tests/baseline.rs` + `crates/umaai-tests/baselines/*.json` | 比对后返回 `Err` / 非零退出码 | 1 |
 | 文档示例 | doctest | `umasim` 1 条标 `ignore` 不执行；`umaai-update` 1 条随测试执行 | 2 |
-| **合计** | | | **358** |
+| **合计** | | | **359** |
 
-- 分 crate：`umaai-core` 74 · `umasim` 78 · `umaai` 70 · `umaai-cli` 31 · `umaai-tools` 54 · `umaai-tests` 22 · `umaai-update` 29。
+- 分 crate：`umaai-core` 75 · `umasim` 78 · `umaai` 70 · `umaai-cli` 31 · `umaai-tools` 54 · `umaai-tests` 22 · `umaai-update` 29。
 - 默认跳过 3 条（需手动跑 `--ignored`）：`channel_watches_real_writes`（真 watcher 写入链路）、`session_runs_on_real_channel`（真通道收局）、`define_terminal_record` 的 doctest（标记 `ignore`）。
 
 ## 运行方式
@@ -40,7 +40,7 @@ cargo test -p umaai-tests --release --test session_basic -- --nocapture    # 单
 - 空剧本仓模板是**独立 workspace**（不在 workspace 成员表内）：`cargo fmt --manifest-path templates/umaai-scenario/Cargo.toml --all --check` + `cargo check --manifest-path templates/umaai-scenario/Cargo.toml --workspace --all-targets` + `cargo clippy --manifest-path templates/umaai-scenario/Cargo.toml --workspace --all-targets -- -D warnings` + `cargo test --manifest-path templates/umaai-scenario/Cargo.toml --workspace --release`（CI 单独一步，守验收条款「不改引擎一行即可编过」）；模板自带 10 条纯逻辑单测（阶段 / 数据 / 配置 / 训练员），不依赖 `data/` 真实数据，固定种子基线由真实剧本仓自持。
 
 ## 目录
-- [umaai-core (74)](#umaai-core-74)
+- [umaai-core (77)](#umaai-core-77)
   - [`src/array.rs` (2)](#srcarrayrs-2)
   - [`src/crn.rs` (5)](#srccrnrs-5)
   - [`src/data/manifest.rs` (1)](#srcdatamanifestrs-1)
@@ -55,6 +55,7 @@ cargo test -p umaai-tests --release --test session_basic -- --nocapture    # 单
   - [`src/gamedata/uma.rs` (3)](#srcgamedataumars-3)
   - [`src/race_mask.rs` (4)](#srcrace_maskrs-4)
   - [`src/rng.rs` (10)](#srcrngrs-10)
+  - [`src/score.rs` (2)](#srcscores-2)
   - [`src/stats.rs` (16)](#srcstatsrs-16)
   - [`tests/data_load.rs` (6)](#testsdata_loadrs-6)
 - [umasim (78)](#umasim-78)
@@ -103,7 +104,7 @@ cargo test -p umaai-tests --release --test session_basic -- --nocapture    # 单
   - [`src/deck.rs` (14)](#srcdeckrs-14)
   - [`src/probe.rs` (1)](#srcprobers-1)
   - [`src/report.rs` (4)](#srcreportrs-4)
-- [umaai-tests (22)](#umaai-tests-22)
+- [umaai-tests (23)](#umaai-tests-23)
   - [`tests/basic_game.rs` (2)](#testsbasic_gamers-2)
   - [`tests/baseline.rs` (1)](#testsbaseliners-1)
   - [`tests/cli_smoke.rs` (4)](#testscli_smokers-4)
@@ -112,6 +113,7 @@ cargo test -p umaai-tests --release --test session_basic -- --nocapture    # 单
   - [`tests/search_smoke.rs` (1)](#testssearch_smokers-1)
   - [`tests/session_basic.rs` (2)](#testssession_basicrs-2)
   - [`tests/smoke.rs` (1)](#testssmokers-1)
+  - [`tests/status_score.rs` (1)](#testsstatus_scores-1)
   - [`tests/tools_smoke.rs` (7)](#teststools_smokers-7)
 - [umaai-update (28)](#umaai-update-28)
   - [`src/channel.rs` (5)](#srcchannelrs-5)
@@ -123,7 +125,7 @@ cargo test -p umaai-tests --release --test session_basic -- --nocapture    # 单
 
 ---
 
-## umaai-core (74)
+## umaai-core (77)
 
 本 crate 共 71 条测试，分两类：65 条内联单元测试（按源码文件分布，逐条 `assert` 判定随机流、DTO 与纯函数口径）；6 条集成测试（载入真实 `gamedata/`，逐条 `print` 观测后经 `Checker` 聚合，有失败才返回 `Err`）。
 关注点：随机派生与可复现性、数据 schema 与语义校验、位段与统计原语的边界口径。
@@ -161,10 +163,11 @@ cargo test -p umaai-tests --release --test session_basic -- --nocapture    # 单
 **事件额外属性效果校验**
 - `test_validate_extra_status_range` — 随机项数 1–5 通过、0 / 6 越界报错
 
-### `src/diag.rs` (4)
+### `src/diag.rs` (5)
 
 **编译期开关**
 - `test_compiled_in_follows_feature` — 编译期开关取值与编译特性一致
+- `test_active_follows_both_switches` — 统一开关查询同时受编译期特性与运行时开关支配
 
 **运行时开关与抑制守卫**
 - `test_guard_suppress_and_restore` — 抑制守卫作用域内关闭，释放后恢复默认开启
@@ -193,10 +196,16 @@ cargo test -p umaai-tests --release --test session_basic -- --nocapture    # 单
 - `test_short_name` — 短名截断：后段只保留前两字
 - `test_pinyin_renames` — 拼音键名按显式重命名落到字段
 
+### `src/score.rs` (2)
+
+**单项属性评分公式**
+- `test_status_point_anchors` — 三段边界与高段外推锚点逐点对齐
+- `test_status_point_bounds` — 负数按 0、单调不减、表末之后不饱和、溢出不 panic
+
 ### `src/gamedata/constants.rs` (3)
 
 **常量表查询**
-- `test_status_final_score_saturates` — 属性评分查表两端饱和，越界取表末
+- `test_status_final_score_formula` — 评分走公式且不读兼容保留的旧表，表末之后继续外推
 - `test_rank_name` — 评价名按分数线取档，两端饱和
 - `test_event_distribution` — 事件分布前三项按表取值，第四项取剩余
 
@@ -392,7 +401,7 @@ cargo test -p umaai-tests --release --test session_basic -- --nocapture    # 单
 - `test_win_races` — 已赛记录转为回合列表，越界的写入被忽略
 
 **评分口径**
-- `test_score_parts_matches_calc_score` — 七个评分分量按公式独立重算，分量和等于总分
+- `test_score_parts_matches_calc_score` — 七个评分分量对照 core 评分规格重算，分量和等于总分
 
 ### `src/search/config.rs` (2)
 
@@ -741,7 +750,7 @@ cargo test -p umaai-tests --release --test session_basic -- --nocapture    # 单
 - `test_machine_line_is_splittable` — 切分后每段都是 `key=value`
 - `test_table_block_respects_width` — 表格宽度由调用方给出，窄宽度不产生超宽行
 
-## umaai-tests (22)
+## umaai-tests (23)
 
 本 crate 是跨 crate 集成与端到端测试的所在地，覆盖引擎编排、CLI 装配、会话协议、搜索、随机流分层、工具链、组卡与测卡八条链路。
 集成测试不用 `assert`，统一经 `umaai-tests/src/lib.rs` 的 `Checker` 逐条打印 `ok` / `FAIL`、聚合失败项后返回 `Err`，保证 `cargo test` 有失败信号。
@@ -785,6 +794,10 @@ cargo test -p umaai-tests --release --test session_basic -- --nocapture    # 单
 ### `tests/smoke.rs` (1)
 
 - `smoke` — 确认测试 crate 与工作区装配可用，输出冒烟标记即过
+
+### `tests/status_score.rs` (1)
+
+- `status_score_formula_matches_legacy_table` — 公式与旧评分表逐位对照：0–2803 一致、2804–3801 只容许 1 分取整差、表末之后按公式外推
 
 ### `tests/tools_smoke.rs` (7)
 

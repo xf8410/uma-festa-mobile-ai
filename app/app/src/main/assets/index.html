@@ -907,7 +907,7 @@ function syncConnectUI(){
   q('btn-connect').classList.toggle('on',state.polling);
   const badge=q('link-badge');
   // [APP-FIX-104] 状态语义：暂停 / 未连接 / 已连接(等帧) / 已连接(在线)
-  if(!state.polling){ badge.textContent='已暂停'; badge.className='badge off'; }
+  if(!state.polling){ badge.textContent='已暂停刷新（后台仍在接收）'; badge.className='badge off'; }
   else if(!svc){ badge.textContent='未连接 · 接收端未启动'; badge.className='badge off'; }
   else if(!so){ badge.textContent='未连接 · SO 未响应'; badge.className='badge warn'; }
   else if(!f){ badge.textContent='已连接 · 等育成帧'; badge.className='badge warn'; }
@@ -954,21 +954,24 @@ async function toggleConnect(){
     state.polling=false;
     if(state.timer){clearInterval(state.timer);state.timer=null;}
     syncConnectUI();
-    toast('已暂停连接 · 接收端仍在后台运行');
+    // [APP-FIX-105] 只停本页自动刷新，接收端与浮窗仍在后台收帧
+    toast('已暂停刷新 · 接收端仍在后台收帧');
     return;
   }
   state.polling=true;
   const btn=document.getElementById('btn-connect');
   if(btn){ btn.textContent='连接中…'; }
   try{ await pullNow(); }catch(e){}
-  let ok=false;
+  let ok=false, hasFrame=false;
   try{
     const r=await fetch(state.base+'/api/snapshot',{cache:'no-store'});
-    if(r.ok){ const s=await r.json(); ok=(s.so_alive===true); }
+    if(r.ok){ const s=await r.json(); ok=(s.so_alive===true); hasFrame=!!s.latest; }
   }catch(e){}
   startPolling();
   syncConnectUI();
-  toast(ok?'已连接 · SO 在线':'未连接 · SO 未响应（游戏里 SO 可能没起来）');
+  // [APP-FIX-105] 连接结果按真实收帧区分：有帧 / 等帧 / 未连，不再笼统「已连接」
+  toast(!ok?'未连接 · SO 未响应（确认游戏在运行且 SO 插件已加载）'
+       :(hasFrame?'已连接 · 正在接收育成帧':'已连接 · 等待育成帧（请进入育成）'));
 }
 
 /* ===== v0.5.0 静态权威数据：来自上游 scenario_matsuri.json / mechanism.md（非编造） ===== */

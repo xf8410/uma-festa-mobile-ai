@@ -1,8 +1,18 @@
 //! 帧通道：读 `.portable` 下小黑板插件写出的回合帧与终局帧
 //!
-//! 目录与文件名是**代码常量**（`.portable` / `PluginData/SendGameStatusPlugin` /
-//! `thisTurn.json` / `finalScore.json`），根目录由宿主注入——不做平台探测、不读环境变量。
-//! 两条信道同形不同义，判别落在文件名上（[`FrameKind`]）。
+//! 目录与文件名是**代码约定**（`.portable` / `PluginData/SendGameStatusPlugin` /
+//! `thisTurn.json` / `game{id}_finalScore.json`），根目录由宿主注入——不做平台探测、不读环境变量。
+//! 两条信道同形不同义，判别落在文件名上（[`FrameKind`]）：回合帧是**固定名**，
+//! 终局帧按**局号命名**（每局一份、互不覆盖，旧局的终局帧不会被新局覆盖写掉）。
+//!
+//! 由此带来两处与「固定名」时代的差别：
+//!
+//! - **按文件名去重**：去重键是目录内的具体文件名，不是信道——新局写出
+//!   `game6311_finalScore.json` 与旧局的 `game6310_finalScore.json` 是两份数据。
+//! - **启动多候选取最新**：目录里可能积着多局的终局帧，启动兜底只推 mtime 最新的一份；
+//!   其余旧局的终局帧不读（由调用方的局号闸再兜一层）。
+//!
+//! 旧固定名 `finalScore.json` **不再被识别**（[`FRAME_FINAL_SCORE`] 仅留常量兼容）。
 //!
 //! 错误分三层：目录缺失是**配置问题**，`FileChannel::open` 直接报错；通道关闭由
 //! `FileChannel::next_frame` 报错；运行期瞬时问题（读到半截 / 文件被独占 / notify 事件
@@ -23,7 +33,7 @@ use std::{
     fs,
     sync::mpsc::{self, Receiver, RecvTimeoutError, Sender},
     thread::{self, JoinHandle},
-    time::{Duration, Instant},
+    time::{Duration, Instant, SystemTime},
 };
 
 #[cfg(feature = "file-channel")]
@@ -40,11 +50,18 @@ pub const PLUGIN_SUBDIR: &str = "PluginData/SendGameStatusPlugin";
 /// 回合帧文件名（AI 决策输入）
 pub const FRAME_THIS_TURN: &str = "thisTurn.json";
 
-/// 终局帧文件名（育成结束·点技能前的真机数据，独立信道）
-pub const FRAME_FINAL_SCORE: &str = "finalScore.json";
+/// 终局帧文件名后缀：`game{id}_finalScore.json`（前段为 `game` + 局号数字）
+pub const FINAL_SCORE_SUFFIX: &str = "_finalScore.json";
 
-/// 白名单：只有这两份文件会被读入，目录里的 `game*.json` 归档一律忽略
-const ALL_KINDS: [FrameKind; 2] = [FrameKind::ThisTurn, FrameKind::FinalScore];
+/// 旧固定名终局帧：**已废弃，不参与匹配 / 读取**
+///
+/// E1 起终局帧按局号命名（[`FINAL_SCORE_SUFFIX`]）。本常量只为外部引用不炸，
+/// 不要再用它拼路径——写了也不会被通道读到。
+#[deprecated(note = "终局帧改为 `game{id}_finalScore.json`；本常量仅留兼容，不参与匹配")]
+pub const FRAME_FINAL_SCORE: &str = LEGACY_FINAL_SCORE_NAME;
+
+/// 旧固定名的字面量（内部用：`FrameKind::file_name` 的兼容返回值，绕开 deprecated 告警）
+const LEGACY_FINAL_SCORE_NAME: &str = "finalScore.json";
 
 /// 稳定读的重试次数与间隔（仅 `file-channel` 特性下使用）
 #[cfg(feature = "file-channel")]
@@ -57,22 +74,77 @@ const READ_STABLE_INTERVAL: Duration = Duration::from_millis(50);
 pub enum FrameKind {
     /// 回合帧 `thisTurn.json`
     ThisTurn,
-    /// 终局帧 `finalScore.json`
+    /// 终局帧 `game{id}_finalScore.json`
     FinalScore,
 }
 
 impl FrameKind {
-    /// 该信道的文件名
+    /// 该信道的**示例文件名**
+    ///
+    /// `ThisTurn` 恒为 `thisTurn.json`；`FinalScore` 按局号命名、无固定名，
+    /// 这里返回的是旧固定名（只作兼容展示）。**判别与拼路径请用
+    /// [`Self::from_file_name`] / 通道给出的实际文件名**。
     pub fn file_name(self) -> &'static str {
         match self {
             Self::ThisTurn => FRAME_THIS_TURN,
-            Self::FinalScore => FRAME_FINAL_SCORE,
+            Self::FinalScore => LEGACY_FINAL_SCORE_NAME,
         }
     }
 
     /// 由 basename 反查信道；不在白名单则 `None`（宿主自己读帧文件时可用）
+    ///
+    /// 白名单：`thisTurn.json` 与 `game{digits}_finalScore.json`；旧固定名
+    /// `finalScore.json` **不命中**。
     pub fn from_file_name(name: &str) -> Option<Self> {
-        ALL_KINDS.into_iter().find(|kind| kind.file_name() == name)
+        if name == FRAME_THIS_TURN {
+            return Some(Self::ThisTurn);
+        }
+        if is_final_score_name(name) {
+            return Some(Self::FinalScore);
+        }
+        None
+    }
+}
+
+/// `game{id}_finalScore.json`：前缀 `game` + 非空纯数字局号 + 后缀
+fn is_final_score_name(name: &str) -> bool {
+    name.strip_prefix("game")
+        .and_then(|rest| rest.strip_suffix(FINAL_SCORE_SUFFIX))
+        .is_some_and(|id| !id.is_empty() && id.bytes().all(|byte| byte.is_ascii_digit()))
+}
+
+/// 一份**读取目标**：信道 + 目录内的具体文件名
+///
+/// 终局帧按局号命名，所以「信道 → 读哪个文件」不能靠固定名反推，必须带着文件名走；
+/// 去重键也用它（按文件名去重，不按信道去重）。
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct FrameTarget {
+    /// 信道
+    kind: FrameKind,
+    /// 目录内的 basename
+    file_name: String,
+}
+
+impl FrameTarget {
+    /// 回合帧目标（固定名）
+    fn this_turn() -> Self {
+        Self {
+            kind: FrameKind::ThisTurn,
+            file_name: FRAME_THIS_TURN.to_string(),
+        }
+    }
+
+    /// 按 basename 构造（调用方已用 [`FrameKind::from_file_name`] 判定过信道）
+    fn new(kind: FrameKind, file_name: impl Into<String>) -> Self {
+        Self {
+            kind,
+            file_name: file_name.into(),
+        }
+    }
+
+    /// 目录内路径
+    fn path(&self, dir: &Path) -> PathBuf {
+        dir.join(&self.file_name)
     }
 }
 
@@ -212,68 +284,118 @@ fn read_stable(path: &Path) -> Result<String> {
 /// producer 主体：消费 notify 事件 → 稳定读白名单文件 → 去重后入队
 #[cfg(feature = "file-channel")]
 fn producer_loop(event_rx: Receiver<notify::Result<Event>>, queue_tx: Sender<ChannelItem>, dir: PathBuf) {
-    // 每个信道各记一份「上次已入队内容」：内容相同不入队，不同一律入队，一份不丢
-    let mut last_pushed: HashMap<FrameKind, String> = HashMap::new();
+    // 去重表按**文件名**记「上次已入队内容」：内容相同不入队，不同一律入队，一份不丢。
+    // 不能按信道记：终局帧按局号命名，每局一个新文件名，按信道记会把新局当成「内容变化」之外的噪声。
+    let mut last_pushed: HashMap<String, String> = HashMap::new();
 
-    // 启动兜底：白名单文件已存在（中途重启 / 结算画面重启）时先各推一份
-    for kind in ALL_KINDS {
-        if dir.join(kind.file_name()).is_file() {
-            read_and_push(&dir, kind, &queue_tx, &mut last_pushed);
-        }
+    // 启动兜底：白名单文件已存在（中途重启 / 结算画面重启）时各推一份；
+    // 终局帧可能积着多局，只取 mtime 最新的一份。
+    for target in startup_targets(&dir) {
+        read_and_push(&dir, &target, &queue_tx, &mut last_pushed);
     }
 
     while let Ok(event) = event_rx.recv() {
         match event {
             Ok(event) => {
-                for kind in matched_kinds(&event) {
-                    read_and_push(&dir, kind, &queue_tx, &mut last_pushed);
+                for target in matched_targets(&event) {
+                    read_and_push(&dir, &target, &queue_tx, &mut last_pushed);
                 }
             }
             Err(e) => {
                 // 事件可能已丢：留痕 + 重读全部白名单兜底（内容变化才入队）
                 let _ = queue_tx.send(ChannelItem::Note(ChannelNote::WatchError { detail: e.to_string() }));
-                for kind in ALL_KINDS {
-                    read_and_push(&dir, kind, &queue_tx, &mut last_pushed);
+                for target in startup_targets(&dir) {
+                    read_and_push(&dir, &target, &queue_tx, &mut last_pushed);
                 }
             }
         }
     }
 }
 
-/// 读某个白名单文件的一份稳定内容并去重入队；失败只留痕，等下一个事件
+/// 启动（以及事件丢失兜底）时要读的目标：回合帧固定一份，终局帧取现有最新一份
 #[cfg(feature = "file-channel")]
-fn read_and_push(dir: &Path, kind: FrameKind, tx: &Sender<ChannelItem>, last_pushed: &mut HashMap<FrameKind, String>) {
-    let path = dir.join(kind.file_name());
-    match read_stable(&path) {
+fn startup_targets(dir: &Path) -> Vec<FrameTarget> {
+    let mut targets = Vec::new();
+    if dir.join(FRAME_THIS_TURN).is_file() {
+        targets.push(FrameTarget::this_turn());
+    }
+    if let Some(target) = latest_final_score(dir) {
+        targets.push(target);
+    }
+    targets
+}
+
+/// 目录里 mtime 最新的终局帧（同 mtime 时取名字较大的，保证确定性）
+#[cfg(feature = "file-channel")]
+fn latest_final_score(dir: &Path) -> Option<FrameTarget> {
+    let entries = fs::read_dir(dir).ok()?;
+    let mut best: Option<(SystemTime, String)> = None;
+    for entry in entries.flatten() {
+        let name = entry.file_name().to_string_lossy().into_owned();
+        if FrameKind::from_file_name(&name) != Some(FrameKind::FinalScore) {
+            continue;
+        }
+        let mtime = entry
+            .metadata()
+            .and_then(|meta| meta.modified())
+            .unwrap_or(SystemTime::UNIX_EPOCH);
+        let better = match &best {
+            Some((time, kept)) => mtime > *time || (mtime == *time && name > *kept),
+            None => true,
+        };
+        if better {
+            best = Some((mtime, name));
+        }
+    }
+    best.map(|(_, name)| FrameTarget::new(FrameKind::FinalScore, name))
+}
+
+/// 读一份目标并去重入队；失败只留痕，等下一个事件
+#[cfg(feature = "file-channel")]
+fn read_and_push(
+    dir: &Path,
+    target: &FrameTarget,
+    tx: &Sender<ChannelItem>,
+    last_pushed: &mut HashMap<String, String>,
+) {
+    match read_stable(&target.path(dir)) {
         Ok(contents) => {
-            if last_pushed.get(&kind).map(String::as_str) != Some(contents.as_str()) {
-                last_pushed.insert(kind, contents.clone());
-                let _ = tx.send(ChannelItem::Frame(RawFrame { kind, contents }));
+            if last_pushed.get(&target.file_name).map(String::as_str) != Some(contents.as_str()) {
+                last_pushed.insert(target.file_name.clone(), contents.clone());
+                let _ = tx.send(ChannelItem::Frame(RawFrame { kind: target.kind, contents }));
             }
         }
         Err(e) => {
             let _ = tx.send(ChannelItem::Note(ChannelNote::ReadFailed {
-                kind,
+                kind: target.kind,
                 detail: e.to_string(),
             }));
         }
     }
 }
 
-/// 事件命中的信道（按 basename 匹配，避开路径前缀差异）
+/// 事件命中的目标（按 basename 匹配，避开路径前缀差异）；同一次事件里的重复文件名只留一份
 ///
 /// 只认 Create / Modify：Remove / Rename 不触发重读。
 #[cfg(feature = "file-channel")]
-fn matched_kinds(event: &Event) -> Vec<FrameKind> {
+fn matched_targets(event: &Event) -> Vec<FrameTarget> {
     if !matches!(event.kind, EventKind::Create(_) | EventKind::Modify(_)) {
         return Vec::new();
     }
-    event
-        .paths
-        .iter()
-        .filter_map(|p| p.file_name().and_then(|f| f.to_str()))
-        .filter_map(FrameKind::from_file_name)
-        .collect()
+    let mut targets: Vec<FrameTarget> = Vec::new();
+    for path in &event.paths {
+        let Some(name) = path.file_name().and_then(|name| name.to_str()) else {
+            continue;
+        };
+        let Some(kind) = FrameKind::from_file_name(name) else {
+            continue;
+        };
+        let target = FrameTarget::new(kind, name);
+        if !targets.contains(&target) {
+            targets.push(target);
+        }
+    }
+    targets
 }
 
 /// 帧形态测试：不依赖文件监听，特性关闭时也守
@@ -298,15 +420,27 @@ mod frame_tests {
         );
     }
 
-    /// 层1：文件名 → 信道；非白名单不命中
+    /// 层1：文件名 → 信道；固定名 + 局号名命中，旧固定名与非白名单不命中
     #[test]
     fn test_frame_kind_lookup() {
         assert_eq!(FrameKind::from_file_name(FRAME_THIS_TURN), Some(FrameKind::ThisTurn));
         assert_eq!(
-            FrameKind::from_file_name(FRAME_FINAL_SCORE),
+            FrameKind::from_file_name("game6308_finalScore.json"),
             Some(FrameKind::FinalScore)
         );
+        assert_eq!(
+            FrameKind::from_file_name("game1_finalScore.json"),
+            Some(FrameKind::FinalScore)
+        );
+        // 旧固定名已废弃：不再识别（E1 反向用例）
+        assert_eq!(FrameKind::from_file_name("finalScore.json"), None);
+        // 局号必须是非空纯数字
+        assert_eq!(FrameKind::from_file_name("game_finalScore.json"), None);
+        assert_eq!(FrameKind::from_file_name("game6310x_finalScore.json"), None);
+        assert_eq!(FrameKind::from_file_name("game6310_finalScore.json.bak"), None);
+        // 归档帧与其它文件不进白名单
         assert_eq!(FrameKind::from_file_name("game6264_turn0.json"), None);
+        assert_eq!(FrameKind::from_file_name("game6264_turn0_2.json"), None);
         assert_eq!(FrameKind::ThisTurn.file_name(), FRAME_THIS_TURN);
     }
 }
@@ -370,36 +504,56 @@ mod tests {
         );
     }
 
-    /// 层1：事件筛选——只认白名单 basename，且只认 Create / Modify
+    /// 层1：事件筛选——只认白名单 basename（回合帧固定名 / 终局帧局号名），且只认 Create / Modify
     #[test]
-    fn test_matched_kinds() {
+    fn test_matched_targets() {
         let other_dir = PathBuf::from("other").join(FRAME_THIS_TURN);
-        assert_eq!(
-            matched_kinds(&event(EventKind::Modify(ModifyKind::Any), other_dir)),
-            vec![FrameKind::ThisTurn]
-        );
-        assert_eq!(
-            matched_kinds(&event(
-                EventKind::Create(CreateKind::Any),
-                PathBuf::from(FRAME_FINAL_SCORE)
+        let targets = matched_targets(&event(EventKind::Modify(ModifyKind::Any), other_dir));
+        assert_eq!(targets.len(), 1);
+        assert_eq!(targets[0].kind, FrameKind::ThisTurn);
+        assert_eq!(targets[0].file_name, FRAME_THIS_TURN);
+
+        let final_path = PathBuf::from("game6310_finalScore.json");
+        let targets = matched_targets(&event(EventKind::Create(CreateKind::Any), final_path));
+        assert_eq!(targets.len(), 1);
+        assert_eq!(targets[0].kind, FrameKind::FinalScore);
+        assert_eq!(targets[0].file_name, "game6310_finalScore.json");
+
+        // 旧固定名不再命中
+        assert!(
+            matched_targets(&event(
+                EventKind::Modify(ModifyKind::Any),
+                PathBuf::from(LEGACY_FINAL_SCORE_NAME)
             ))
-            .len(),
-            1
+            .is_empty(),
+            "旧 finalScore.json 不应命中"
         );
         assert!(
-            matched_kinds(&event(
+            matched_targets(&event(
                 EventKind::Modify(ModifyKind::Any),
                 PathBuf::from("game1_turn0.json")
             ))
             .is_empty()
         );
         assert!(
-            matched_kinds(&event(
+            matched_targets(&event(
                 EventKind::Remove(notify::event::RemoveKind::Any),
                 PathBuf::from(FRAME_THIS_TURN)
             ))
             .is_empty()
         );
+    }
+
+    /// 层1：一次事件带多个路径且同名 → 只留一份目标
+    #[test]
+    fn test_matched_targets_dedup_by_name() {
+        let path = PathBuf::from("game6310_finalScore.json");
+        let multi = Event {
+            kind: EventKind::Modify(ModifyKind::Any),
+            paths: vec![path.clone(), path],
+            attrs: notify::event::EventAttributes::default(),
+        };
+        assert_eq!(matched_targets(&multi).len(), 1);
     }
 
     /// 层1：稳定读——内容不再变化时返回；空文件与缺失文件报错（重试有界）
@@ -414,17 +568,21 @@ mod tests {
         fs::write(&path, "").expect("写空文件");
         assert!(read_stable(&path).is_err(), "空文件（写入中）应为失败");
 
-        let missing = dir.join(FRAME_FINAL_SCORE);
+        let missing = dir.join("game1_finalScore.json");
         assert!(read_stable(&missing).is_err(), "缺失文件应为失败");
         let _ = fs::remove_dir_all(&dir);
     }
 
-    /// 层1：启动兜底——现存的两份白名单文件各推一份，顺序即白名单顺序
+    /// 层1：启动兜底——回合帧一份 + 终局帧取 mtime 最新一份
     #[test]
     fn test_startup_fallback() {
         let dir = test_dir("fallback");
         fs::write(dir.join(FRAME_THIS_TURN), r#"{"turn":77}"#).expect("写回合帧");
-        fs::write(dir.join(FRAME_FINAL_SCORE), r#"{"scenarioId":14}"#).expect("写终局帧");
+        fs::write(dir.join("game6308_finalScore.json"), r#"{"scenarioId":15,"id":6308}"#).expect("写旧局终局帧");
+        thread::sleep(Duration::from_millis(20));
+        fs::write(dir.join("game6309_finalScore.json"), r#"{"scenarioId":15,"id":6309}"#).expect("写新局终局帧");
+        // 旧固定名不该被读到
+        fs::write(dir.join(LEGACY_FINAL_SCORE_NAME), r#"{"scenarioId":15,"id":0}"#).expect("写旧固定名");
 
         let (event_tx, rx, handle) = start_producer(&dir);
         let first = recv_frame(&rx);
@@ -432,7 +590,9 @@ mod tests {
         assert_eq!(first.contents, r#"{"turn":77}"#);
         let second = recv_frame(&rx);
         assert_eq!(second.kind, FrameKind::FinalScore);
-        assert_eq!(second.contents, r#"{"scenarioId":14}"#);
+        assert_eq!(second.contents, r#"{"scenarioId":15,"id":6309}"#, "取 mtime 最新的一份");
+        // 旧局终局帧与旧固定名都不该再推
+        assert_idle(&rx);
 
         drop(event_tx);
         handle.join().expect("producer 应正常退出");
@@ -473,7 +633,7 @@ mod tests {
         let _ = fs::remove_dir_all(&dir);
     }
 
-    /// 层1：两条信道各自去重（终局帧内容变化不受回合帧影响）
+    /// 层1：两条信道各自去重；终局帧按**文件名**去重（新局新名 → 照常入队）
     #[test]
     fn test_final_score_channel_independent() {
         let dir = test_dir("final");
@@ -483,25 +643,33 @@ mod tests {
         let (event_tx, rx, handle) = start_producer(&dir);
         assert_eq!(recv_frame(&rx).kind, FrameKind::ThisTurn);
 
-        let final_path = dir.join(FRAME_FINAL_SCORE);
-        fs::write(&final_path, r#"{"single_mode_chara_id":6243}"#).expect("写终局帧");
+        let final_path = dir.join("game6310_finalScore.json");
+        fs::write(&final_path, r#"{"single_mode_chara_id":6310}"#).expect("写终局帧");
         event_tx
             .send(Ok(event(EventKind::Create(CreateKind::Any), final_path.clone())))
             .unwrap();
         assert_eq!(recv_frame(&rx).kind, FrameKind::FinalScore);
 
-        // 同内容再触发 → 去重
+        // 同文件同内容再触发 → 去重
         event_tx
             .send(Ok(event(EventKind::Modify(ModifyKind::Any), final_path.clone())))
             .unwrap();
         assert_idle(&rx);
 
-        // 下一局覆盖写 → 内容变化仍入队
-        fs::write(&final_path, r#"{"single_mode_chara_id":6244}"#).expect("写终局帧");
+        // 同文件覆盖写 → 内容变化仍入队
+        fs::write(&final_path, r#"{"single_mode_chara_id":6311}"#).expect("写终局帧");
         event_tx
             .send(Ok(event(EventKind::Modify(ModifyKind::Any), final_path.clone())))
             .unwrap();
-        assert!(recv_frame(&rx).contents.contains("6244"));
+        assert!(recv_frame(&rx).contents.contains("6311"));
+
+        // 下一局的终局帧是**另一个文件名**：即便内容与上一份相同也应入队（按文件名去重）
+        let next_path = dir.join("game6311_finalScore.json");
+        fs::write(&next_path, r#"{"single_mode_chara_id":6311}"#).expect("写下一局终局帧");
+        event_tx
+            .send(Ok(event(EventKind::Create(CreateKind::Any), next_path)))
+            .unwrap();
+        assert_eq!(recv_frame(&rx).kind, FrameKind::FinalScore);
 
         drop(event_tx);
         handle.join().expect("producer 应正常退出");

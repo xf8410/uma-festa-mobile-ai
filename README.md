@@ -29,35 +29,22 @@
 - App 接收端：`app/app/src/main/java/com/ranko/matsuricapture/NativeEngine.kt`
 - 浮窗面板：`app/app/src/main/assets/float.html`
 
-## 当前未决故障（2026-11-07 真机实测）
+## 数据链与 AI 接线（2026-11-09 全链路打通）
 
-### 1. SIGSEGV 确定性崩溃（最高优先级）
+```
+游戏内存 ─SO(:18765 /summary+POST推送，18766被占自动改推18764/18772/18773)
+  → App接收端 NativeEngine(:18766…) ─WebView浮窗轮询 /api/snapshot
+  └→ EngineBridge（APK 内置 matsuri 引擎子进程，online 双档 matsuri/search）
+       每帧 /summary → FrameAdapter → thisTurn.json → 引擎
+       引擎 decision ─[AI-WIRE] onDecision 回调→ mergeDecision 回写最新帧
+       （score=搜索档期望、luck_turn/luck_game=umaai_review 口径、
+         train_advice[5列]、ai_candidates 候选榜、ai_top 首选）
+```
 
-真机实测证据：
-
-- `/summary` 在 phase1 崩溃，两次崩溃 `last_step` 都是 **`S:after_read_speed`**
-  （`/debug/crashlog` → `{"crash":true,"signal":11,"step":148}`，step 递增 148→172）
-- `/debug/cmdinfo` 实测：`CommandInfoArray` 元素**就是** legacy `SingleModeCommandInfoData` 布局
-  （`CommandType@16 / CommandId@36 / IsEnable@56 / TrainingPartnerArray@80 / TipsEventPartnerArray@88 /
-  ParamsIncDecInfoArray@96 / FailureRate@104`），所以 v3.29.2 的「Festa 布局识别」分支不会触发，
-  崩溃点在别处：**`S:after_read_speed` 之后、下一个埋点之前的那段 getter 链**
-- hooklog 显示 phase2~p6 有完整跑通的轮次，是健康的
-- 崩溃后进入 60 秒全局冷却，`push_loop` 每 5 秒拿到 error JSON 直接 continue → 永远不推送给 App
-
-**下一步（已定方案）**：在 phase1 每个 getter（stamina / power / guts / wiz / hp / maxhp /
-motivation / skillpoint / fan）前后各加一个 `last_step` 埋点，出 v3.29.3，一次真机验证收敛到单个 getter。
-
-### 2. festa 数据链断（独立故障，不引发崩溃）
-
-- `/scenario` → `{"scenario_id":15,"error":"scenario_obj_null","hint":"getter_name_not_found"}`
-- 但 `/debug/dumpclass` 实测：`WorkSingleModeCharaData` 有 `<ScenarioFesta>@1232`，
-  方法表有 `get_ScenarioFesta`——类存在、属性存在，**是 sid=15 的取对象路径没覆盖**
-- 后果：演目槽 / 教诲角标 / festa 块全空
-
-### 3. 已知瑕疵
-
-- hooklog 首条 `URA plugin v3.24.9 loaded` 与 `/health` 的 3.29.2 不符：构建里日志字符串没同步
-- `/debug/all` 自己也会崩（`sigsegv_recovered_in_debug_all`）
+- 引擎 = 上游 umaai-matsuri main + **PR#3**（在线按帧内卡组选档 / 自选比赛期限修复）CI 现合现编
+- 真机 SIGSEGV 已根修（arrayfix：`read_il2cpp_int_list` 把内联 ObscuredInt[] 误当指针数组解引用）
+- festa 已接线：sid=15 走 `WorkSingleModeCharaData.<ScenarioFesta>@1232` 字段直读，acts/教诲/检查点进 /summary
+- App 源码 = 仓库内权威版本（0.9.25-dsh34）；CI 不再从 0.7.4 基线重放补丁（旧脚本 marker 幂等空转）
 
 ## 编译
 

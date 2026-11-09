@@ -56,14 +56,8 @@ impl UmaFlagsExt for UmaFlags {
         }
         self.aijiao |= rhs.aijiao;
         self.good_trainer |= rhs.good_trainer;
-        // 恢复精神盾：挡一次「不擅长训练」不良状态（事件 bad_trainer 路径）
-        if rhs.bad_trainer && self.ill_guard_count > 0 {
-            self.ill_guard_count -= 1;
-        } else {
-            self.bad_trainer |= rhs.bad_trainer;
-        }
+        self.bad_trainer |= rhs.bad_trainer;
         self.positive_thinking_count += rhs.positive_thinking_count;
-        self.ill_guard_count += rhs.ill_guard_count;
         self.refresh_mind += rhs.refresh_mind;
         self.lucky_count += rhs.lucky_count;
         self.doll |= rhs.doll;
@@ -73,12 +67,7 @@ impl UmaFlagsExt for UmaFlags {
             ill.remove(Ill::ANY);
             ill.insert(Ill::UNKNOWN);
         }
-        // 恢复精神（不良状态盾）：有盾时挡一次生病，消耗一层、不真正染病
-        if !ill.is_empty() && self.ill_guard_count > 0 {
-            self.ill_guard_count -= 1;
-        } else {
-            self.ill.insert(ill);
-        }
+        self.ill.insert(ill);
         // 同置：bad_trainer 与 BAD_TRAINER 位任一来源触发即两边都置
         if self.bad_trainer || self.ill.contains(Ill::BAD_TRAINER) {
             self.bad_trainer = true;
@@ -95,7 +84,6 @@ impl UmaFlagsExt for UmaFlags {
         self.bad_trainer &= !rhs.bad_trainer;
         // 次数类状态按下限 0 扣减（心情盾被消耗、幸运体质失效）
         self.positive_thinking_count = (self.positive_thinking_count - rhs.positive_thinking_count).max(0);
-        self.ill_guard_count = (self.ill_guard_count - rhs.ill_guard_count).max(0);
         self.refresh_mind -= rhs.refresh_mind;
         self.lucky_count = (self.lucky_count - rhs.lucky_count).max(0);
         self.doll &= !rhs.doll;
@@ -535,11 +523,10 @@ mod tests {
             .iter_mut()
             .zip(uma.five_status.iter().zip(uma.five_status_limit.iter()))
         {
-            // 刻意不调 `cons.status_final_score()`：这份是用来对照 `score_parts()` 的
-            // 独立实现，两边共用同一个查表函数就不再是 oracle 了。
-            let table = &cons.five_status_final_score;
-            let status = (*value).min(*limit).max(0) as usize;
-            *slot = table[status.min(table.len() - 1)];
+            // 五维按 core 的评分规格取值；本用例守的是 `score_parts()` 的夹取、
+            // 折算系数与分量求和，公式本身由 core 锚点与 L3 逐位对照守门。
+            let status = (*value).min(*limit).max(0);
+            *slot = umaai_core::score::status_point(status);
         }
         // 切者/小切的 PT 折算加成：独立写死系数，保证能抓住实现里的系数写错
         let pt_factor = if uma.flags.qiezhe {

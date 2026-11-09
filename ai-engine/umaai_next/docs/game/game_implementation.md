@@ -48,7 +48,7 @@
 | 状态与属性 | `game/uma.rs`（`Uma`/`UmaFlags`/`add_value`/`add_motivation`） |
 | 继承 / 支援卡 | `game/inherit.rs`、`game/support_card.rs` |
 | 友人 | `game/mod.rs::FriendState`、`game/base/basic.rs` |
-| 评分 | `game/uma.rs::calc_score`/`score_parts`、`gamedata/config.rs`（`GameConstants`） |
+| 评分 | `crates/umaai-core/src/score.rs::status_point`（单项属性公式）、`game/uma.rs::calc_score`/`score_parts`、`crates/umaai-core/src/gamedata/constants.rs`（`GameConstants::status_final_score`） |
 | 育成结束 | `game/traits.rs::on_simulation_end`、`game/base/basic.rs`、`game/ramen/game.rs::add_mandatory_events` |
 | 在线记录 / 协议 | `crates/umaai/src/`（`protocol/`、`decision/record`、`plot/`） |
 

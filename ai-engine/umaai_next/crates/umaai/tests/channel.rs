@@ -13,7 +13,7 @@ use std::path::PathBuf;
 use std::time::Duration;
 
 use anyhow::Result;
-use umaai::protocol::channel::{FRAME_FINAL_SCORE, FRAME_THIS_TURN, PORTABLE_DIR};
+use umaai::protocol::channel::{FRAME_THIS_TURN, PORTABLE_DIR};
 use umaai::{FileChannel, FrameKind, plugin_dir};
 
 use crate::common::Checks;
@@ -22,6 +22,8 @@ use crate::common::Checks;
 const TURN_FRAME: &str = r#"{"baseGame":{"scenarioId":14,"turn":3}}"#;
 /// 变化后的回合帧原文
 const TURN_FRAME2: &str = r#"{"baseGame":{"scenarioId":14,"turn":4}}"#;
+/// 终局帧文件名（E1 起按局号命名）
+const FINAL_SCORE_FILE: &str = "game6264_finalScore.json";
 /// 终局帧原文
 const FINAL_FRAME: &str = r#"{"scenarioId":14,"single_mode_chara_id":6264}"#;
 
@@ -67,7 +69,7 @@ fn channel_startup_fallback() -> Result<()> {
     let _ = fs::remove_dir_all(&root);
     fs::create_dir_all(&dir)?;
     fs::write(dir.join(FRAME_THIS_TURN), TURN_FRAME)?;
-    fs::write(dir.join(FRAME_FINAL_SCORE), FINAL_FRAME)?;
+    fs::write(dir.join(FINAL_SCORE_FILE), FINAL_FRAME)?;
 
     let mut ch = FileChannel::open(&root)?;
     let first = ch.next_frame(Duration::from_secs(2))?;
@@ -125,7 +127,7 @@ fn channel_watches_real_writes() -> Result<()> {
     );
 
     // 终局帧信道同样可达
-    fs::write(dir.join(FRAME_FINAL_SCORE), FINAL_FRAME)?;
+    fs::write(dir.join(FINAL_SCORE_FILE), FINAL_FRAME)?;
     let third = ch.next_frame(Duration::from_secs(5))?;
     c.check(
         third.as_ref().map(|f| f.kind) == Some(FrameKind::FinalScore),

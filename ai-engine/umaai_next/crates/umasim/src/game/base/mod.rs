@@ -339,24 +339,27 @@ impl BaseGame {
             self.unresolved_events.push(event);
         }
         // 诊断摘要：只报「生成了什么」——事件身份由 run_event 报、羁绊由 add_friendship 报
-        let mut parts: Vec<String> = vec![];
-        if let Some(p) = hint_chosen {
-            parts.push(format!("红点#{p}"));
-        }
-        if extra_train {
-            parts.push("加练".to_string());
-        }
-        if friend_clicked {
-            parts.push("友人点击".to_string());
-        }
-        if yayoi_clicked {
-            parts.push("理事长点击".to_string());
-        }
-        if reporter_clicked {
-            parts.push("记者点击".to_string());
-        }
-        if !parts.is_empty() {
-            diag!("训练后处理 训练位{train}: {}", parts.join(" "));
+        // 载荷在宏外构造，须先问开关：静默期零分配、零格式化
+        if diag::active() {
+            let mut parts: Vec<String> = vec![];
+            if let Some(p) = hint_chosen {
+                parts.push(format!("红点#{p}"));
+            }
+            if extra_train {
+                parts.push("加练".to_string());
+            }
+            if friend_clicked {
+                parts.push("友人点击".to_string());
+            }
+            if yayoi_clicked {
+                parts.push("理事长点击".to_string());
+            }
+            if reporter_clicked {
+                parts.push("记者点击".to_string());
+            }
+            if !parts.is_empty() {
+                diag!("训练后处理 训练位{train}: {}", parts.join(" "));
+            }
         }
         Ok(())
     }
@@ -585,22 +588,25 @@ impl BaseGame {
                     self.apply_extra_status(extra, rng);
                 }
                 // 结算叙事：结果档（普通档略）+ 入账摘要 + 额外属性 + 友人加成注记；皆空不落日志
-                let mut parts: Vec<String> = vec![];
-                if let Some(result) = diag_result_note(choice_result.result) {
-                    parts.push(result.to_string());
-                }
-                let value = choice_result.value.to_string();
-                if !value.is_empty() {
-                    parts.push(format!("入账 {value}"));
-                }
-                if let Some(extra) = choice_result.extra_status {
-                    parts.push(format!("额外{extra}"));
-                }
-                if friend {
-                    parts.push("含友人加成".to_string());
-                }
-                if !parts.is_empty() {
-                    diag!("事件 #{} 结算: {}", event.id, parts.join(" "));
+                // 载荷在宏外构造，须先问开关：静默期（rollout）零分配、零格式化
+                if diag::active() {
+                    let mut parts: Vec<String> = vec![];
+                    if let Some(result) = diag_result_note(choice_result.result) {
+                        parts.push(result.to_string());
+                    }
+                    let value = choice_result.value.to_string();
+                    if !value.is_empty() {
+                        parts.push(format!("入账 {value}"));
+                    }
+                    if let Some(extra) = choice_result.extra_status {
+                        parts.push(format!("额外{extra}"));
+                    }
+                    if friend {
+                        parts.push("含友人加成".to_string());
+                    }
+                    if !parts.is_empty() {
+                        diag!("事件 #{} 结算: {}", event.id, parts.join(" "));
+                    }
                 }
                 Some(choice_result)
             } else {
@@ -677,25 +683,28 @@ impl BaseGame {
     /// [`Self::apply_event`]，这里记诊断后忽略。
     pub fn apply_event_choice(&mut self, choice: &EventChoice) {
         // 结算叙事：入账摘要与状态增减（词形见 `UmaFlags` 的 `Display`）；皆空不落日志
-        let mut parts: Vec<String> = vec![];
-        let value = choice.value.to_string();
-        if !value.is_empty() {
-            parts.push(format!("入账 {value}"));
-        }
-        if let Some(add) = &choice.add_flags {
-            let words = add.to_string();
-            if !words.is_empty() {
-                parts.push(format!("+{words}"));
+        // 载荷在宏外构造，须先问开关：静默期零分配、零格式化
+        if diag::active() {
+            let mut parts: Vec<String> = vec![];
+            let value = choice.value.to_string();
+            if !value.is_empty() {
+                parts.push(format!("入账 {value}"));
             }
-        }
-        if let Some(remove) = &choice.remove_flags {
-            let words = remove.to_string();
-            if !words.is_empty() {
-                parts.push(format!("-{words}"));
+            if let Some(add) = &choice.add_flags {
+                let words = add.to_string();
+                if !words.is_empty() {
+                    parts.push(format!("+{words}"));
+                }
             }
-        }
-        if !parts.is_empty() {
-            diag!("事件选项结算: {}", parts.join(" "));
+            if let Some(remove) = &choice.remove_flags {
+                let words = remove.to_string();
+                if !words.is_empty() {
+                    parts.push(format!("-{words}"));
+                }
+            }
+            if !parts.is_empty() {
+                diag!("事件选项结算: {}", parts.join(" "));
+            }
         }
         match choice.extra_status {
             Some(ExtraStatus::LastTrain { value }) => match self.last_train {

@@ -72,10 +72,90 @@ object NativeEngine {
     @Volatile var boundPort: Int = 0
     private val FIVE_KEYS = arrayOf("speed", "stamina", "power", "guts", "wiz")
 
+    // [AI-WIRE] 引擎决策回写状态。运气分口径 = umaai_review：本局 = T(n)−T(首回合)，本轮 = T(n)−T(n−1)
+    @Volatile private var aiFirstExpected: Long? = null
+    @Volatile private var aiLastExpected: Long? = null
+    @Volatile private var aiLastTurn: Int = -1
+    @Volatile private var aiSearchTurn: Int = -1  // search 档已覆盖的回合（hand 档不覆盖它）
+    // 动作下标兜底名（PC 控制台同序）；引擎给了 descriptions 时优先用描述
+    private val ACTION_NAMES = arrayOf("速训练", "耐训练", "力训练", "根训练", "智训练", "休息", "出行", "比赛")
+
+    /** [AI-WIRE] 引擎决策回写最新帧：期望分→score、本局/本轮运气、五列候选分、首选。
+     *  只收与当前帧同回合的决策（决策天然滞后于帧）；search 档优先，hand 档先到先用。 */
+    private fun mergeDecision(trainer: String, d: JSONObject) {
+        val f = latest ?: return
+        val dTurn = d.optInt("turn", -1)
+        val fTurn = f.optInt("turn", -1)
+        if (dTurn < 0 || fTurn < 0 || dTurn != fTurn) return
+        val isSearch = trainer == "search"
+        if (!isSearch && aiSearchTurn == dTurn) return
+        synchronized(gate) {
+            if (latest !== f) return  // 帧已换新，旧帧不回写
+            if (isSearch) {
+                aiSearchTurn = dTurn
+                val expected = d.optLong("expected_score", 0L)
+                if (expected > 0) {
+                    if (aiFirstExpected == null || dTurn <= aiLastTurn) aiFirstExpected = expected
+                    val prev = aiLastExpected
+                    f.put("luck_turn", if (prev != null && dTurn > aiLastTurn) expected - prev else 0L)
+                    f.put("luck_game", expected - (aiFirstExpected ?: expected))
+                    aiLastExpected = expected
+                    aiLastTurn = dTurn
+                    f.put("score", expected)  // 预估评分 = 搜索档期望终局分（PC 面板「期望」）
+                    f.put("expected_stdev", d.optInt("expected_stdev", 0))
+                    f.put("expected_rank", d.optString("expected_rank", ""))
+                }
+            }
+            // 候选：detail[{i,s,n,five,pt}] + descriptions[k]（与 detail 同序）；PC 口径 delta = s − baseline
+            val baseline = d.optDouble("baseline", 0.0)
+            val detail = d.optJSONArray("detail")
+            val descs = d.optJSONArray("descriptions")
+            if (detail != null && detail.length() > 0) {
+                val cands = JSONArray()
+                var best: JSONObject? = null
+                for (k in 0 until detail.length()) {
+                    val c = detail.optJSONObject(k) ?: continue
+                    val idx = c.optInt("i", -1)
+                    val delta = Math.round(c.optDouble("s", 0.0) - baseline)
+                    val nm = descs?.optString(k, "")?.takeIf { it.isNotEmpty() }
+                        ?: ACTION_NAMES.getOrElse(idx) { "动作$idx" }
+                    val item = JSONObject()
+                        .put("index", idx).put("name", nm).put("score", delta)
+                        .put("five", c.optJSONArray("five") ?: JSONArray())
+                        .put("pt", c.optInt("pt", 0))
+                    cands.put(item)
+                    if (best == null || delta > best!!.optLong("score")) best = item
+                }
+                // 五列按动作下标 0..4 对齐（速耐力根智），缺列补空对象
+                val cols = JSONArray()
+                for (i in 0..4) {
+                    var hit: JSONObject? = null
+                    for (k in 0 until cands.length()) {
+                        val it = cands.optJSONObject(k)
+                        if (it != null && it.optInt("index") == i) { hit = it; break }
+                    }
+                    cols.put(hit ?: JSONObject())
+                }
+                f.put("train_advice", cols)
+                f.put("ai_candidates", cands)
+                if (best != null) {
+                    val bs = best!!.optLong("score")
+                    f.put("ai_top", "▶ " + best!!.optString("name") + " " + (if (bs >= 0) "+" else "") + bs)
+                }
+            }
+            f.put("ai_trainer", trainer)
+            f.put("ai_at_ms", System.currentTimeMillis())
+        }
+    }
+
     fun start(bind: String, dir: String, ctx: Context? = null): Boolean {
         if (ctx != null) appContext = ctx.applicationContext
         // [ENGINE-ANDROID] 拉起内置 umaai 引擎（App 进程内，别放游戏里算）
-        if (ctx != null) EngineBridge.init(ctx.applicationContext)
+        if (ctx != null) {
+            // [AI-WIRE] 决策回写：引擎每出一条 decision 就并进最新帧，浮窗才有 score/运气/建议
+            EngineBridge.onDecision = { trainer, d -> mergeDecision(trainer, d) }
+            EngineBridge.init(ctx.applicationContext)
+        }
         if (running.get()) return true
         return try {
             val i = bind.lastIndexOf(':')

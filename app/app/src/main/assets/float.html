@@ -154,6 +154,11 @@ body.mini #mini{display:flex}
     <div class="pick"><div class="k">训练备选</div><div class="v" id="picks">—</div></div>
   </div>
 
+  <!-- [AI-WIRE] AI 候选榜（PC 控制台同口径：delta=候选分−基线，绿正红负，首选▶） -->
+  <div class="row duo" id="aiRow" style="grid-template-columns:1fr;display:none">
+    <div class="pick"><div class="k">AI 候选 · 期望 <span id="aiExp">—</span></div><div class="v" id="aiCands">—</div></div>
+  </div>
+
   <!-- 稽古：演目设施进度（槽满 5 触发该演目稽古） -->
   <div class="bhead"><span class="t">稽古 · 演目槽</span><span id="gauges" class="dim">满 5 触发稽古</span></div>
   <div class="row" id="acts" style="background:rgba(255,255,255,.4);border:1px solid var(--line2);border-radius:6px;padding:1px 3px"></div>
@@ -185,7 +190,15 @@ const dsp=v=>{v=+v;if(!isFinite(v)||v<0)return '—';return v;};
 /* 祭典杯属性上限（剧本提升后，用户实测口径）：速2200 耐1850 力1800 根1700 智1800 */
 const MAX_ATTR={spd:2200,sta:1850,pow:1800,gut:1700,wis:1800};
 const advName=id=>ADV[+id]||(+id>0?'#'+id:'—');
-const BASE='http://127.0.0.1:18766';
+// [APP-FIX-099] 卡册：支援卡名 / 得意训练（cardType 0速1耐2力3根4智）
+let CARDD={};
+fetch(BASE+'/api/carddb',{cache:'force-cache'}).then(function(r){return r.json();}).then(function(j){CARDD=j;}).catch(function(){});
+const cardMeta=function(id){return CARDD[String(id)]||null;};
+const cardShort=function(id){const c=cardMeta(id);if(!c)return '';const n=String(c.cardName||'');const m=n.match(/^\[([^\]]+)\]/);return m?m[1]+' '+n.replace(/^\[[^\]]+\]/,''):n;};
+// [APP-FIX-100] 彩圈直接用 SO 的 is_shining（引擎规则），不再用卡册推算
+const isShiningNow=function(p){return p&&p.is_shining===true;};
+// [APP-FIX-098] 同源：App 的 HTTP 端口可能不是 18766
+const BASE=(location&&location.origin&&location.origin!=='null')?location.origin:'http://127.0.0.1:18766';
 let timer=null,paused=false,lastRec={txt:'等待游戏连接',wait:true};
 
 /* 五属性训练 command_id（SO lib.rs：101速/105耐/102力/103根/106智；URA 决赛 601-605 同序） */
@@ -311,12 +324,14 @@ function render(s){
   // 装备卡组（support_cards[]：position/卡ID/chara_id/kizuna）
   const deck=f.support_cards||[];
 
-  // 行动建议（稽古亮起优先；否则彩圈最多的属性训练；友人外出由 AI 统一算）
+  // 行动建议：[AI-WIRE] 引擎首选优先（ai_top=「▶ 速训练 +146」成品文案）；引擎未出决策才回退本地启发
   const rec=recommend(acts,trByAttr);lastRec=rec;
+  const aiTop=(f.ai_top&&String(f.ai_top).length>2)?String(f.ai_top):null;
+  if(aiTop)lastRec={txt:aiTop,wait:false};
   const aa=document.getElementById('advAct');
-  aa.textContent=rec.txt+(kensan&&acts.length?' ⚡追加稽古':'');aa.className='v'+(rec.wait?' wait':'');
+  aa.textContent=lastRec.txt+(kensan&&acts.length?' ⚡追加稽古':'');aa.className='v'+(lastRec.wait?' wait':'');
   // 运气分 / 预估评分：内置 AI 未接入，无数据源，不编造
-  document.getElementById('score').textContent=n(f.score);
+  document.getElementById('score').innerHTML=n(f.score)+(+f.expected_stdev>0?` <span style="font-size:9px;color:var(--dim)">±${n(f.expected_stdev)}${f.expected_rank?' '+esc(f.expected_rank):''}</span>`:'');
   document.getElementById('luckGame').textContent=n(f.luck_game);
   document.getElementById('luckTurn').textContent=n(f.luck_turn);
 
@@ -362,6 +377,18 @@ function render(s){
       (lit.length&&near.length?'　':'')+
       near.map(a=>`<span class="sub">${a.short} ${n((byT[a.t]||{}).gauge)}/${n((byT[a.t]||{}).need_gauge)}</span>`).join('　')||'—';
   }else document.getElementById('picks').textContent='—';
+  // [AI-WIRE] AI 候选榜：PC 控制台口径（delta 绿正红负、首选▶加粗），无引擎决策时整行隐藏
+  const cs=f.ai_candidates||[];
+  const ar=document.getElementById('aiRow');
+  if(cs.length){
+    ar.style.display='';
+    document.getElementById('aiExp').textContent=n(f.score)+(+f.expected_stdev>0?(' ±'+n(f.expected_stdev)):'');
+    const sorted=[...cs].sort((a,b)=>+b.score-+a.score).slice(0,5);
+    document.getElementById('aiCands').innerHTML=sorted.map((c,i)=>{
+      const s=+c.score||0,cl=s>0?'#2e7d32':(s<0?'#c62828':'#888');
+      return `<span style="color:${cl};font-weight:${i==0?'800':'400'}">${i==0?'▶':''}${esc(c.name)} ${s>=0?'+':''}${s}</span>`;
+    }).join('　');
+  }else ar.style.display='none';
   // 装备卡组已解析（deck）：AI 落地后用于局面构建；友人外出由 AI 统一计算
 
   // 稽古：5 演目设施进度（槽色照上游：满绿 / 差一格黄 / 有进度青 / 空灰）

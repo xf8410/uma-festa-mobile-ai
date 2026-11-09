@@ -44,17 +44,24 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Restore 0.7.4 baseline
-        run: |
-          set -euo pipefail
-          git checkout 4a0009f3 -- app/app/src/main
+      # [APP-FIX-105] 0.7.4 baseline restore 已删除：仓库内 app 源码现在是全量合并后的权威版本，
+      # 直接构建即可（旧补丁脚本靠 marker 幂等空转，不再每次从基线重放）。
 
-      - name: Clone upstream + patch engine (panel json + view) + cross-build arm64
+      - name: Clone upstream (+PR#3) + patch engine (panel json + view) + cross-build arm64
         run: |
           set -euo pipefail
           mkdir -p /tmp/w
           [ -d /tmp/w/umaai_next/.git ] || git clone --depth 1 https://github.com/umaai-project/umaai-next.git /tmp/w/umaai_next
-          [ -d /tmp/w/umaai-matsuri/.git ] || git clone --depth 1 https://github.com/umaai-project/umaai-matsuri.git /tmp/w/umaai-matsuri
+          rm -rf /tmp/w/umaai-matsuri
+          git clone https://github.com/umaai-project/umaai-matsuri.git /tmp/w/umaai-matsuri
+          # [AI-WIRE] 合入上游 PR#3（GA 三档定参 + 在线按帧内卡组选档 + 自选比赛期限修复）
+          # PR 未进 main，从 fork 头拉；合不进就退回 main 构建，不让 CI 死
+          if git -C /tmp/w/umaai-matsuri fetch origin pull/3/head:pr3 2>/dev/null; then
+            git -C /tmp/w/umaai-matsuri merge --no-edit pr3 && echo "PR#3 merged" || echo "PR#3 merge conflict, building main"
+          else
+            echo "PR#3 fetch failed, building main"
+          fi
+          git -C /tmp/w/umaai-matsuri log --oneline -3
           node .github/scripts/apply_engine_json_panel.js /tmp/w/umaai-matsuri/crates/matsuri-ai/src/output.rs
           node .github/scripts/apply_engine_json_view.js /tmp/w/umaai-matsuri/crates/matsuri-ai/src/output.rs
           rustup target add aarch64-linux-android
@@ -150,8 +157,8 @@ jobs:
           grep -qF '[APP-FIX-103]' app/app/src/main/assets/index.html
           grep -qF '[APP-FIX-104]' app/app/src/main/assets/index.html
           grep -qF 'startOne' $K/EngineBridge.kt
-          sed -i 's/versionName = "[^"]*"/versionName = "0.9.24-dsh33"/' app/app/build.gradle.kts
-          sed -i 's/versionCode = [0-9]\+/versionCode = 49/' app/app/build.gradle.kts
+          sed -i 's/versionName = "[^"]*"/versionName = "0.9.25-dsh34"/' app/app/build.gradle.kts
+          sed -i 's/versionCode = [0-9]\+/versionCode = 50/' app/app/build.gradle.kts
           grep -E 'versionCode|versionName' app/app/build.gradle.kts
 
       - uses: gradle/actions/setup-gradle@v4
@@ -170,14 +177,14 @@ jobs:
           set -euo pipefail
           mkdir -p app/dist
           SRC=$(find app/app/build/outputs/apk/release -name "*.apk" | head -1)
-          cp "$SRC" app/dist/matsuri-ai-0.9.24-dsh33.apk
+          cp "$SRC" app/dist/matsuri-ai-0.9.25-dsh34.apk
           cp "$SRC" app/dist/matsuri-ai-latest.apk
           ls -l app/dist/
           git config user.name dsh-bot
           git config user.email dsh-bot@users.noreply.github.com
-          git add -f app/dist/matsuri-ai-0.9.24-dsh33.apk app/dist/matsuri-ai-latest.apk
+          git add -f app/dist/matsuri-ai-0.9.25-dsh34.apk app/dist/matsuri-ai-latest.apk
           git add -f app/app/src/main/java app/app/src/main/assets/index.html app/app/build.gradle.kts 2>/dev/null || true
-          git commit -m "build(app): 0.9.24-dsh33 连接语义重做" || echo nothing
+          git commit -m "build(app): 0.9.25-dsh34 AI决策回写+PR3引擎" || echo nothing
           git fetch origin main || true
           git rebase origin/main || git rebase --abort || true
           git push origin HEAD:main || git push -f origin HEAD:main || echo "push failed"

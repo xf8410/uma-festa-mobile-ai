@@ -122,9 +122,6 @@ impl fmt::Display for UmaFlags {
         if self.positive_thinking_count > 0 {
             parts.push(format!("正向思考×{}", self.positive_thinking_count));
         }
-        if self.ill_guard_count > 0 {
-            parts.push(format!("恢复精神×{}", self.ill_guard_count));
-        }
         if self.refresh_mind > 0 {
             parts.push(format!("休息心得×{}", self.refresh_mind));
         }
@@ -202,9 +199,6 @@ pub struct UmaFlags {
     /// 正向思考（心情盾）剩余次数
     #[serde(default)]
     pub positive_thinking_count: i32,
-    /// 恢复精神（不良状态盾）剩余次数：挡一次生病
-    #[serde(default)]
-    pub ill_guard_count: i32,
     /// 休息心得持续回合数
     #[serde(default)]
     pub refresh_mind: i32,

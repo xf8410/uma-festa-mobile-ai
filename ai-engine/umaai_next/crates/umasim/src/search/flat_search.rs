@@ -137,6 +137,29 @@ impl SearchProbe {
     }
 }
 
+/// 本次搜索已收集样本的合并样本标准差（贝塞尔校正）
+///
+/// 每个候选各自持有一组样本，合并口径用「组内平方和之和 / (总样本数 − 组数)」。
+/// 组数不足或样本退化时回落到 `1.0`：探索项不能取 0，否则 UCB 退化成贪心。
+fn pooled_stdev<D>(collected: &[CandidateAccum<D>]) -> f64 {
+    let mut ss = 0.0;
+    let mut n = 0u64;
+    let mut groups = 0u64;
+    for acc in collected {
+        let k = acc.score.count() as u64;
+        if k == 0 {
+            continue;
+        }
+        ss += acc.score.sample_ss();
+        n += k;
+        groups += 1;
+    }
+    if n <= groups || ss <= 0.0 {
+        return 1.0;
+    }
+    (ss / (n - groups) as f64).sqrt()
+}
+
 /// 扁平蒙特卡洛搜索
 pub struct FlatSearch<G: FlatSearchGame>
 where
@@ -544,7 +567,14 @@ where
     fn select_ucb_action<D>(&self, collected: &[CandidateAccum<D>], radical_factor: f64, total_n: f64) -> usize {
         let sqrt_total = total_n.sqrt();
         let cpuct = self.config.search_cpuct;
-        let expected_stdev = self.config.expected_search_stdev;
+        // 探索项的量纲：`expected_search_stdev > 0` 用配置常数；`0` 用**本次搜索实测的
+        // 合并样本标准差**。评分标准差随剩余回合大幅变化（下游实测早期约 3300、末期约
+        // 900），单一常数必然在其中一端错配；实测口径让探索项与当前分数尺度同步。
+        let expected_stdev = if self.config.expected_search_stdev > 0.0 {
+            self.config.expected_search_stdev
+        } else {
+            pooled_stdev(collected)
+        };
 
         let mut best_idx = 0;
         let mut best_search_value = f64::NEG_INFINITY;

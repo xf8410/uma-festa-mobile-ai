@@ -27,10 +27,15 @@ object EngineBridge {
         @Volatile var lastLine: String = "",
         @Volatile var lastError: String = "",
         @Volatile var lines: Int = 0,
-        @Volatile var decision: String = ""
+        @Volatile var decision: String = "",
+        @Volatile var decisionJson: org.json.JSONObject? = null
     )
 
     private val slots = ConcurrentHashMap<String, Slot>()
+
+    /** [AI-WIRE] 决策回调：引擎每出一条 decision 就回调（trainer, 决策JSON）。
+     *  NativeEngine 注册后把期望/运气/候选回写进最新帧，浮窗才有数据可渲染。 */
+    @Volatile var onDecision: ((trainer: String, decision: org.json.JSONObject) -> Unit)? = null
 
     @Volatile var frames: Int = 0
         private set
@@ -164,21 +169,23 @@ object EngineBridge {
             val o = org.json.JSONObject(line)
             if (o.optString("type") != "decision") return
             val ex = o.optJSONObject("scenario_extra")
-            val d = StringBuilder()
-            d.append("{")
-            d.append("\"trainer\":\"").append(trainer).append("\",")
-            d.append("\"turn\":").append(o.optInt("turn", 0)).append(",")
-            d.append("\"score\":").append(o.optDouble("score", 0.0)).append(",")
-            d.append("\"action_index\":").append(o.optInt("action_index", 0)).append(",")
-            d.append("\"expected_score\":").append(ex?.optInt("expected_score", 0) ?: 0).append(",")
-            d.append("\"expected_stdev\":").append(ex?.optInt("expected_stdev", 0) ?: 0).append(",")
-            d.append("\"expected_rank\":\"").append(ex?.optString("expected_rank", "") ?: "").append("\",")
-            d.append("\"baseline\":").append(ex?.optDouble("baseline", 0.0) ?: 0.0).append(",")
-            d.append("\"descriptions\":").append(o.optJSONArray("candidate_descriptions")?.toString() ?: "[]").append(",")
-            d.append("\"scores\":").append(o.optJSONArray("candidate_scores")?.toString() ?: "[]").append(",")
-            d.append("\"detail\":").append(ex?.optJSONArray("candidate_detail")?.toString() ?: "[]")
-            d.append("}")
-            slot(trainer).decision = d.toString()
+            // [AI-WIRE] 直接组 JSONObject（原来是拼字符串），顺带回调给 NativeEngine 回写帧
+            val d = org.json.JSONObject()
+            d.put("trainer", trainer)
+            d.put("turn", o.optInt("turn", 0))
+            d.put("score", o.optDouble("score", 0.0))
+            d.put("action_index", o.optInt("action_index", 0))
+            d.put("expected_score", ex?.optInt("expected_score", 0) ?: 0)
+            d.put("expected_stdev", ex?.optInt("expected_stdev", 0) ?: 0)
+            d.put("expected_rank", ex?.optString("expected_rank", "") ?: "")
+            d.put("baseline", ex?.optDouble("baseline", 0.0) ?: 0.0)
+            d.put("descriptions", o.optJSONArray("candidate_descriptions") ?: org.json.JSONArray())
+            d.put("scores", o.optJSONArray("candidate_scores") ?: org.json.JSONArray())
+            d.put("detail", ex?.optJSONArray("candidate_detail") ?: org.json.JSONArray())
+            val s = slot(trainer)
+            s.decision = d.toString()
+            s.decisionJson = d
+            try { onDecision?.invoke(trainer, d) } catch (e: Throwable) { }
         } catch (e: Throwable) {
         }
     }

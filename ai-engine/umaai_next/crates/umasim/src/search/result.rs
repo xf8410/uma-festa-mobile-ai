@@ -92,6 +92,17 @@ impl ActionResult {
         variance.max(0.0).sqrt()
     }
 
+    /// 组内样本平方和（`Σ(x−x̄)²`），用于合并方差估计
+    ///
+    /// 供搜索内核按实测分数尺度校准 UCB 的探索项；不参与排序。
+    pub fn sample_ss(&self) -> f64 {
+        if self.num == 0 {
+            return 0.0;
+        }
+        let n = self.num as f64;
+        (self.sum_sq - self.sum * self.sum / n).max(0.0)
+    }
+
     /// 排名加权平均分：按 `rank_ratio^radical_factor` 加权，越大越偏高分尾部
     ///
     /// `radical_factor = 0` 时退化为普通均值。结果按 `radical_factor` 缓存，

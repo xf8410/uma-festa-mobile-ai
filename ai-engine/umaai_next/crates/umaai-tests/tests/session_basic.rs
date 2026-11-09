@@ -20,7 +20,7 @@ use umaai::FileChannel;
 #[cfg(feature = "file-channel")]
 use umaai::RunStop;
 #[cfg(feature = "file-channel")]
-use umaai::protocol::channel::{FRAME_FINAL_SCORE, FRAME_THIS_TURN, plugin_dir};
+use umaai::protocol::channel::{FRAME_THIS_TURN, plugin_dir};
 use umaai::protocol::story::{StoryChoice, StoryEffectValue};
 use umaai::{
     BaseParams, BaseStatus, Candidate, Config, DecisionRecord, DecisionSource, FinalScoreFrame, FrameKind, FrameRoute,
@@ -204,6 +204,8 @@ fn final_frame(epoch: u64, five: [i32; 5]) -> Result<String> {
         total_hints: 20,
         skill_pt_spent: 0,
         inherit_gains: vec![],
+        action_schema_version: None,
+        actions: None,
     };
     Ok(serde_json::to_string(&frame)?)
 }
@@ -397,7 +399,10 @@ fn session_runs_on_real_channel() -> Result<()> {
         dir.join(FRAME_THIS_TURN),
         turn_frame(&root_game, root_game.turn, "command", None)?,
     )?;
-    fs::write(dir.join(FRAME_FINAL_SCORE), final_frame(EPOCH, [800; 5])?)?;
+    fs::write(
+        dir.join(format!("game{EPOCH}_finalScore.json")),
+        final_frame(EPOCH, [800; 5])?,
+    )?;
 
     let trainer = RaceFirstTrainer;
     let src = StubSource::new(vec![train_record()]);

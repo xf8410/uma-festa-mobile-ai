@@ -25,7 +25,8 @@ pub struct GameConstants {
     pub pt_score_rate: f32,
     /// 每级 Hint 对应的 pt
     pub hint_pt_rate: f32,
-    /// 五维 → 终局评分（原始属性索引，1200 以上未减半）
+    /// 兼容保留的旧评分表（评分已改走 [`crate::score::status_point`]，本字段不再参与计算）
+    #[serde(default)]
     pub five_status_final_score: Vec<i32>,
     /// 评分档次分界
     pub rank_scores: Vec<i32>,
@@ -57,19 +58,12 @@ impl GameConstants {
         self.train_names.get(i).cloned().unwrap_or_else(|| format!("#{i}"))
     }
 
-    /// 查五维属性对应的终局评分，越界饱和到表末（空表返回 0）
+    /// 五维原始属性 → 终局评分（公式口径，无属性上限）
+    ///
+    /// 与 [`crate::score::status_point`] 同源；负数按 0 处理，不再查表也不再饱和到表末。
+    #[must_use]
     pub fn status_final_score(&self, status: i32) -> i32 {
-        match self.five_status_final_score.last() {
-            None => 0,
-            Some(&last) => {
-                let idx = (status.max(0) as usize).min(self.five_status_final_score.len() - 1);
-                if idx == self.five_status_final_score.len() - 1 {
-                    last
-                } else {
-                    self.five_status_final_score[idx]
-                }
-            }
-        }
+        crate::score::status_point(status)
     }
 
     /// 查评分对应评价名
@@ -127,14 +121,17 @@ mod tests {
         }
     }
 
-    /// 层1：评分查表两端饱和
+    /// 层1：评分走公式，不读兼容保留的旧表
     #[test]
-    fn test_status_final_score_saturates() {
+    fn test_status_final_score_formula() {
         let c = consts();
         assert_eq!(c.status_final_score(-5), 0);
-        assert_eq!(c.status_final_score(1), 10);
-        assert_eq!(c.status_final_score(2), 20);
-        assert_eq!(c.status_final_score(9999), 20, "越界应饱和到表末");
+        assert_eq!(c.status_final_score(0), 0);
+        assert_eq!(c.status_final_score(1), 1, "夹具旧表为 [0,10,20]，若仍查表会得 10");
+        assert_eq!(c.status_final_score(1200), 3841);
+        assert_eq!(c.status_final_score(3100), 17062);
+        assert_eq!(c.status_final_score(3801), 23905);
+        assert_eq!(c.status_final_score(4000), 25950, "表末之后不再饱和");
     }
 
     /// 层1：评价名按分数线取档，两端饱和

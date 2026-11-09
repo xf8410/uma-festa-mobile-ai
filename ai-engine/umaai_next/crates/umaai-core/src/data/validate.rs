@@ -42,9 +42,6 @@ pub fn validate(data: &Data) -> UmaResult<()> {
             ),
         ));
     }
-    if data.consts.five_status_final_score.is_empty() {
-        return Err(field("constants.json/five_status_final_score", "评分表为空"));
-    }
     for key in ["card_event", "uma_event", "drop_motivation"] {
         if !data.consts.event_probs.contains_key(key) {
             return Err(field(format!("constants.json/event_probs/{key}"), "缺少随机事件分布键"));

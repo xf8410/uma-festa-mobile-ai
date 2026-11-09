@@ -116,12 +116,8 @@ impl BasicAction {
             if rng.random_bool(failure_rate as f64) {
                 game.apply_event(&Data::get()?.system_event("training_fail_low")?.clone(), 0, rng)?;
                 // 大失败：生病（不擅长训练）与 bool 同置
-                if game.uma().flags.ill_guard_count > 0 {
-                    game.uma_mut().flags.ill_guard_count -= 1;
-                } else {
-                    game.uma_mut().flags.ill.insert(Ill::BAD_TRAINER);
-                    game.uma_mut().flags.bad_trainer = true;
-                }
+                game.uma_mut().flags.ill.insert(Ill::BAD_TRAINER);
+                game.uma_mut().flags.bad_trainer = true;
             } else {
                 game.apply_event(&Data::get()?.system_event("training_fail")?.clone(), 0, rng)?;
             }

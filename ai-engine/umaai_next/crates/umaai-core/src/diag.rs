@@ -35,6 +35,16 @@ pub fn enabled() -> bool {
     DIAG_ENABLED.load(Ordering::Relaxed)
 }
 
+/// 诊断输出当前是否**有效**（编译期 feature 与运行时开关同时成立）
+///
+/// 热路径上「先在宏外构造诊断载荷、再交给 diag 宏」的调用点应先问本函数：
+/// 宏参数本就惰性，宏外的格式化却照付。feature 关闭时恒为 false，整块可被消除。
+#[inline]
+#[must_use]
+pub fn active() -> bool {
+    compiled_in() && enabled()
+}
+
 /// 设置诊断输出开关（进程级，跨线程可见）
 ///
 /// 直接调用请优先考虑 [`DiagGuard`]：guard 以 RAII 方式恢复进入前的开关值，
@@ -56,17 +66,26 @@ pub struct DiagGuard {
 
 impl DiagGuard {
     /// 关闭诊断输出并返回恢复 guard
+    ///
+    /// 只在**需要切换**时写开关：开关已关闭时不再重复 store。该开关在训练 / 资源预览里
+    /// 每个候选创建一次 guard，是并行 rollout 的热路径；重复 store 会让缓存行在核心间
+    /// 反复失效。语义不变：guard 仍恢复进入前的值。
     #[must_use = "guard 被 drop 前诊断输出一直关闭，请绑定到变量以覆盖整个作用域"]
     pub fn suppress() -> Self {
         let prev = enabled();
-        set_enabled(false);
+        if prev {
+            set_enabled(false);
+        }
         Self { prev }
     }
 }
 
 impl Drop for DiagGuard {
     fn drop(&mut self) {
-        set_enabled(self.prev);
+        // 当前值已等于进入前的值时不写：内层 guard（prev=false）的 drop 不产生冗余 store
+        if enabled() != self.prev {
+            set_enabled(self.prev);
+        }
     }
 }
 
@@ -94,7 +113,7 @@ macro_rules! diag {
 mod tests {
     use std::sync::Mutex;
 
-    use super::{DiagGuard, compiled_in, enabled, set_enabled};
+    use super::{DiagGuard, active, compiled_in, enabled, set_enabled};
 
     /// 全局开关测试互斥锁：开关是进程级状态，相关测试必须串行执行
     static SWITCH_LOCK: Mutex<()> = Mutex::new(());
@@ -103,6 +122,20 @@ mod tests {
     #[test]
     fn test_compiled_in_follows_feature() {
         assert_eq!(compiled_in(), cfg!(feature = "diag"));
+    }
+
+    /// 层1：`active()` 同时受编译期 feature 与运行时开关支配
+    #[test]
+    fn test_active_follows_both_switches() {
+        // unwrap：测试代码，锁中毒只可能来自其他测试 panic，无恢复意义
+        let _serial = SWITCH_LOCK.lock().unwrap();
+        set_enabled(true);
+        assert_eq!(active(), compiled_in(), "开关打开时回到编译期口径");
+        {
+            let _guard = DiagGuard::suppress();
+            assert!(!active(), "运行时静默时 active 必须为 false");
+        }
+        assert_eq!(active(), compiled_in(), "guard drop 后恢复编译期口径");
     }
 
     /// 层1：guard 抑制后 `enabled()` 为 false，drop 后恢复进入前的值
