@@ -1,9 +1,9 @@
-name: "Build hachimi_ura 3.29.3 (pure-capture)"
+name: "Build hachimi_ura 3.29.4 (http-trunc-fix)"
 on:
   push:
     branches: [main]
     paths:
-      - ".github/workflows/build-ura-3293-v26.yml"
+      - ".github/workflows/build-ura-3294-v27.yml"
       - "so/hachimi_ura_plugin/src/lib.rs"
       - "so/hachimi_ura_plugin/Cargo.toml"
   workflow_dispatch:
@@ -19,7 +19,7 @@ jobs:
       # [PURE-CAPTURE-3293] 仓库 lib.rs 即权威源码，不再重放任何 apply_* 补丁。
       # 算分/彩圈/运气/决策已全部剥离出 SO（移交 App 侧 ScoreTable.kt + 内置引擎），
       # 若重放 apply_score/apply_shining/apply_luck 会把已删除的启发式代码注回来。
-      - name: Verify pure-capture markers
+      - name: Verify pure-capture + httpfix markers
         run: |
           set -euo pipefail
           grep -qF '[PURE-CAPTURE-3293]' so/hachimi_ura_plugin/src/lib.rs
@@ -27,10 +27,16 @@ jobs:
           grep -qF '[EVAL-3292]' so/hachimi_ura_plugin/src/lib.rs
           grep -qF '[BOOTGATE-3292]' so/hachimi_ura_plugin/src/lib.rs
           grep -qF '[PUSHFALLBACK-3292]' so/hachimi_ura_plugin/src/lib.rs
+          grep -qF '[HTTP-READFIX-3294]' so/hachimi_ura_plugin/src/lib.rs
+          grep -qF '[HTTP-PAGE-3294]' so/hachimi_ura_plugin/src/lib.rs
+          grep -qF '[HTTP-DIAG-3294]' so/hachimi_ura_plugin/src/lib.rs
+          grep -qF '[HTTP-CLOSE-3294]' so/hachimi_ura_plugin/src/lib.rs
+          grep -qF '/debug/summary_integrity' so/hachimi_ura_plugin/src/lib.rs
+          grep -qF 'S:resp_written=' so/hachimi_ura_plugin/src/lib.rs
           ! grep -qF 'evaluate_ai' so/hachimi_ura_plugin/src/lib.rs
           ! grep -qF 'five_status_final_score' so/hachimi_ura_plugin/src/lib.rs
           ! grep -qF 'FIVE_STATUS_FINAL_SCORE' so/hachimi_ura_plugin/src/lib.rs
-          echo "pure-capture source verified"
+          echo "pure-capture + httpfix source verified"
       - name: Toolchain
         run: |
           set -euo pipefail
@@ -52,22 +58,22 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p so/dist
-          cp so/hachimi_ura_plugin/target/aarch64-linux-android/release/libhachimi_ura.so so/dist/libhachimi_ura-3.29.3-pure.so
+          cp so/hachimi_ura_plugin/target/aarch64-linux-android/release/libhachimi_ura.so so/dist/libhachimi_ura-3.29.4-httpfix.so
           git config user.name dsh-bot
           git config user.email dsh-bot@users.noreply.github.com
-          git add -f so/dist/libhachimi_ura-3.29.3-pure.so
+          git add -f so/dist/libhachimi_ura-3.29.4-httpfix.so
           git add -u  # tracked 修改全暂存，否则 rebase 报 unstaged changes
-          git commit -m "build(so): 3.29.3 pure-capture (决策/算分/彩圈移交 App)" || echo nothing
+          git commit -m "build(so): 3.29.4 httpfix (/summary 截断：完整读请求+优雅关闭+resp_written诊断+integrity端点+分页)" || echo nothing
           git fetch origin main || true
           git rebase origin/main || git rebase --abort || true
           git push origin HEAD:main || echo "push failed（禁止 force，防吞并提）"
       - name: Report
         if: always()
         run: |
-          { echo "job_status=${{ job.status }}"; tail -c 6000 ci-capture.txt 2>/dev/null || true; } > ci-last-v26.txt
+          { echo "job_status=${{ job.status }}"; tail -c 6000 ci-capture.txt 2>/dev/null || true; } > ci-last-v27.txt
           git config user.name dsh-bot
           git config user.email dsh-bot@users.noreply.github.com
-          git add ci-last-v26.txt || true
-          git commit -m "ci: v26 log (${{ job.status }})" || echo nothing
+          git add ci-last-v27.txt || true
+          git commit -m "ci: v27 log (${{ job.status }})" || echo nothing
           git pull --rebase --autostash || true
           git push || echo "push failed"

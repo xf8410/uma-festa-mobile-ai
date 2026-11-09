@@ -178,6 +178,7 @@ const ENDPOINTS: &[&str] = &[
     "/skilldata",
     "/status",
     "/summary",
+    "/debug/summary_integrity",
     "/tables",
     "/training/result",
     "/update",
@@ -7419,13 +7420,44 @@ fn safe_maps_summary() -> String {
     format!(r#"{{"ok":true,"maps_total":{},"readable":{},"sample_limited":true,"maps":[{}]}}"#,maps.len(),readable,sample)
 }
 
+// [HTTP-READFIX-3294] 分段读取直到请求完整（头部 \r\n\r\n + Content-Length 体）。
+// 旧实现只 read 一次：客户端把请求拆成多个 TCP 段发送时，未读字节滞留在接收队列，
+// 响应写完 close 触发 RST，部分客户端（Windows/adb forward 尤甚）会丢弃已收数据
+// ——表现为「/summary 永远在固定位置被截断」。
 fn handle_http(mut stream: std::net::TcpStream) {
     use std::io::{Read, Write};
-    let mut buf = [0u8; 8192];
-    let n = match stream.read(&mut buf) {
-        Ok(n) if n > 0 => n,
-        _ => return,
-    };
+    let mut buf = [0u8; 16384];
+    let mut n: usize = 0;
+    loop {
+        if n >= buf.len() {
+            break;
+        }
+        match stream.read(&mut buf[n..]) {
+            Ok(0) => break,
+            Ok(m) => {
+                n += m;
+                if let Some(he) = buf[..n].windows(4).position(|w| w == b"\r\n\r\n") {
+                    // 头已齐；若带 Content-Length 体则继续读到体齐
+                    let mut want = he + 4;
+                    for ln in buf[..he].split(|&b| b == b'\n') {
+                        let l: &[u8] = if ln.last() == Some(&b'\r') { &ln[..ln.len() - 1] } else { ln };
+                        if l.len() > 15 && l[..15].eq_ignore_ascii_case(b"content-length:") {
+                            if let Ok(v) = std::str::from_utf8(&l[15..]).unwrap_or("").trim().parse::<usize>() {
+                                want = he + 4 + v.min(8192);
+                            }
+                        }
+                    }
+                    if n >= want {
+                        break;
+                    }
+                }
+            }
+            Err(_) => break, // 5s 读超时或对端错误——用已读到的部分继续
+        }
+    }
+    if n == 0 {
+        return;
+    }
     let req = std::str::from_utf8(&buf[..n]).unwrap_or("");
     let path = parse_path(req);
     let full_uri = req
@@ -7487,6 +7519,7 @@ fn handle_http(mut stream: std::net::TcpStream) {
             "/skilldata",
             // [BOOTGATE-3292] 晚加载时也要能读育成数据（门禁不能只看 on_game_initialized）
             "/summary",
+            "/debug/summary_integrity",
             "/debug/festa_probe",
             "/debug/table",
             "/debug/push_table",
@@ -7648,7 +7681,54 @@ fn handle_http(mut stream: std::net::TcpStream) {
         }
     } else if path == "/summary" {
         unsafe { install_all_hooks_lazy() };
-        read_summary()
+        let s = read_summary();
+        // [HTTP-PAGE-3294] ?off=&len= 字节分页：绕过任何客户端/查看器长度上限
+        let off: usize = parse_query(&full_uri, "off").parse().unwrap_or(0);
+        let lim: usize = parse_query(&full_uri, "len").parse().unwrap_or(0);
+        if off > 0 || lim > 0 {
+            let total = s.len();
+            let start = off.min(total);
+            let end = if lim > 0 { (start + lim).min(total) } else { total };
+            // 防御：不切割 UTF-8 字符边界（本 JSON 基本全 ASCII）
+            let mut e = end;
+            while e > start && !s.is_char_boundary(e) {
+                e -= 1;
+            }
+            let mut st = start;
+            while st < e && !s.is_char_boundary(st) {
+                st += 1;
+            }
+            format!(
+                r#"{{"paged":true,"off":{},"len":{},"total":{},"data":"{}"}}"#,
+                st,
+                e - st,
+                total,
+                json_escape(&s[st..e])
+            )
+        } else {
+            s
+        }
+    } else if path == "/debug/summary_integrity" {
+        // [HTTP-DIAG-3294] 服务器侧完整性自证：返回当前 summary 的字节数/哈希/头尾。
+        // 小响应任何客户端都截不动；tail 应显示末尾注入字段（total_hints/playing_state 等）。
+        let s = read_summary();
+        let h = simple_hash(&s);
+        let head: String = s.chars().take(96).collect();
+        let tail: String = s
+            .chars()
+            .rev()
+            .take(96)
+            .collect::<Vec<char>>()
+            .into_iter()
+            .rev()
+            .collect();
+        format!(
+            r#"{{"len":{},"hash":{},"head":"{}","tail":"{}"}}"#,
+            s.len(),
+            h,
+            json_escape(&head),
+            json_escape(&tail)
+        )
     } else if path == "/debug/ringlog" {
         unsafe { ringlog_json() }
     } else if path == "/debug/selftest" {
@@ -9406,10 +9486,25 @@ fn handle_http(mut stream: std::net::TcpStream) {
                 "HTTP/1.1 200 OK\r\nContent-Type: {}\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
                 content_type, body.len(), body
             );
-            let _ = stream.write_all(resp.as_bytes());
+            let ok = stream.write_all(resp.as_bytes()).is_ok();
+            // [HTTP-DIAG-3294] 记录实际写出的响应字节数：拉 /summary 后再拉
+            // /debug/laststep，若显示 S:resp_written=<大数> 而客户端只看到前几百字节
+            // → 截断在客户端/查看工具，不在插件。
+            log_predict_step(&format!("S:resp_written={} ok={}", resp.len(), ok));
         }
     }
     let _ = stream.flush();
+    // [HTTP-CLOSE-3294] 优雅关闭：半关写侧让客户端收到有序 EOF；
+    // 再短暂排空客户端多发/流水线残留字节，避免 drop close 时触发 RST 截断。
+    let _ = stream.shutdown(std::net::Shutdown::Write);
+    let _ = stream.set_read_timeout(Some(std::time::Duration::from_millis(120)));
+    let mut drain = [0u8; 1024];
+    for _ in 0..4 {
+        match stream.read(&mut drain) {
+            Ok(0) | Err(_) => break,
+            Ok(_) => {}
+        }
+    }
 }
 
 // ============================================================
