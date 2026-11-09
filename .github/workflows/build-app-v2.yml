@@ -154,8 +154,15 @@ jobs:
           grep -qF '[APP-FIX-103]' app/app/src/main/assets/index.html
           grep -qF '[APP-FIX-104]' app/app/src/main/assets/index.html
           grep -qF 'startOne' $K/EngineBridge.kt
-          sed -i 's/versionName = "[^"]*"/versionName = "0.9.32-dsh41"/' app/app/build.gradle.kts
-          sed -i 's/versionCode = [0-9]\+/versionCode = 57/' app/app/build.gradle.kts
+          grep -qF '[APP-FIX-105]' $K/FrameAdapter.kt
+          grep -qF '[APP-FIX-105]' $K/EngineBridge.kt
+          grep -qF '[APP-FIX-105]' $K/NativeEngine.kt
+          grep -qF '[APP-FIX-105]' app/app/src/main/assets/index.html
+          grep -qF '[APP-BOARD-3297]' app/app/src/main/assets/index.html
+          grep -qF 'turn_engine' $K/NativeEngine.kt
+          grep -qF '[APP-FIX-105]' .github/scripts/summary_to_frame.js
+          sed -i 's/versionName = "[^"]*"/versionName = "0.9.33-dsh42"/' app/app/build.gradle.kts
+          sed -i 's/versionCode = [0-9]\+/versionCode = 58/' app/app/build.gradle.kts
           grep -E 'versionCode|versionName' app/app/build.gradle.kts
 
       - uses: gradle/actions/setup-gradle@v4
