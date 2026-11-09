@@ -1520,7 +1520,7 @@ function fitBoard(){
   root.style.fontSize = '15px'; root.style.width = 'max-content';
   const oldTuiW = tui ? tui.style.width : '';
   if (tui) tui.style.width = 'max-content';
-  const nat = main.scrollWidth || 900;
+  const nat = main.scrollWidth || 900;   // 只适配五列主区（[APP-FIX-108]），信息栏同宽不另算
   if (tui) tui.style.width = oldTuiW;
   root.style.width = '';
   const w = (sc.clientWidth || 340) - 20;
