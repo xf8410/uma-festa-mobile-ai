@@ -285,14 +285,12 @@ h1.big{font-size:33px;line-height:1.3;font-weight:700;margin:0 0 6px;letter-spac
 </style>
 </head>
 <body>
-<div id="demo-banner" style="display:none;background:#4a4026;color:#f0dfae;padding:6px 12px;font-size:11px;text-align:center;position:sticky;top:0;z-index:99">布局预览 · 非游戏数据（当前不是真实盘面）</div>
-
 <div class="stage-note">
   <b>UmaAI · 骏大祭（祭典杯）</b><br>
   手机版 UI 原型 · 照旧版四 tab 视觉重做<br>
   数据口径对齐 <b>matsuri-capture</b> 电脑版面板<br>
   SO 推 /data → 本机 18766 收；本机后台持续主动拉 SO 18765 /summary（双通道）<br><br>
-  默认演示数据；设置页可切「实时 18766」<br>
+  全部数据 = 游戏实时帧（SO → 18766），无演示帧<br>
   点「建议」页顶部的悬浮窗按钮看浮层
 </div>
 
@@ -470,10 +468,7 @@ h1.big{font-size:33px;line-height:1.3;font-weight:700;margin:0 0 6px;letter-spac
         <div class="field"><label>推送方 SO 端口</label>
           <input id="s-port-so" value="18765" inputmode="numeric">
           <div class="tip">/summary、/debug/festa_probe、/action/latest 都在这里</div></div>
-        <div class="field"><label>面板数据源</label>
-          <select id="s-source"><option value="live" selected>实时 18766 · /api/snapshot（默认）</option>
-          <option value="demo">布局预览 · 非游戏数据</option></select>
-          <div class="tip">默认只用真实帧；「布局预览」仅供离线看版式，不会冒充游戏盘面</div></div>
+        <!-- [APP-BOARD-3302] 演示机制已删除：面板只有实时数据一种源，不存在演示帧 -->
         <div class="field"><label>实时 BASE（APK WebView 用）</label>
           <input id="s-base" value=""></div>
       </div>
@@ -619,38 +614,38 @@ h1.big{font-size:33px;line-height:1.3;font-weight:700;margin:0 0 6px;letter-spac
   <!-- ===== 电脑版原样盘面：1:1 复刻 umaai-project/FestaScenarioAnalyzer/FestaDisplayRenderer.cs ===== -->
   <div class="board-overlay" id="boardOverlay">
     <div class="bo-bar">
-      <b>电脑版原样盘面 · 1:1</b>
+      <b>实时盘面 · 3+2</b>
       <button onclick="boardZoom(-1)">−</button>
       <button onclick="boardZoom(1)">＋</button>
       <button onclick="fitBoard()">适配</button>
       <button onclick="hideBoard()">返回 App</button>
     </div>
     <div class="bo-scroll" id="boScroll">
-      <div id="boZoom">
+      <div id="boZoom" style="min-height:100%;display:flex;flex-direction:column">
 <style id="board-css">
 #board-root{
   --n:#d8dedb; --cy:#4fd8e8; --gr:#39e07a; --yl:#e8d45a; --pu:#c08cff;
   --rd:#ff6b6b; --dim:#8b9691; --line:#cfd6d2; --sel:#2fe06d;
-  width:100%; color:var(--n);
+  width:100%; color:var(--n); flex:1 0 auto; display:flex; flex-direction:column; /* [APP-BOARD-3302] 纵向填满链 */
   font:15px/1.45 "Cascadia Mono","Sarasa Mono SC","Noto Sans Mono CJK SC","Microsoft YaHei",Consolas,monospace;
   -webkit-font-smoothing:none;
 }
 #board-root *{box-sizing:border-box}
-#board-root .tui{display:flex;flex-direction:column;align-items:stretch;width:100%} /* [APP-BOARD-3297] 流式：随容器满宽 */
-#board-root .main{width:100%}
-#board-root .headers{display:flex;height:3.6em}
-#board-root .hd{border:1px solid var(--line);padding:.55em .8em;white-space:pre;overflow:hidden;min-width:0}
+#board-root .tui{display:flex;flex-direction:column;align-items:stretch;width:100%;flex:1 0 auto} /* [APP-BOARD-3302] 纵向也填满浮窗 */
+#board-root .main{width:100%;flex:1 0 auto;display:flex;flex-direction:column} /* [APP-BOARD-3302] */
+#board-root .headers{display:flex}
+#board-root .hd{border:1px solid var(--line);padding:.35em .6em;white-space:normal;overflow:hidden;min-width:0;line-height:1.3} /* [APP-BOARD-3302] 表头可换行：不再把自然宽撑大、字号就能放开 */
 #board-root .hd.w30{flex:1.35 1 0} #board-root .hd.w27{flex:1.2 1 0}
 #board-root .hd.w24{flex:1.1 1 0} #board-root .hd.w14{flex:.7 1 0}
-#board-root .cards{display:flex;align-items:stretch}
-#board-root .card{flex:1 1 0;min-width:0;border:1px solid var(--line);padding:.15em .45em .35em;
-  display:flex;flex-direction:column} /* [APP-BOARD-3297] 五列流式等宽；min-height 固定值删除（消灭死空间） */
+#board-root .cards{display:grid;grid-template-columns:repeat(3,1fr);grid-template-rows:1fr 1fr;gap:2px;flex:1 0 auto} /* [APP-BOARD-3302] 3+2：速耐力一行、根智+动作建议一行，纵向拉伸填满 */
+#board-root .card{min-width:0;border:1px solid var(--line);padding:.15em .45em .35em;
+  display:flex;flex-direction:column}
 #board-root .card.sel{border-color:var(--sel)}
 #board-root .ttl{text-align:center;height:1.45em;white-space:pre;overflow:hidden}
 #board-root .marks{height:1.45em;white-space:pre;overflow:hidden}
 #board-root .sep{border-top:1px solid var(--line);margin:.1em 0 .35em}
 #board-root .g-cap{height:2.9em} #board-root .g-cost{height:2.9em}
-#board-root .g-gain{min-height:2.9em} /* [APP-BOARD-3297] 人头区自适应内容高度，不再撑 8.7em 死空间 */
+#board-root .g-gain{min-height:0;flex:1} /* [APP-BOARD-3302] 人头区有内容才渲染；吸收纵向余量 */
 #board-root .row{white-space:pre;overflow:hidden;height:1.45em}
 #board-root .cy{color:var(--cy)} #board-root .gr{color:var(--gr)}
 #board-root .yl{color:var(--yl)} #board-root .pu{color:var(--pu)}
@@ -678,7 +673,7 @@ h1.big{font-size:33px;line-height:1.3;font-weight:700;margin:0 0 6px;letter-spac
 </div>
       </div>
     </div>
-    <div class="bo-tip">上下滑动查看更多 · 绿框 = 该列有彩圈支援卡。＋/− 缩放 ·「适配」= 五列正好满宽（无需横滑）。</div>
+    <div class="bo-tip">3+2 盘面 · 绿框 = 该列有彩圈支援卡 · ＋/− 缩放 ·「适配」= 自动填满浮窗（无需横滑）。</div>
   </div>
 
   <div class="toast" id="toast"></div>
@@ -700,24 +695,7 @@ h1.big{font-size:33px;line-height:1.3;font-weight:700;margin:0 0 6px;letter-spac
 </div>
 
 <script>
-/* ===== 内嵌真机帧（抄自 matsuri-capture/sessions/demo/frames.jsonl，逐字不改字段口径） ===== */
-const DEMO = {
-  seq:1, source:"push", turn:46, raw_total_turn_num:46, year:2, month:3, half:2,
-  turn_semantics:"countdown", scenario:"festa", chara_id:100101,
-  five:[412,388,501,300,255], max_five:[3179,2415,2200,2200,2400],
-  vital:64, max_vital:100, motivation:"GREAT", skill_point:780, fan:92378,
-  acts:[
-    {act_type:1,command_id:5101,name:"流镝",name_src:"mdb",gauge:3,need_gauge:12,level:2,state:1,advice_id:101,friend_outing:0},
-    {act_type:2,command_id:5102,name:"神旗",name_src:"mdb",gauge:5,need_gauge:12,level:1,state:1,advice_id:201,friend_outing:0},
-    {act_type:3,command_id:5103,name:"纳舞",name_src:"mdb",gauge:0,need_gauge:10,level:1,state:0,advice_id:0,friend_outing:0},
-    {act_type:4,command_id:5104,name:"大曳",name_src:"mdb",gauge:7,need_gauge:12,level:1,state:1,advice_id:401,friend_outing:0},
-    {act_type:5,command_id:5105,name:"飞悬",name_src:"mdb",gauge:2,need_gauge:10,level:2,state:1,advice_id:501,friend_outing:0}
-  ],
-  advice:[], checkpoints:[{schedule_id:23,result_type:2}],
-  camp_remain_turn:2, max_act_level:10, act_training_step:3,
-  last_action:{action:"Training",normalized_command_id:5101,raw_command_id:5101,result_type:0,sequence:88,source:"training_hook"},
-  notes:[], missing:[]
-};
+/* [APP-BOARD-3302] 内嵌演示帧已删除：断线只显示「等待游戏数据」，绝不铺假盘面 */
 const AX=["速","耐","力","根","智"], KC=["k1","k2","k3","k4","k5"];
 /* 官方演目/教诲中文名：抄自 umaai-project/FestaScenarioAnalyzer/scripts/generate_festa_data.py */
 const ACT_FULL={1:"流镝马",2:"神旗争夺战",3:"纳舞",4:"大曳神舆",5:"飞悬"};
@@ -743,7 +721,7 @@ const n=v=>(v===U||v===null||v===undefined)?'—':v;
 const esc=s=>String(s??'').replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
 const fmt=v=>typeof v==='number'?v.toLocaleString('zh-CN'):String(v);
 
-/* 所有数值都来自 18766 真实接口；DEMO 仅在用户显式点「布局预览」时使用，且明确标注非游戏数据 */
+/* [APP-BOARD-3302] 所有数值都来自 18766 真实接口；演示帧机制已整体删除 */
 // [APP-FIX-095] 同源：App 的 HTTP 端口可能不是 18766（被占用时落到 18764/18772/18773）
 let state={polling:true, source:"live", base:(location&&location.origin&&location.origin!=='null'?location.origin:'http://127.0.0.1:18766'), frame:null, frames:0,
            service:false, soAlive:false, latestSource:"none", archiveCount:0, ageMs:0,
@@ -763,7 +741,6 @@ function syncConnectUI(){
     set className(v){},get className(){return "";}};
   const q=id=>document.getElementById(id)||DUMMY;
   const svc=state.service, so=state.soAlive, f=state.frame;
-  if(state.source==='live') q('demo-banner').style.display='none';
   q('btn-connect').textContent=state.polling?'暂停连接':'开始连接'; // [APP-FIX-103]
   q('btn-connect').classList.toggle('on',state.polling);
   const badge=q('link-badge');
@@ -1211,12 +1188,11 @@ function startPolling(){
 }
 async function refresh(){
   // v0.6.0：手动刷新显式向 18765 拉一次（低频人工动作，不触发高频全量读）
-  if(state.source==='live'){ await pullNow(); toast('已刷新 · 并向 SO 主动拉取'); }
-  else { document.getElementById('demo-banner').style.display='block'; applyFrame(DEMO); toast('布局预览 · 非游戏数据'); }
+  await pullNow(); toast('已刷新 · 并向 SO 主动拉取'); /* [APP-BOARD-3302] 无演示分支 */
 }
 function onAppResume(){
   // 回前台也真拉一次当前盘面；日常自动接线由接收端后台 pullLoop 承担
-  if(state.source==='live') pullNow();
+  pullNow();
   refreshOverlayState();
 }
 document.addEventListener('visibilitychange',()=>{
@@ -1283,15 +1259,14 @@ async function probeSo(){
 
 /* ===== 设置 ===== */
 function saveSettings(){
-  state.source=document.getElementById('s-source').value;
   state.base=document.getElementById('s-base').value.replace(/\/$/,'');
   const so=document.getElementById('s-port-so').value, inn=document.getElementById('s-port-in').value;
   /* SO 状态由 syncConnectUI 按真实帧渲染，这里不写死 */
   document.getElementById('v-inport').textContent='本机 · 127.0.0.1:'+inn;
   document.getElementById('v-soport').textContent='127.0.0.1:'+so;
-  if(state.source==='live'&&state.polling) startPolling();
+  if(state.polling) startPolling();
   else if(state.timer){clearInterval(state.timer);state.timer=null;}
-  toast(`已保存 · SO ${so} → 本机 ${inn} · ${state.source==='demo'?'演示':'实时'}`);
+  toast(`已保存 · SO ${so} → 本机 ${inn} · 实时`);
 }
 function sw(el){el.classList.toggle('on');}
 function dragStart(e,el){
@@ -1370,7 +1345,7 @@ function applyEngineCfg(){
 syncConnectUI();
 clearFrame();
 refreshOverlayState();
-if(state.source==='live') startPolling();
+startPolling();
 
 // [APP-FIX-093] 页面级缩放：悬浮窗的 ⤢ 按钮改窗口宽度 + CSS zoom，这里让 zoom 真正生效
 window.setZoom = function(z){
@@ -1413,14 +1388,18 @@ function boardRenderLive(f){
   const ATTRNAME=['速度','耐力','力量','根性','智力'],ATTRS=['速','耐','力','根','智'];
 
   // 表头：第X年 Y月前/后半 · 第N回合 ｜ 五围共计+Pt ｜ 体力 ｜ 干劲
-  let html='<div class="headers">'+
-    '<div class="hd w30">第'+year+'年 '+(mon||'—')+'月'+halfTxt+' · 第'+(turn||'—')+'回合</div>'+
-    '<div class="hd w27"><span class="cy">五围 '+total+' · Pt '+pt+'</span></div>'+
-    '<div class="hd w24">'+vital+'</div>'+
-    '<div class="hd w14"><span class="gr">'+esc(mot)+'</span></div></div>';
+  /* [APP-BOARD-3302] 表头两行：日期回合一行；五围/Pt/体力/干劲一行（窄屏不再折烂） */
+  let html='<div class="headers"><div class="hd" style="flex:1">第'+year+'年'+(mon||'—')+'月'+halfTxt+' · 第'+(turn||'—')+'回合</div></div>'+
+    '<div class="headers">'+
+    '<div class="hd" style="flex:1.3"><span class="cy">五围 '+total+' · Pt '+pt+'</span></div>'+
+    '<div class="hd" style="flex:1">'+vital+'</div>'+
+    '<div class="hd" style="flex:.55"><span class="gr">'+esc(mot)+'</span></div></div>';
 
-  // 五列训练卡：稽古亮起→演目名+Lv；含彩圈人头→绿框（panel.rs Shining 口径）
-  html+='<div class="cards">'+ACTS.map((a,i)=>{
+  /* [APP-BOARD-3302] 3+2 训练卡：第一行 速/耐/力，第二行 根/智/动作建议。
+     失败率行按用户要求删除；人头为空=不渲染人头区（不再显示「本轮无站位」占位噪音） */
+  const csB=[...(f.ai_candidates||[])].sort((a,b)=>+b.score-+a.score).slice(0,4);
+  const rawB=!!f.ai_raw;
+  const cardHtml=ACTS.map((a,i)=>{
     const it=byT[a.t]||{},g=+it.gauge||0,nd=+it.need_gauge||0,lv=+it.level||0;
     const lit=nd>0&&g>=nd;
     const tr=trs.find(t=>+t.command_id===5101+i)||{};
@@ -1432,17 +1411,14 @@ function boardRenderLive(f){
     const title=lit?(esc(fullAct(a))+(lv?(' Lv'+lv):'')):ATTRNAME[i];
     const marks=lit?('稽古·'+esc(adviceName(aid))):'';
     const predCls=pred==null?'dim':(pred>=curEval?'gr':'rd');
-    const ai=(col.score!==undefined&&col.score!==null&&col.score!==''&&col.name)?
-      ('<span class="'+(+col.score>=0?'gr':'rd')+'">AI '+(+col.score>=0?'+':'')+col.score+'</span>'):'<span class="dim">AI —</span>';
-    const heads=ps.length?ps.slice(0,5).map(p=>{
+    const heads=ps.slice(0,5).map(p=>{
       const pt2=+p.partner_type,sh=+p.is_shining===1,tip=+p.is_tips_event===1;
       let nm;
       if(+p.support_card_id>0){nm=cardShort(p.support_card_id)||p.name||('#'+p.support_card_id);}
       else nm=PTYPE_NAME_BOARD[pt2]||p.name||'NPC';
       const cls=sh?'cy':(pt2===1||pt2===2?'':'dim');
       return '<div class="row"><span class="'+cls+'">['+ATTRS[i]+']'+esc(nm)+(tip?'<span class="rd">!</span>':'')+(sh?' <span class="gr">彩</span>':'')+(+p.current_bond>0?(' <span class="dim">'+p.current_bond+'</span>'):'')+'</span></div>';
-    }).join(''):'<div class="row"><span class="dim">本轮无站位</span></div>';
-    /* [APP-BOARD-3297] 删掉凑满 5 行的 pad 空行：人头几行就几行，卡片不再留死空间 */
+    }).join('');
     return '<div class="card'+(shining?' sel':'')+'">'+
      '<div class="ttl">'+title+'</div>'+
      '<div class="marks">'+marks+'</div>'+
@@ -1456,23 +1432,31 @@ function boardRenderLive(f){
       '<div class="row">'+vital+'</div>'+
       '<div class="row">Lv'+(lv||'—')+' | 槽 '+g+'/'+(nd||'—')+'</div>'+
      '</div>'+
-     '<div class="sep"></div>'+
-     '<div class="g-gain">'+
-      '<div class="row">失败率:'+n(tr.failure_rate)+'% '+ai+'</div>'+
-      heads+
-     '</div>'+
-     '<div class="sep"></div>'+
+     (heads?('<div class="sep"></div><div class="g-gain">'+heads+'</div>'):'')+
     '</div>';
-  }).join('')+'</div>';
+  });
+  /* [APP-BOARD-3302] 第 6 格 = 动作建议（原底部右列上移）；拒帧红字直显 */
+  let advRows;
+  if(csB.length){
+    advRows=csB.map((c,i)=>{
+      const cl=rawB?'dim':(+c.score>=0?'gr':'rd');
+      return '<div class="row">'+(i===0?'<span class="gr">▶</span>':'　')+' '+esc(c.name)+' <span class="'+cl+'">'+(rawB?n(c.score):((+c.score>=0?'+':'')+n(c.score)))+'</span></div>';
+    }).join('');
+  }else if(f.engine_error){
+    advRows='<div class="row"><span class="rd">引擎未出决策</span></div>'+
+            '<div class="row" style="white-space:normal"><span class="rd">'+esc(String(f.engine_error))+'</span></div>';
+  }else{
+    advRows='<div class="row"><span class="dim">等待引擎决策</span></div>';
+  }
+  cardHtml.push('<div class="card adv"><div class="ttl"><span class="cy">动作建议'+(rawB?'·手写档':'')+'</span></div>'+
+    '<div class="marks"> </div><div class="sep"></div>'+advRows+'</div>');
+  html+='<div class="cards">'+cardHtml.join('')+'</div>';
   main.innerHTML=html;
 
-  // 右栏：运气分 / 评价分预测（期望终局）/ 当前评价分构成 / 动作选择分数 / 稽古槽
+  /* [APP-BOARD-3302] 两列并排：运气/期望 | 评价分构成/稽古槽（动作建议已上移到网格第 6 格） */
   if(ext){
     const sg=v=>(+v>0?'+':'')+n(v);
-    const cs=[...(f.ai_candidates||[])].sort((a,b)=>+b.score-+a.score).slice(0,5);
-    const rawMode=!!f.ai_raw;
     let gS=0,nS=0,on=0;acts.forEach(a=>{const g=+a.gauge||0,nd=+a.need_gauge||0;if(g>0)gS+=g;if(nd>0)nS+=nd;if(nd>0&&g>=nd)on++;});
-    /* [APP-BOARD-3296] 三列并排：运气/期望 | 评价分构成/稽古槽 | 动作分数 */
     ext.innerHTML=
       '<div class="xcol">'+
         '<div class="r"><span class="cy">运气分</span></div>'+
@@ -1487,17 +1471,6 @@ function boardRenderLive(f){
         '<div class="sp"></div>'+
         '<div class="r"><span class="cy">稽古槽</span> '+gS+'/'+(nS||'—')+' · 亮起 '+on+'/5</div>'+
         '<div class="r"><span class="dim">满 5 触发稽古 · 演目 Lv 上限 '+n(f.max_act_level)+'</span></div>'+
-      '</div>'+
-      '<div class="xcol">'+
-        '<div class="r"><span class="cy">动作选择分数'+(rawMode?'（手写档原分）':'')+'</span></div>'+
-        (cs.length?cs.map((c,i)=>{
-          const cl=rawMode?'dim':(+c.score>=0?'gr':'rd');
-          return '<div class="r">'+(i===0?'▶':'　')+esc(c.name)+' <span class="'+cl+'">'+(rawMode?n(c.score):((+c.score>=0?'+':'')+n(c.score)))+'</span></div>';
-        }).join(''):(f.engine_error?
-          /* [APP-FIX-105] 引擎拒帧原因直显（编成不合规 / 人头对不上 / 数据缺失），不再永远「等待」 */
-          '<div class="r"><span class="rd">引擎未出决策</span></div>'+
-          '<div class="r" style="white-space:normal"><span class="rd">'+esc(String(f.engine_error))+'</span></div>'
-          :'<div class="r"><span class="dim">等待引擎决策</span></div>'))+
       '</div>';
   }
 }
@@ -1507,7 +1480,7 @@ let boardZ = 1;
 /* [APP-BOARD-3297] 缩放 = 改字号：卡片尺寸全用 em/ch，随 font-size 等比缩；
    布局宽恒 = 容器 100%（五列 flex 流式），任何缩放下零横滑、无 zoom/scrollWidth 怪癖 */
 function setBoardZoom(z){
-  boardZ = Math.max(.3, Math.min(2.5, +z.toFixed(3)));
+  boardZ = Math.max(.3, Math.min(3, +z.toFixed(3)));
   document.getElementById('board-root').style.fontSize = (15 * boardZ) + 'px';
 }
 function fitBoard(){
@@ -1515,16 +1488,22 @@ function fitBoard(){
   const root = document.getElementById('board-root');
   const main = document.getElementById('boMain') || root;
   if (!sc || !root) return;
-  /* 量内容理想宽：基准字号 + 自然宽（五列 flex 的 min-content ≈ 每列 19ch），再按比例缩字号 */
-  const tui = root.querySelector('.tui');
-  root.style.fontSize = '15px'; root.style.width = 'max-content';
-  const oldTuiW = tui ? tui.style.width : '';
-  if (tui) tui.style.width = 'max-content';
-  const nat = main.scrollWidth || 900;   // 只适配五列主区（[APP-FIX-108]），信息栏同宽不另算
-  if (tui) tui.style.width = oldTuiW;
+  /* [APP-BOARD-3302] 宽+高双向适配：基准字号量自然宽/高，放大到 宽或高 先顶格为止（填满浮窗，不留底部大空） */
+  root.style.fontSize = '15px';
+  /* [APP-BOARD-3302] 自然宽只量网格三列（每列=该列两张卡较宽者）；表头/信息栏可换行不占宽 */
+  const cardsEl = main.querySelector('.cards');
+  let natW = 900;
+  if (cardsEl) {
+    const old = cardsEl.style.cssText;
+    cardsEl.style.display = 'flex'; cardsEl.style.width = 'max-content';
+    const ws = [...cardsEl.children].map(c => c.offsetWidth);
+    cardsEl.style.cssText = old;
+    natW = Math.max(ws[0]||0, ws[3]||0) + Math.max(ws[1]||0, ws[4]||0) + Math.max(ws[2]||0, ws[5]||0) + 6;
+  }
   root.style.width = '';
-  const w = (sc.clientWidth || 340) - 20;
-  setBoardZoom(Math.max(.3, Math.min(2.5, w / nat)));
+  const w = (sc.clientWidth || 340) - 16;
+  /* 宽度定字号；纵向靠 .cards 拉伸填满（人头区吸收余量），不再为凑高度缩字 */
+  setBoardZoom(Math.max(.35, Math.min(3, w / natW)));
   sc.scrollLeft = 0; sc.scrollTop = 0;
 }
 function boardZoom(d){ setBoardZoom(boardZ + d * .08); }
