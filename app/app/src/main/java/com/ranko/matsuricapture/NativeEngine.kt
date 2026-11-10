@@ -83,6 +83,31 @@ object NativeEngine {
     // 动作下标兜底名（PC 控制台同序）；引擎给了 descriptions 时优先用描述
     private val ACTION_NAMES = arrayOf("速训练", "耐训练", "力训练", "根训练", "智训练", "休息", "出行", "比赛")
 
+    // [APP-FIX-111] 同回合决策粘性缓存：引擎决策是写在「帧对象」上的，SO 每推一帧
+    // latest 就换对象，ai_top/期望/运气全丢 → 浮窗在「本地启发 ↔ 引擎建议」之间闪变
+    // （真机实测一回合变 3 次）。这里按 turn_engine 缓存决策字段，同回合新帧落库时复贴：
+    // 建议钉住当前首选（只显 1 选），游戏状态真变（引擎出同回合新决策）才刷新。
+    private val DEC_KEYS = arrayOf(
+        "ai_candidates", "ai_top", "ai_raw", "ai_trainer", "ai_at_ms",
+        "train_advice", "expected", "expected_stdev", "expected_rank",
+        "luck_turn", "luck_game", "engine_error", "engine_error_trainer"
+    )
+    @Volatile private var decCacheTurn: Int = -1
+    private var decCache: JSONObject? = null
+
+    /** [APP-FIX-111] 调用处必须已持有 gate。把 f 上的决策类字段快照进同回合缓存。 */
+    private fun cacheDecisionLocked(fTurn: Int, f: JSONObject) {
+        if (fTurn < 0) return
+        if (decCacheTurn != fTurn || decCache == null) {
+            decCacheTurn = fTurn
+            decCache = JSONObject()
+        }
+        val c = decCache ?: return
+        for (k in DEC_KEYS) {
+            if (f.has(k)) c.put(k, f.get(k)) else c.remove(k)
+        }
+    }
+
     /** [AI-WIRE] 引擎决策回写最新帧：期望分→score、本局/本轮运气、五列候选分、首选。
      *  只收与当前帧同回合的决策（决策天然滞后于帧）；search 档优先，hand 档先到先用。 */
     private fun mergeDecision(trainer: String, d: JSONObject) {
@@ -93,6 +118,9 @@ object NativeEngine {
                 if (latest !== f) return
                 f.put("engine_error", d.optString("error", ""))
                 f.put("engine_error_trainer", trainer)
+                // [APP-FIX-111] 拒帧红字也随回合并存，新帧复贴不闪没
+                val fTurn0 = if (f.has("turn_engine")) f.optInt("turn_engine", -1) else f.optInt("turn", -1)
+                cacheDecisionLocked(fTurn0, f)
             }
             return
         }
@@ -202,6 +230,7 @@ object NativeEngine {
             }
             f.put("ai_trainer", trainer)
             f.put("ai_at_ms", System.currentTimeMillis())
+            cacheDecisionLocked(dTurn, f) // [APP-FIX-111] 同回合缓存，供后续新帧复贴
         }
     }
 
@@ -339,6 +368,10 @@ object NativeEngine {
                             pullRecv++
                             lastPullOkAtMs = now
                             lastSummaryError = ""
+                            // [APP-FIX-110] 拉取通道也喂引擎：推送静默时兜底拉到的帧同样进决策。
+                            // 旧代码只 push 喂引擎——SO 推送一断，引擎永远收不到帧，
+                            // 浮窗只剩本地启发（真机 T13 帧「主动拉取」时 AI 长期不出结果即此因）
+                            appContext?.let { EngineBridge.onSummary(it, jo) }
                             store(normalize(jo, null, "pull"))
                         }
                     }
@@ -784,6 +817,23 @@ object NativeEngine {
         latestSource = frame.optString("source", "push").ifEmpty { "push" }
         frame.remove("recovered_from_archive") // 新帧不再是归档帧
         lastAt = System.currentTimeMillis()
+        // [APP-FIX-111] 同回合新帧复贴缓存决策：建议/期望/运气钉住不闪回本地启发；
+        // 回合推进（turn_engine 变了）自动失效，不串回合
+        run {
+            val ct = decCacheTurn
+            val c = decCache
+            if (c == null || ct < 0) return@run
+            val ft = if (frame.has("turn_engine")) frame.optInt("turn_engine", -1) else frame.optInt("turn", -1)
+            if (ft != ct) return@run
+            synchronized(gate) {
+                if (decCacheTurn != ct || decCache !== c) return@synchronized
+                val it = c.keys()
+                while (it.hasNext()) {
+                    val k = it.next()
+                    frame.put(k, c.get(k))
+                }
+            }
+        }
         synchronized(gate) {
             frames.add(frame)
             while (frames.size > 2000) frames.removeAt(0)
@@ -921,6 +971,8 @@ object NativeEngine {
         if (summary.opt("last_action") == null && action != null) {
             summary.put("last_action", action)
         }
+        // [APP-FIX-110] 手动拉取同口径喂引擎（与 push / 兜底拉取一致）
+        appContext?.let { EngineBridge.onSummary(it, summary) }
         val frame = normalize(summary, null, "pull")
         store(frame)
         return JSONObject()

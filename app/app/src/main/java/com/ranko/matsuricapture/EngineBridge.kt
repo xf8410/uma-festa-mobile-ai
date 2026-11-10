@@ -47,12 +47,22 @@ object EngineBridge {
     private const val KEY_SEARCH_N = "search_n"
     const val DEF_THREADS = 4
     const val DEF_SEARCH_N = 8192
+    // [APP-PERF-110] 喂帧去重：FrameAdapter.toFrame 是纯函数（帧内无时间戳），
+    // 帧串不变 = 引擎局面不变。上游 G7 幂等发生在 restore 之后——重复帧每次仍
+    // 白跑一次局面还原；这里帧串与上次一致就不写盘，不白触发引擎。
+    @Volatile private var lastFedFrame: String? = null
     @Volatile private var appCtx: Context? = null
     @Volatile private var engineFile: File? = null
 
+    // [APP-PERF-111] 线程默认自适应：核数−2、钳 4..8。PC 端默认 0=自动（全逻辑核）；
+    // 手机上给游戏/系统留 2 核，其余全给搜索档 rayon 池。只改并行度——
+    // 8192 预算、MCTS 算法、评分口径全不变，纯粹缩短每次搜索的墙钟时间。
+    private fun defaultThreads(): Int =
+        (Runtime.getRuntime().availableProcessors() - 2).coerceIn(DEF_THREADS, 8)
+
     fun getThreads(ctx: Context): Int =
         ctx.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-            .getInt(KEY_THREADS, DEF_THREADS).coerceIn(1, 32)
+            .getInt(KEY_THREADS, defaultThreads()).coerceIn(1, 32)
 
     fun getSearchN(ctx: Context): Int =
         ctx.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
@@ -78,6 +88,7 @@ object EngineBridge {
             s.status = "restarting"
             s.lines = 0
             s.restarts = 0
+            lastFedFrame = null // [APP-PERF-110] 引擎重拉后 seen 清空，必须允许重喂当前帧
         }
         Thread {
             try {
@@ -178,6 +189,7 @@ object EngineBridge {
             return
         }
         s.status = "starting"
+        lastFedFrame = null // [APP-PERF-110] 崩溃自恢复同样要允许重喂当前帧
         val pb = ProcessBuilder(
             engine.absolutePath,
             "online",
@@ -229,11 +241,14 @@ object EngineBridge {
         }
     }
 
-    /** 每收到一帧 /summary 就转成引擎帧，同时喂给两档 */
+    /** 每收到一帧 /summary 就转成引擎帧，同时喂给两档（内容不变则不喂，[APP-PERF-110]） */
+    @Synchronized
     fun onSummary(ctx: Context, raw: org.json.JSONObject) {
         frames++
         try {
             val frame = FrameAdapter.toFrame(raw).toString()
+            if (frame == lastFedFrame) return // [APP-PERF-110] 局面没变：两档都不重喂
+            lastFedFrame = frame
             for (t in arrayOf("matsuri", "search")) {
                 val dir = pluginDir(ctx, t)
                 val turn = raw.optInt("turn", 0)
