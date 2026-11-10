@@ -112,13 +112,20 @@ if (!distFromFesta) (src.trainings || []).forEach(t => {
   });
 });
 const festaSrc = src.festa || {};
+// [APP-FIX-109] 転成教诲：festa.advice[] 是 advice_id→fusion 对，按 act.advice_id 反查
+const fadvPairs = festaSrc.advice || [];
+const fusionOf = aid => {
+  if (!aid) return 0;
+  const hit = fadvPairs.find(e => Number(e.advice_id || 0) === aid);
+  return hit ? Number(hit.fusion_advice_id || 0) : 0;
+};
 const acts = (festaSrc.acts || []).map(a => ({
   actType: Number(a.act_type || 0),
   gauge: Number(a.gauge || 0),
   level: Number(a.level || 0),
   needGauge: Number(a.need_gauge || 0),
   adviceId: Number(a.advice_id || 0),
-  fusionId: Number(a.fusion_advice_id || 0) || undefined,
+  fusionId: fusionOf(Number(a.advice_id || 0)) || Number(a.fusion_advice_id || 0) || undefined,
   outingGainLevel: Number(a.friend_outing_gain_act_level || 0)
 }));
 const cps = (festaSrc.checkpoints || []).map(c => ({ scheduleId: Number(c.schedule_id || 0), resultType: Number(c.result_type || 0) }));
@@ -166,8 +173,9 @@ const baseGame = {
   friendship_noncard_reporter: bondByTarget[103] || 0, // [APP-FIX-105] 103=记者
   friend_stage: 0,
   friend_outgoingUsed: 0,
-  playing_state: 1,
-  source: 'command',
+  // [APP-FIX-109] 教诲窗口路由：playing_state=51 → special 帧（上游 route() 口径），引擎才走 Advice 分配决策
+  playing_state: Number(src.playing_state || 1),
+  source: Number(src.playing_state || 1) === 51 ? 'special' : 'command',
   isAfterTraining: false,
   single_mode_chara_id: Number(src.chara_id || 0)
 };
