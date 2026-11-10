@@ -64,7 +64,7 @@ body{padding:6px 7px 7px}
 .bhead{display:flex;justify-content:space-between;align-items:baseline;font-size:10px;
   color:var(--sub);margin:1px 1px 3px;white-space:nowrap}
 .bhead .t{color:var(--txt);font-weight:700;font-size:10.5px}
-.grid5{display:grid;grid-template-columns:repeat(5,1fr);gap:4px}
+.grid5{display:grid;grid-template-columns:repeat(3,1fr);gap:4px} /* [APP-BOARD-3302] 3+2：速耐力一行、根智+备选一行 */
 .g5{background:rgba(255,255,255,.4);border:1px solid var(--line2);border-radius:6px;overflow:hidden;min-width:0}
 .g5.on{border-color:rgba(95,192,141,.55)}
 .g5 .h{padding:2px 0;text-align:center;font-weight:800;font-size:10px;border-bottom:1px solid var(--line2)}
@@ -100,6 +100,7 @@ body{padding:6px 7px 7px}
 .pick .v{font-size:10px;color:#dfeae2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .pick .v b{color:var(--ok)}
 
+.g5.pick6 .va{white-space:normal;line-height:1.3}
 /* 稽古：仿游戏演目面板，5 格菱形槽 */
 .act{display:grid;grid-template-columns:28px 32px 82px 28px 1fr;gap:3px;align-items:center;
   padding:2px 3px;border-bottom:1px solid var(--line2);font-size:9px}
@@ -127,9 +128,9 @@ body{padding:6px 7px 7px}
 
 /* 迷你条（折叠态）：只显示 运气分 ± 与 推荐训练 */
 #mini{display:none;align-items:center;gap:6px;height:100%;padding:0 8px;white-space:nowrap;overflow:hidden}
-#mini .lk{font-size:12px;font-weight:800;color:var(--warn)}
+#mini .lk{font-size:12px;font-weight:800;color:var(--warn);flex:none}
 #mini .sp{flex:none;color:var(--dim)}
-#mini .rc{font-size:12px;font-weight:800;color:var(--ok);overflow:hidden;text-overflow:ellipsis}
+#mini .rc{font-size:12px;font-weight:800;color:var(--ok);overflow:hidden;text-overflow:ellipsis;flex:1 1 auto;min-width:0}
 #mini .rc.wait{color:var(--sub);font-weight:600}
 body.mini{padding:0;height:100vh}
 body.mini #panel{display:none}
@@ -179,11 +180,6 @@ body.mini #mini{display:flex}
   <div class="bhead"><span class="t">盘面</span><span id="cond">体力 —/—　干劲 —</span></div>
   <div class="row grid5" id="board"></div>
 
-  <!-- 训练备选 -->
-  <div class="row duo" style="grid-template-columns:1fr">
-    <div class="pick"><div class="k">训练备选</div><div class="v" id="picks">—</div></div>
-  </div>
-
   <!-- [AI-WIRE] AI 候选榜（PC 控制台同口径：delta=候选分−基线，绿正红负，首选▶） -->
   <div class="row duo" id="aiRow" style="grid-template-columns:1fr;display:none">
     <div class="pick"><div class="k">AI 候选 · 期望 <span id="aiExp">—</span></div><div class="v" id="aiCands">—</div></div>
@@ -198,7 +194,8 @@ body.mini #mini{display:flex}
 </div>
 
 <!-- 折叠迷你条：运气分 ± ｜ 推荐训练 ｜ 点按恢复提示（[APP-FIX-106] 点一下迷你条展开全盘面） -->
-<div id="mini"><span class="lk" id="mLuck">运气 —</span><span class="sp">｜</span><span class="rc wait" id="mRec">等待游戏连接</span><span class="sp">｜</span><span style="font-size:9px;color:var(--dim);flex:none">点按展开</span></div>
+<!-- [APP-BOARD-3302] 折叠迷你条：只显示 本回合建议 + 运气加减分（本局/本轮）；备选训练在展开的大浮窗里 -->
+<div id="mini"><span class="rc wait" id="mRec">等待游戏连接</span><span class="sp">｜</span><span class="lk" id="mLuck">运 —</span><span class="sp">｜</span><span style="font-size:9px;color:var(--dim);flex:none">展开看备选</span></div>
 
 <script>
 /* 静态映射：来自上游 umaai-matsuri（glossary.md / mechanism.md / scenario_matsuri.json） */
@@ -367,24 +364,9 @@ function headReal(tr,badgeText,assist){
     return chip(cls+(c?' '+c:''),nm,b,bond,shine,tips);
   }).join('');
 }
-/* 每列人头：优先真实 partners（tr 存在）；SO 未推 trainings 时回退结构占位（mechanism §2.1） */
+/* [APP-BOARD-3302] 每列人头：只显示 SO 实测 partners；读不到就整块省略（不再放结构占位假人头） */
 function headList(a,on,anyOn,badgeText,assist,tr){
-  const real=headReal(tr,badgeText,assist);
-  if(real)return real;
-  const c=assist?'assist':'';
-  if(on){
-    // 稽古位：担当神驹+担当卡+担当NPC 必定锁定；理事长/记者绝不落稽古位；吾妻必补 1 稽古位
-    return chip('guest '+c,a.guest+'（神驹）',badgeText)
-         + chip('card '+c,'担当支援卡',badgeText)
-         + chip('npc '+c,'担当NPC',badgeText)
-         + chip('npc','其他NPC（可同框）','')
-         + chip('friend','吾妻（必补位）','');
-  }
-  // 普通位：支援卡/NPC 随机落位；理事长/记者只落普通位；有稽古时吾妻不落普通位
-  return chip('card','支援卡（随机）','')
-       + chip('npc','一般NPC（随机）','')
-       + (anyOn?chip('social','理事长/记者（仅普通位）','')
-               :chip('social','理事长/记者/吾妻',''));
+  return headReal(tr,badgeText,assist);
 }
 
 function render(s){
@@ -444,14 +426,15 @@ function render(s){
     const shTxt=sh<0?'—':(sh>0?'彩圈×'+sh:'无彩圈');
     // AI 建议分/运气分：内置 AI（照 umaai-matsuri 移植）未落地，无数据源，不编造
     const ta=(f.train_advice||[])[i]||{};
+    const headsHtml=headList(a,on,onCnt>0,on?badge:'',assist,tr); /* [APP-BOARD-3302] 无人头=整块省略 */
     return `<div class="g5 ${a.key}${on?' on':''}">
       <div class="h">${a.attr}</div>
       <div class="r"><span class="va ${on?'keiko':' dim'}" style="font-weight:${on?'800':'400'};font-size:9px">${on?(a.attr+'触发·'+a.name+(kensanCol?' ⚡':'')):'未触发'}</span></div>
-      <div class="r"><span class="lb">人头（真实 · 角标=教诲buff）</span><div class="heads">${headList(a,on,onCnt>0,on?badge:'',assist,tr)}</div></div>
-      <div class="r"><span class="lb">彩圈 / 失败率</span><span class="va${sh<=0?' dim':''}">${shTxt}${tr&&+tr.failure_rate>0?(' · '+tr.failure_rate+'%'):''}</span></div>
-      <div class="r"><span class="lb">AI建议分 · 运气</span><span class="va${ta.score?'':' dim'}">${ta.score?n(ta.score):'—'}${ta.luck?(' · '+(+ta.luck>0?'+':'')+ta.luck):''}</span></div>
+      ${headsHtml?('<div class="r"><span class="lb">人头 · 角标=教诲buff</span><div class="heads">'+headsHtml+'</div></div>'):''}
+      <div class="r"><span class="lb">彩圈</span><span class="va${sh<=0?' dim':''}">${shTxt}</span></div>
+      ${ta.score?('<div class="r"><span class="lb">AI建议分 · 运气</span><span class="va">'+n(ta.score)+(ta.luck?(' · '+(+ta.luck>0?'+':'')+ta.luck):'')+'</span></div>'):''}
     </div>`;
-  }).join('');
+  }).join('')+`<div class="g5 pick6"><div class="h" style="color:var(--pt)">备选</div><div class="r"><span class="va" id="picks" style="white-space:normal">—</span></div></div>`; /* [APP-BOARD-3302] 第 6 格=训练备选 */
 
   // 训练备选：亮起稽古 + 最接近亮起的蓄力位
   if(acts.length){
@@ -535,10 +518,12 @@ function render(s){
 }
 
 /* 折叠迷你条：本回合运气分 ± ｜ 推荐训练 */
+/* [APP-BOARD-3302] 折叠迷你条：本回合建议 + 运气加减分（本局/本轮） */
 function renderMini(){
-  const lk=document.getElementById('mLuck');
-  const v=document.getElementById('luckTurn').textContent;
-  lk.textContent='运气 '+(v==='—'?'—':((+v>0?'+':'')+v));
+  const fm=x=>x==='—'?'—':((+x>0?'+':'')+x);
+  const lg=document.getElementById('luckGame').textContent;
+  const lt=document.getElementById('luckTurn').textContent;
+  document.getElementById('mLuck').textContent='运 局'+fm(lg)+' 轮'+fm(lt);
   const rc=document.getElementById('mRec');
   rc.textContent=lastRec.txt;rc.className='rc'+(lastRec.wait?' wait':'');
 }
