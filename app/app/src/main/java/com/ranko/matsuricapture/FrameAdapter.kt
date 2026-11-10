@@ -231,22 +231,37 @@ object FrameAdapter {
         base.put("friendship_noncard_reporter", bondByTarget[103] ?: 0) // [APP-FIX-105] 103=记者
         base.put("friend_stage", 0)
         base.put("friend_outgoingUsed", src.optInt("friend_outgoing_used", 0)) // [APP-FIX-090]
-        base.put("playing_state", if (src.has("playing_state")) src.optInt("playing_state", 1) else 1) // [APP-FIX-090]
-        base.put("source", "command")
+        val psVal = if (src.has("playing_state")) src.optInt("playing_state", 1) else 1
+        base.put("playing_state", psVal) // [APP-FIX-090]
+        // [APP-FIX-109] 教诲选择建议：playing_state=51 = 教诲分配窗口，按上游 route() 口径发 special 帧，
+        // 引擎才会走 Advice 分配决策（否则永远只有训练决策，教诲选择不出建议）
+        base.put("source", if (psVal == 51) "special" else "command")
         base.put("isAfterTraining", false)
         base.put("single_mode_chara_id", src.optInt("chara_id", 0))
 
         val fs = fsEarly
+        // [APP-FIX-109] 転成教诲：summary festa.advice[] 是 advice_id→fusion 对，按 act.advice_id 反查补 fusionId
+        val fadv = fs.optJSONArray("advice") ?: JSONArray()
+        fun fusionOf(aid: Int): Int {
+            if (aid <= 0) return 0
+            for (k in 0 until fadv.length()) {
+                val e = fadv.optJSONObject(k) ?: continue
+                if (e.optInt("advice_id", 0) == aid) return e.optInt("fusion_advice_id", 0)
+            }
+            return 0
+        }
         val acts = JSONArray()
         val fa = fs.optJSONArray("acts") ?: JSONArray()
         for (i in 0 until fa.length()) {
             val a = fa.optJSONObject(i) ?: continue
+            val aid = a.optInt("advice_id", 0)
             acts.put(JSONObject().apply {
                 put("actType", a.optInt("act_type", 0))
                 put("gauge", a.optInt("gauge", 0))
                 put("level", a.optInt("level", 0))
                 put("needGauge", a.optInt("need_gauge", 0))
-                put("adviceId", a.optInt("advice_id", 0))
+                put("adviceId", aid)
+                put("fusionId", fusionOf(aid))
                 put("outingGainLevel", a.optInt("friend_outing_gain_act_level", 0))
             })
         }
