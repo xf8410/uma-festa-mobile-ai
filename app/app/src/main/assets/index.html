@@ -1490,7 +1490,7 @@ function fitBoard(){
   if (!sc || !root) return;
   /* [APP-BOARD-3302] 宽+高双向适配：基准字号量自然宽/高，放大到 宽或高 先顶格为止（填满浮窗，不留底部大空） */
   root.style.fontSize = '15px';
-  /* [APP-BOARD-3302] 自然宽只量网格三列（每列=该列两张卡较宽者）；表头/信息栏可换行不占宽 */
+  /* [APP-BOARD-3302] 自然宽只量网格三列（每列=该列两张卡较宽者）；表头/信息栏可换行不占宽；沿用 [APP-FIX-108] 只适配主区口径 */
   const cardsEl = main.querySelector('.cards');
   let natW = 900;
   if (cardsEl) {
