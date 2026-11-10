@@ -161,8 +161,12 @@ jobs:
           grep -qF '[APP-BOARD-3297]' app/app/src/main/assets/index.html
           grep -qF 'turn_engine' $K/NativeEngine.kt
           grep -qF '[APP-FIX-105]' .github/scripts/summary_to_frame.js
-          sed -i 's/versionName = "[^"]*"/versionName = "0.9.33-dsh42"/' app/app/build.gradle.kts
-          sed -i 's/versionCode = [0-9]\+/versionCode = 58/' app/app/build.gradle.kts
+          grep -qF '[APP-BOARD-3302]' app/app/src/main/assets/index.html
+          grep -qF '[APP-BOARD-3302]' app/app/src/main/assets/float.html
+          grep -qF '[APP-FIX-109]' $K/FrameAdapter.kt
+          grep -qF '[APP-FIX-109]' .github/scripts/summary_to_frame.js
+          sed -i 's/versionName = "[^"]*"/versionName = "0.9.34-dsh43"/' app/app/build.gradle.kts
+          sed -i 's/versionCode = [0-9]\+/versionCode = 59/' app/app/build.gradle.kts
           grep -E 'versionCode|versionName' app/app/build.gradle.kts
 
       - uses: gradle/actions/setup-gradle@v4
@@ -181,15 +185,15 @@ jobs:
           set -euo pipefail
           mkdir -p app/dist
           SRC=$(find app/app/build/outputs/apk/release -name "*.apk" | head -1)
-          cp "$SRC" app/dist/matsuri-ai-0.9.33-dsh42.apk
+          cp "$SRC" app/dist/matsuri-ai-0.9.34-dsh43.apk
           cp "$SRC" app/dist/matsuri-ai-latest.apk
           ls -l app/dist/
           git config user.name dsh-bot
           git config user.email dsh-bot@users.noreply.github.com
-          git add -f app/dist/matsuri-ai-0.9.33-dsh42.apk app/dist/matsuri-ai-latest.apk
+          git add -f app/dist/matsuri-ai-0.9.34-dsh43.apk app/dist/matsuri-ai-latest.apk
           git add -f app/app/src/main/java app/app/src/main/assets/index.html app/app/build.gradle.kts 2>/dev/null || true
           git add -u  # tracked 修改全暂存，否则 rebase 报 unstaged changes
-          git commit -m "build(app): 0.9.33-dsh42 引擎决策+人头合成+流式布局修复" || echo nothing
+          git commit -m "build(app): 0.9.34-dsh43 盘面3+2重排+教诲选择建议+去演示帧" || echo nothing
           git fetch origin main || true
           git rebase origin/main || git rebase --abort || true
           git push origin HEAD:main || echo "push failed（禁止 force，防吞并提）"
