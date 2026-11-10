@@ -1453,7 +1453,7 @@ function boardRenderLive(f){
   html+='<div class="cards">'+cardHtml.join('')+'</div>';
   main.innerHTML=html;
 
-  /* [APP-BOARD-3302] 两列并排：运气/期望 | 评价分构成/稽古槽（动作建议已上移到网格第 6 格） */
+  /* [APP-BOARD-3302] 两列并排：运气/期望 | 评价分构成/稽古槽（动作建议已上移到网格第 6 格；原 [APP-BOARD-3296] 三列并排迭代而来） */
   if(ext){
     const sg=v=>(+v>0?'+':'')+n(v);
     let gS=0,nS=0,on=0;acts.forEach(a=>{const g=+a.gauge||0,nd=+a.need_gauge||0;if(g>0)gS+=g;if(nd>0)nS+=nd;if(nd>0&&g>=nd)on++;});
