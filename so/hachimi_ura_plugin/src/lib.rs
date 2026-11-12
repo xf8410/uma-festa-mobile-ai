@@ -6600,6 +6600,20 @@ unsafe fn read_summary_inner_impl() -> String {
             __out.insert_str(pos, &format!(",\"playing_state\":{},\"friend_outgoing_used\":{},\"total_hints\":{}", playing_state, friend_used, total_hints));
         }
     }
+    // [SO-FIX-113] 事件帧透传（上游 G16 协议）：story_id / story_choices / story_selected。
+    //   纯采集：只读 SetStory/选项 hook 已捕获的状态，不解释。
+    //   App 口径 = 「待选多选项事件」：story_id>0 且 story_choices>1 且 story_selected<0 才发
+    //   source=event + storyId；单选项/演出事件与已选择的事件不构成决策点，由 App 过滤。
+    //   恒输出（无事件 = 0/0/-1），保持 summary 字段集稳定。
+    {
+        let (sid, sch, ssel) = {
+            let _lock = EVENT_STATE_MUTEX.lock();
+            unsafe { (EVENT_STORY_ID, EVENT_CHOICES.len() as i32, EVENT_SELECTED_IDX) }
+        };
+        if let Some(pos) = __out.rfind('}') {
+            __out.insert_str(pos, &format!(",\"story_id\":{},\"story_choices\":{},\"story_selected\":{}", sid, sch, ssel));
+        }
+    }
     // [PURE-CAPTURE-3293] luck/expected 投影已移除 → App 引擎决策回写 luck_turn/luck_game/expected
     log_predict_step("S:json_done");
     __out

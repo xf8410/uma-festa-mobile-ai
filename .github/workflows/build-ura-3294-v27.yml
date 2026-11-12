@@ -1,4 +1,4 @@
-name: "Build hachimi_ura 3.29.4 (http-trunc-fix)"
+name: "Build hachimi_ura 3.29.5 (event-story)"
 on:
   push:
     branches: [main]
@@ -32,6 +32,7 @@ jobs:
           grep -qF '[HTTP-DIAG-3294]' so/hachimi_ura_plugin/src/lib.rs
           grep -qF '[HTTP-CLOSE-3294]' so/hachimi_ura_plugin/src/lib.rs
           grep -qF '/debug/summary_integrity' so/hachimi_ura_plugin/src/lib.rs
+          grep -qF '[SO-FIX-113]' so/hachimi_ura_plugin/src/lib.rs
           grep -qF 'S:resp_written=' so/hachimi_ura_plugin/src/lib.rs
           ! grep -qF 'evaluate_ai' so/hachimi_ura_plugin/src/lib.rs
           ! grep -qF 'five_status_final_score' so/hachimi_ura_plugin/src/lib.rs
@@ -58,12 +59,12 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p so/dist
-          cp so/hachimi_ura_plugin/target/aarch64-linux-android/release/libhachimi_ura.so so/dist/libhachimi_ura-3.29.4-httpfix.so
+          cp so/hachimi_ura_plugin/target/aarch64-linux-android/release/libhachimi_ura.so so/dist/libhachimi_ura-3.29.5-storyid.so
           git config user.name dsh-bot
           git config user.email dsh-bot@users.noreply.github.com
-          git add -f so/dist/libhachimi_ura-3.29.4-httpfix.so
+          git add -f so/dist/libhachimi_ura-3.29.5-storyid.so
           git add -u  # tracked 修改全暂存，否则 rebase 报 unstaged changes
-          git commit -m "build(so): 3.29.4 httpfix (/summary 截断：完整读请求+优雅关闭+resp_written诊断+integrity端点+分页)" || echo nothing
+          git commit -m "build(so): 3.29.5 事件帧story_id/choices/selected透传（上游G16协议）" || echo nothing
           git fetch origin main || true
           git rebase origin/main || git rebase --abort || true
           git push origin HEAD:main || echo "push failed（禁止 force，防吞并提）"

@@ -29,6 +29,10 @@ const cards = (src.support_cards || []).map(c => {
 const effects = (src.chara_effect_ids || []).map(Number);
 const isAijiao = effects.includes(8);
 if (!effects.length) notes.push('chara_effect_ids empty');
+// [APP-FIX-113] 待选多选项事件判定（与 FrameAdapter.kt 同口径）
+function isEventPending(s) {
+  return Number(s.story_id || 0) > 0 && Number(s.story_choices || 0) > 1 && Number(s.story_selected ?? -1) < 0;
+}
 // 人头：引擎要求 persons 数量 == 卡组张数；friend 卡（30323/10149）personType=1，其余 2
 const FRIEND_CARDS = [30323, 10149];
 const partnerByCard = {};
@@ -163,6 +167,8 @@ const baseGame = {
   isIll: false,
   isQieZhe: false,
   isAiJiao: isAijiao,
+  // [APP-FIX-112] 全量状态 ID 透传（与 FrameAdapter.kt 同口径）：引擎按 142 表判病种（变胖只认这条路）
+  charaEffects: effects,
   zhongMaBlueCount: [0, 0, 0, 0, 0],
   isRacing: false,
   cardId: cards,
@@ -175,7 +181,11 @@ const baseGame = {
   friend_outgoingUsed: 0,
   // [APP-FIX-109] 教诲窗口路由：playing_state=51 → special 帧（上游 route() 口径），引擎才走 Advice 分配决策
   playing_state: Number(src.playing_state || 1),
-  source: Number(src.playing_state || 1) === 51 ? 'special' : 'command',
+  // [APP-FIX-113] 事件帧（上游 G16）：待选多选项事件（id>0 && choices>1 && 未选择）→ source=event + storyId，
+  // 引擎查本地事件表给选项建议；未收录引擎自己 Skip，不回落成训练建议
+  source: Number(src.playing_state || 1) === 51 ? 'special'
+    : (isEventPending(src) ? 'event' : 'command'),
+  ...(isEventPending(src) ? { storyId: Number(src.story_id) } : {}),
   isAfterTraining: false,
   single_mode_chara_id: Number(src.chara_id || 0)
 };

@@ -3,32 +3,16 @@ on:
   push:
     branches: [main]
     paths:
+      # [CLEAN-113] 死补丁脚本（apply_appfix_*，仓库源码即权威后从未执行）已从 paths 与磁盘移除；
+      # 触发面收敛到「真正参与构建的源码」：kt / html / gradle / 引擎补丁与回放转换器
       - ".github/workflows/build-app-v2.yml"
-      - "app/app/src/main/java/com/ranko/matsuricapture/NativeEngine.kt"
-      - "app/app/src/main/java/com/ranko/matsuricapture/ScoreTable.kt"
-      - ".github/scripts/apply_appfix_081.js"
-      - ".github/scripts/apply_appfix_082.js"
-      - ".github/scripts/apply_appfix_083.js"
-      - ".github/scripts/apply_appfix_084.js"
-      - ".github/scripts/apply_appfix_085.js"
-      - ".github/scripts/apply_appfix_089.js"
-      - ".github/scripts/apply_appfix_090.js"
-      - ".github/scripts/apply_appfix_091.js"
-      - ".github/scripts/apply_appfix_092.js"
-      - ".github/scripts/apply_appfix_093.js"
-      - ".github/scripts/apply_appfix_094.js"
-      - ".github/scripts/apply_appfix_095.js"
-      - ".github/scripts/apply_appfix_096.js"
-      - ".github/scripts/apply_appfix_097.js"
-      - ".github/scripts/apply_appfix_098.js"
-      - ".github/scripts/apply_appfix_099.js"
-      - ".github/scripts/apply_appfix_100.js"
-      - ".github/scripts/apply_appfix_102.js"
-      - ".github/scripts/apply_appfix_103.js"
-      - ".github/scripts/apply_appfix_104.js"
+      - "app/app/build.gradle.kts"
+      - "app/app/src/main/java/com/ranko/matsuricapture/*.kt"
+      - "app/app/src/main/assets/float.html"
+      - "app/app/src/main/assets/index.html"
+      - ".github/scripts/apply_engine_json_panel.js"
       - ".github/scripts/apply_engine_json_view.js"
-      - "app/app/src/main/java/com/ranko/matsuricapture/EngineBridge.kt"
-      - "app/app/src/main/java/com/ranko/matsuricapture/FrameAdapter.kt"
+      - ".github/scripts/summary_to_frame.js"
   workflow_dispatch:
 
 permissions:
@@ -173,8 +157,10 @@ jobs:
           grep -qF '[APP-FIX-111]' $K/NativeEngine.kt
           grep -qF '[APP-PERF-110]' $K/EngineBridge.kt
           grep -qF '[APP-PERF-111]' $K/EngineBridge.kt
-          sed -i 's/versionName = "[^"]*"/versionName = "0.9.35-dsh44"/' app/app/build.gradle.kts
-          sed -i 's/versionCode = [0-9]\+/versionCode = 60/' app/app/build.gradle.kts
+          grep -qF '[APP-FIX-112]' $K/FrameAdapter.kt
+          grep -qF '[APP-FIX-113]' $K/FrameAdapter.kt
+          sed -i 's/versionName = "[^"]*"/versionName = "0.9.36-dsh45"/' app/app/build.gradle.kts
+          sed -i 's/versionCode = [0-9]\+/versionCode = 61/' app/app/build.gradle.kts
           grep -E 'versionCode|versionName' app/app/build.gradle.kts
 
       - uses: gradle/actions/setup-gradle@v4
@@ -193,15 +179,15 @@ jobs:
           set -euo pipefail
           mkdir -p app/dist
           SRC=$(find app/app/build/outputs/apk/release -name "*.apk" | head -1)
-          cp "$SRC" app/dist/matsuri-ai-0.9.35-dsh44.apk
+          cp "$SRC" app/dist/matsuri-ai-0.9.36-dsh45.apk
           cp "$SRC" app/dist/matsuri-ai-latest.apk
           ls -l app/dist/
           git config user.name dsh-bot
           git config user.email dsh-bot@users.noreply.github.com
-          git add -f app/dist/matsuri-ai-0.9.35-dsh44.apk app/dist/matsuri-ai-latest.apk
+          git add -f app/dist/matsuri-ai-0.9.36-dsh45.apk app/dist/matsuri-ai-latest.apk
           git add -f app/app/src/main/java app/app/src/main/assets/index.html app/app/build.gradle.kts 2>/dev/null || true
           git add -u  # tracked 修改全暂存，否则 rebase 报 unstaged changes
-          git commit -m "build(app): 0.9.35-dsh44 建议钉住1选不闪变+拉取通道喂引擎+搜索提速" || echo nothing
+          git commit -m "build(app): 0.9.36-dsh45 上游同步：charaEffects病种透传+事件帧storyId建议+清理废弃" || echo nothing
           git fetch origin main || true
           git rebase origin/main || git rebase --abort || true
           git push origin HEAD:main || echo "push failed（禁止 force，防吞并提）"

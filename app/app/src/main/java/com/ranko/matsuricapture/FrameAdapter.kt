@@ -221,6 +221,10 @@ object FrameAdapter {
         base.put("isIll", false)
         base.put("isQieZhe", false)
         base.put("isAiJiao", aijiao)
+        // [APP-FIX-112] 全量状态 ID 透传（上游 2026-11-08 handoff：baseGame.charaEffects）。
+        // 引擎 restore 按 142 表从 effects 判病种覆盖 isIll 粗标记——变胖(FAT)只有这条路
+        // 认得出来；纯 buff/空数组时引擎不覆盖，isIll=false 兜底不变。
+        base.put("charaEffects", JSONArray(effects.toList()))
         base.put("zhongMaBlueCount", JSONArray(listOf(0, 0, 0, 0, 0)))
         base.put("isRacing", false)
         base.put("cardId", JSONArray(cardIds))
@@ -233,9 +237,18 @@ object FrameAdapter {
         base.put("friend_outgoingUsed", src.optInt("friend_outgoing_used", 0)) // [APP-FIX-090]
         val psVal = if (src.has("playing_state")) src.optInt("playing_state", 1) else 1
         base.put("playing_state", psVal) // [APP-FIX-090]
+        // [APP-FIX-113] 事件帧（上游 G16）：SO 透传 story_id/story_choices/story_selected。
+        // 口径 = 「待选多选项事件」：id>0 且 choices>1 且未选择 → source=event + storyId，
+        // 引擎按本地事件表注入后走 Event 路由给选项建议；未收录/无数据引擎自己 Skip。
+        // 不发时事件弹窗帧会被当 command 帧用残值给训练建议（上游明确禁止的回落）。
+        val storyId = src.optInt("story_id", 0)
+        val storyChoices = src.optInt("story_choices", 0)
+        val storySelected = src.optInt("story_selected", -1)
+        val isEventPending = storyId > 0 && storyChoices > 1 && storySelected < 0
         // [APP-FIX-109] 教诲选择建议：playing_state=51 = 教诲分配窗口，按上游 route() 口径发 special 帧，
         // 引擎才会走 Advice 分配决策（否则永远只有训练决策，教诲选择不出建议）
-        base.put("source", if (psVal == 51) "special" else "command")
+        base.put("source", if (psVal == 51) "special" else if (isEventPending) "event" else "command")
+        if (isEventPending) base.put("storyId", storyId)
         base.put("isAfterTraining", false)
         base.put("single_mode_chara_id", src.optInt("chara_id", 0))
 
