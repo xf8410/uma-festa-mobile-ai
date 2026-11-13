@@ -4631,7 +4631,7 @@ unsafe fn read_summary_inner() -> String {
 /// 蓝因子 id 1..=5 = 速/耐/力/根/智，level = 星数 1..=3；其余 id（适性/固有/剧本）原样透出。
 /// 只在换局时调用（调用方按 fixed_turn_chara_seed 缓存），不在稳态帧热路径上。
 unsafe fn read_succession_factors_json(
-    image: *mut c_void,
+    image: *const c_void,
     chara_class: *mut c_void,
     chara_obj: *const c_void,
 ) -> String {
