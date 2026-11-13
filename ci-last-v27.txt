@@ -1,111 +1,164 @@
-job_status=success
-                                                             ++++++++++++
+job_status=failure
+obj, "get_CardId");
+     |         ^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_chara_id`
+     |
+     = note: `#[warn(unused_variables)]` (part of `#[warn(unused)]`) on by default
 
-warning: creating a mutable reference to mutable static
-     --> src/lib.rs:19828:46
-      |
-19828 |     let jump_result = unsafe { sys_sigsetjmp(SIGSEGV_JMP_BUF.as_mut_ptr(), 1) };
-      |                                              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^ mutable reference to mutable static
-      |
-      = note: mutable references to mutable statics are dangerous; it's undefined behavior if any other pointer to the static is used or if any other reference is created for the static while the mutable reference lives
-      = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/static-mut-references.html>
+warning: unused variable: `chara_class`
+    --> src/lib.rs:4441:9
+     |
+4441 |     let chara_class = find_class(image, to_cstr("Gallop").as_ptr(), to_cstr("WorkSingleModeCharaData").as_ptr());
+     |         ^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_chara_class`
 
-warning: creating a mutable reference to mutable static
-     --> src/lib.rs:19954:46
-      |
-19954 |     let jump_result = unsafe { sys_sigsetjmp(SIGSEGV_JMP_BUF.as_mut_ptr(), 1) };
-      |                                              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^ mutable reference to mutable static
-      |
-      = note: mutable references to mutable statics are dangerous; it's undefined behavior if any other pointer to the static is used or if any other reference is created for the static while the mutable reference lives
-      = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/static-mut-references.html>
+warning: variable does not need to be mutable
+    --> src/lib.rs:7279:37
+     |
+7279 |         let run_query = |sql: &str, mut on_row: &mut dyn FnMut(&[*const u8])| -> i32 {
+     |                                     ----^^^^^^
+     |                                     |
+     |                                     help: remove this `mut`
+     |
+     = note: `#[warn(unused_mut)]` (part of `#[warn(unused)]`) on by default
 
-warning: creating a mutable reference to mutable static
-     --> src/lib.rs:21116:45
-      |
-21116 |     let jmp_result = unsafe { sys_sigsetjmp(SIGSEGV_JMP_BUF.as_mut_ptr(), 1) };
-      |                                             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^ mutable reference to mutable static
-      |
-      = note: mutable references to mutable statics are dangerous; it's undefined behavior if any other pointer to the static is used or if any other reference is created for the static while the mutable reference lives
-      = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/static-mut-references.html>
+warning: unused variable: `resp`
+    --> src/lib.rs:9543:13
+     |
+9543 |         let resp = format!(
+     |             ^^^^ help: if this is intentional, prefix it with an underscore: `_resp`
 
-warning: creating a mutable reference to mutable static
-     --> src/lib.rs:21302:45
+warning: unnecessary `unsafe` block
+     --> src/lib.rs:10084:70
       |
-21302 |     let jmp_result = unsafe { sys_sigsetjmp(SIGSEGV_JMP_BUF.as_mut_ptr(), 1) };
-      |                                             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^ mutable reference to mutable static
+10084 |     let _ = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| unsafe {
+      |                                                                      ^^^^^^ unnecessary `unsafe` block
       |
-      = note: mutable references to mutable statics are dangerous; it's undefined behavior if any other pointer to the static is used or if any other reference is created for the static while the mutable reference lives
-      = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/static-mut-references.html>
+      = note: `#[warn(unused_unsafe)]` (part of `#[warn(unused)]`) on by default
 
-warning: direct cast of function item into an integer
-     --> src/lib.rs:21776:72
+warning: unused variable: `api`
+     --> src/lib.rs:12251:9
       |
-21776 |         let trampoline = interceptor_get_trampoline(exec_training_hook as usize);
-      |                                                                        ^^^^^^^^
-      |
-help: first cast to a pointer `as *const ()`
-      |
-21776 |         let trampoline = interceptor_get_trampoline(exec_training_hook as *const () as usize);
-      |                                                                        ++++++++++++
+12251 |     let api = &*API;
+      |         ^^^ help: if this is intentional, prefix it with an underscore: `_api`
 
-warning: direct cast of function item into an integer
-     --> src/lib.rs:21870:71
+warning: unused variable: `api`
+     --> src/lib.rs:12275:9
       |
-21870 |         let trampoline = interceptor_get_trampoline(failure_rate_hook as usize);
-      |                                                                       ^^^^^^^^
-      |
-help: first cast to a pointer `as *const ()`
-      |
-21870 |         let trampoline = interceptor_get_trampoline(failure_rate_hook as *const () as usize);
-      |                                                                       ++++++++++++
+12275 |     let api = &*API;
+      |         ^^^ help: if this is intentional, prefix it with an underscore: `_api`
 
-warning: direct cast of function item into an integer
-     --> src/lib.rs:21918:27
+warning: unnecessary `unsafe` block
+     --> src/lib.rs:12552:25
       |
-21918 |         failure_rate_hook as usize,
-      |                           ^^^^^^^^
-      |
-help: first cast to a pointer `as *const ()`
-      |
-21918 |         failure_rate_hook as *const () as usize,
-      |                           ++++++++++++
+12518 |     unsafe {
+      |     ------ because it's nested under this `unsafe` block
+...
+12552 |                         unsafe { get_config() }.http_port
+      |                         ^^^^^^ unnecessary `unsafe` block
 
-warning: creating a mutable reference to mutable static
-     --> src/lib.rs:21919:9
+warning: unnecessary `unsafe` block
+     --> src/lib.rs:12698:23
       |
-21919 |         &mut ORIG_FAILURE_RATE_PROLOGUE,
-      |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ mutable reference to mutable static
-      |
-      = note: mutable references to mutable statics are dangerous; it's undefined behavior if any other pointer to the static is used or if any other reference is created for the static while the mutable reference lives
-      = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/static-mut-references.html>
-help: use `&raw mut` instead to create a raw pointer
-      |
-21919 |         &raw mut ORIG_FAILURE_RATE_PROLOGUE,
-      |          +++
+12518 |     unsafe {
+      |     ------ because it's nested under this `unsafe` block
+...
+12698 |             let cfg = unsafe { get_config() };
+      |                       ^^^^^^ unnecessary `unsafe` block
 
-warning: direct cast of function item into an integer
-     --> src/lib.rs:21953:28
+warning: unnecessary `unsafe` block
+     --> src/lib.rs:12701:13
       |
-21953 |         exec_training_hook as usize,
-      |                            ^^^^^^^^
-      |
-help: first cast to a pointer `as *const ()`
-      |
-21953 |         exec_training_hook as *const () as usize,
-      |                            ++++++++++++
+12518 |     unsafe {
+      |     ------ because it's nested under this `unsafe` block
+...
+12701 |             unsafe {
+      |             ^^^^^^ unnecessary `unsafe` block
 
-warning: creating a mutable reference to mutable static
-     --> src/lib.rs:21954:9
+warning: unnecessary `unsafe` block
+     --> src/lib.rs:12724:37
       |
-21954 |         &mut ORIG_EXEC_TRAINING_PROLOGUE,
-      |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ mutable reference to mutable static
-      |
-      = note: mutable references to mutable statics are dangerous; it's undefined behavior if any other pointer to the static is used or if any other reference is created for the static while the mutable reference lives
-      = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/static-mut-references.html>
-help: use `&raw mut` instead to create a raw pointer
-      |
-21954 |         &raw mut ORIG_EXEC_TRAINING_PROLOGUE,
-      |          +++
+12518 |     unsafe {
+      |     ------ because it's nested under this `unsafe` block
+...
+12724 |                 let changed = f(ui, unsafe { GUI_HOST_BUF.as_mut_ptr() as *mut c_char }, 64);
+      |                                     ^^^^^^ unnecessary `unsafe` block
 
-warning: `hachimi_ura` (lib) generated 155 warnings (run `cargo fix --lib -p hachimi_ura` to apply 60 suggestions)
-    Finished `release` profile [optimized] target(s) in 1m 13s
+warning: unnecessary `unsafe` block
+     --> src/lib.rs:12726:21
+      |
+12518 |     unsafe {
+      |     ------ because it's nested under this `unsafe` block
+...
+12726 |                     unsafe {
+      |                     ^^^^^^ unnecessary `unsafe` block
+
+warning: unnecessary `unsafe` block
+     --> src/lib.rs:12751:37
+      |
+12518 |     unsafe {
+      |     ------ because it's nested under this `unsafe` block
+...
+12751 |                 let changed = f(ui, unsafe { GUI_PORT_BUF.as_mut_ptr() as *mut c_char }, 8);
+      |                                     ^^^^^^ unnecessary `unsafe` block
+
+warning: unnecessary `unsafe` block
+     --> src/lib.rs:12753:21
+      |
+12518 |     unsafe {
+      |     ------ because it's nested under this `unsafe` block
+...
+12753 |                     unsafe {
+      |                     ^^^^^^ unnecessary `unsafe` block
+
+warning: variable does not need to be mutable
+     --> src/lib.rs:13414:9
+      |
+13414 |     let mut dream_overflow = false;
+      |         ----^^^^^^^^^^^^^^
+      |         |
+      |         help: remove this `mut`
+
+warning: value assigned to `min_level` is never read
+     --> src/lib.rs:13590:9
+      |
+13590 |         min_level = 0;
+      |         ^^^^^^^^^^^^^
+      |
+      = help: maybe it is overwritten before being read?
+      = note: `#[warn(unused_assignments)]` (part of `#[warn(unused)]`) on by default
+
+warning: variable does not need to be mutable
+     --> src/lib.rs:16114:20
+      |
+16114 |                 Ok(mut stmt) => stmt.column_names().iter().map(|s| s.to_string()).collect(),
+      |                    ----^^^^
+      |                    |
+      |                    help: remove this `mut`
+
+warning: value assigned to `all_events_count` is never read
+     --> src/lib.rs:21068:37
+      |
+21068 |       let mut all_events_count: i32 = 0;
+      |                                       ^ this value is reassigned later and never used
+...
+21107 | /             all_events_count = conn
+21108 | |                 .query_row("SELECT COUNT(*) FROM single_mode_story_data", [], |r| {
+21109 | |                     r.get(0)
+21110 | |                 })
+21111 | |                 .unwrap_or(0);
+      | |_____________________________- `all_events_count` is overwritten here before the previous value is read
+
+warning: unused variable: `ds_class`
+     --> src/lib.rs:21603:9
+      |
+21603 |     let ds_class = get_class_from_object(ds_obj);
+      |         ^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_ds_class`
+
+warning: unused variable: `is_literal`
+     --> src/lib.rs:22629:13
+      |
+22629 |         let is_literal = match field_get_flags {
+      |             ^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_is_literal`
+
+For more information about this error, try `rustc --explain E0308`.
+warning: `hachimi_ura` (lib) generated 22 warnings
+error: could not compile `hachimi_ura` (lib) due to 1 previous error; 22 warnings emitted
