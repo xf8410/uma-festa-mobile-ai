@@ -89,7 +89,6 @@ const persons = (src.support_cards || []).map((c, i) => {
 const cardIndexByCard = {};
 (src.support_cards || []).forEach((c, i) => { cardIndexByCard[Number(c.support_card_id || c.id || 0)] = i; });
 const personDistribution = [0, 1, 2, 3, 4].map(() => [-1, -1, -1, -1, -1]);
-let distFromFesta = false;
 {
   const counts = [0, 0, 0, 0, 0];
   [...festaPersons].sort((a, b) => a.targetId - b.targetId).forEach(fp => {
@@ -101,18 +100,30 @@ let distFromFesta = false;
     if (fp.targetId >= 1000) v = fp.charaId;
     else { const s = slotByChara[fp.charaId]; if (s === undefined) return; v = s; }
     personDistribution[row][counts[row]++] = v;
-    distFromFesta = true;
   });
 }
-if (!distFromFesta) (src.trainings || []).forEach(t => {
+// [APP-FIX-114] 分布补漏（与 FrameAdapter.kt 同口径）：festa.persons 不标友人/理事长/记者站位
+// （act_type 恒 0，fixture 实证友人卡丢失），用 trainings[].partners 补全；值协议：卡位 0..5 / 理事长 6 / 记者 7 / 神驹 >=1000
+(src.trainings || []).forEach(t => {
   const ci = Number(t.command_id || 0) - 5101;
   if (ci < 0 || ci > 4) return;
-  let slot = 0;
+  const row = personDistribution[ci];
+  const have = new Set(row.filter(v => v >= 0));
   (t.partners || []).forEach(p => {
+    if (have.size >= 5) return;
+    const pid = Number(p.partner_id || 0);
     const cid = Number(p.support_card_id || 0);
-    const pi = cardIndexByCard[cid];
-    if (pi === undefined || pi === null) return;
-    if (slot < 5) personDistribution[ci][slot++] = pi;
+    let v;
+    if (cid > 0) { v = cardIndexByCard[cid]; if (v === undefined || v === null) return; }
+    else if (pid >= 1000) v = pid;
+    else if (pid === 102) v = 6;
+    else if (pid === 103) v = 7;
+    else return;
+    if (have.has(v)) return;
+    const w = row.findIndex(x => x < 0);
+    if (w < 0) return;
+    row[w] = v;
+    have.add(v);
   });
 });
 const festaSrc = src.festa || {};

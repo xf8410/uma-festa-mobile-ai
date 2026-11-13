@@ -152,7 +152,6 @@ object FrameAdapter {
         // 卡位人头填 persons 下标（0..5），神驹填 chara_id（>=1000）；act_type 0 = 不占担当不进分布。
         // 注意：festa.persons 只覆盖「担当」人头；站着但不担当的友人 / NPC 站位无数据源（Festa 布局
         // CommandInfoArray 不直读），分布可能比真机少人——引擎容忍（人数加成偏低），不拒帧。
-        var distFromFesta = false
         run {
             val counts = IntArray(5)
             for (fp in festaPersons.sortedBy { it.targetId }) {
@@ -167,25 +166,41 @@ object FrameAdapter {
                 }
                 dist.getJSONArray(row).put(counts[row], value)
                 counts[row]++
-                distFromFesta = true
             }
         }
-        // 兜底：festa.persons 空（老 SO / 非 Festa 局）时退回 trainings[].partners 反推
-        if (!distFromFesta) {
+        // [APP-FIX-114] 分布补漏：festa.persons 的 act_type 只标担当/神驹，友人卡(target 6)与
+        // 理事长(102)/记者(103)站位恒 act_type=0 被丢弃（真机 fixture 实证：友人卡站力量位丢失）。
+        // trainings[].partners 是训练界面人头数组，身份齐全 → 用它补全（上游协议值：
+        // 卡位 0..5 / 理事长 6 / 记者 7 / 神驹 chara_id>=1000；NPC 101..115 丢弃）。
+        // 友人与理事长站位直接抬高该训练收益，漏算 = 期望分系统性偏低 + 建议歪。
+        run {
             for (i in 0 until trainings.length()) {
                 val t = trainings.optJSONObject(i) ?: continue
                 val ci = t.optInt("command_id", 0) - 5101
                 if (ci < 0 || ci > 4) continue
                 val row = dist.getJSONArray(ci)
-                var slot = 0
+                val have = HashSet<Int>()
+                for (k in 0 until row.length()) { val v = row.optInt(k, -1); if (v >= 0) have.add(v) }
                 val ps = t.optJSONArray("partners") ?: continue
                 for (j in 0 until ps.length()) {
                     val p = ps.optJSONObject(j) ?: continue
-                    val pi = cardIndexByCard[p.optInt("support_card_id", 0)] ?: continue
-                    if (slot < 5) {
-                        row.put(slot, pi)
-                        slot++
+                    val pid = p.optInt("partner_id", 0)
+                    val v: Int = when {
+                        p.optInt("support_card_id", 0) > 0 ->
+                            cardIndexByCard[p.optInt("support_card_id", 0)] ?: continue
+                        pid >= 1000 -> pid                     // 神驹 chara_id
+                        pid == 102 -> 6                        // 理事长
+                        pid == 103 -> 7                        // 记者
+                        else -> continue                       // NPC 占位/未知
                     }
+                    if (v in have) continue
+                    if (have.size >= 5) break
+                    // 紧凑化：festa 路可能留了 -1 空位，找第一个空位写
+                    var w = -1
+                    for (k in 0 until 5) { if (row.optInt(k, -1) < 0) { w = k; break } }
+                    if (w < 0) break
+                    row.put(w, v)
+                    have.add(v)
                 }
             }
         }
