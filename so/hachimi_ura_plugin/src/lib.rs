@@ -22,6 +22,7 @@
 const PLUGIN_VERSION: &str = env!("CARGO_PKG_VERSION");
 mod auth_capture;
 mod rng_consumption_probe;
+mod cn_summary;
 
 // ★ 端点单一真相源：/health 的 endpoints 与 404 的 available 共用此表，
 //   杜绝三份清单手抄漂移（uma-sniffkit 根因：漏报=骗人）。
@@ -737,7 +738,7 @@ extern "C" {
     fn sys_siglongjmp(env: *const u8, val: i32) -> !;
 }
 
-const CRASH_LOG_PATH: &str = "/sdcard/Android/media/jp.co.cygames.umamusume/hachimi/uma_predict.log";
+const CRASH_LOG_PATH: &str = "/sdcard/Android/media/com.bilibili.umamusume/hachimi/uma_predict.log";
 
 // ★ v3.22.35: SIGSEGV recovery for push thread
 // sigsetjmp buffer: 200 bytes is enough for jmp_buf on aarch64 (typically 24 x 8 = 192 bytes)
@@ -833,7 +834,7 @@ extern "C" fn crash_signal_handler(sig: i32) {
     }
     msg[len] = b'\n';
     len += 1;
-    let path = b"/sdcard/Android/media/jp.co.cygames.umamusume/hachimi/uma_predict.log\0";
+    let path = b"/sdcard/Android/media/com.bilibili.umamusume/hachimi/uma_predict.log\0";
     let fd = unsafe { sys_open(path.as_ptr() as *const i8, 1 | 64 | 1024, 0o644) };
     if fd >= 0 {
         unsafe {
@@ -878,7 +879,7 @@ fn init_crash_handler() {
         let _ = std::fs::OpenOptions::new()
             .create(true)
             .append(true)
-            .open("/sdcard/Android/media/jp.co.cygames.umamusume/hachimi/uma_predict.log")
+            .open("/sdcard/Android/media/com.bilibili.umamusume/hachimi/uma_predict.log")
             .and_then(|mut f| std::io::Write::write_all(&mut f, msg.as_bytes()));
     }));
 }
@@ -947,7 +948,7 @@ fn log_predict_step(msg: &str) {
     LAST_STEP_LEN.store(len as u32, std::sync::atomic::Ordering::Relaxed);
 
     // Write to file using raw libc syscalls (more reliable than std::fs on Android)
-    let path1 = b"/sdcard/Android/media/jp.co.cygames.umamusume/hachimi/uma_predict.log\0";
+    let path1 = b"/sdcard/Android/media/com.bilibili.umamusume/hachimi/uma_predict.log\0";
     let path2 = b"/data/local/tmp/uma_predict.log\0";
     let line_bytes = line.as_bytes();
     unsafe {
@@ -965,7 +966,7 @@ fn log_predict_step(msg: &str) {
         let _ = std::fs::OpenOptions::new()
             .create(true)
             .append(true)
-            .open("/sdcard/Android/media/jp.co.cygames.umamusume/hachimi/uma_predict.log")
+            .open("/sdcard/Android/media/com.bilibili.umamusume/hachimi/uma_predict.log")
             .and_then(|mut f| std::io::Write::write_all(&mut f, line.as_bytes()));
     }
 }
@@ -993,7 +994,7 @@ fn is_plausible_ptr(p: *const c_void) -> bool {
 fn clear_predict_log() {
     PREDICT_STEP.store(0, std::sync::atomic::Ordering::Relaxed);
     LAST_STEP_LEN.store(0, std::sync::atomic::Ordering::Relaxed);
-    let path1 = b"/sdcard/Android/media/jp.co.cygames.umamusume/hachimi/uma_predict.log\0";
+    let path1 = b"/sdcard/Android/media/com.bilibili.umamusume/hachimi/uma_predict.log\0";
     let path2 = b"/data/local/tmp/uma_predict.log\0";
     unsafe {
         let fd = sys_open(path1.as_ptr() as *const i8, 1 | 64 | 512, 0o644);
@@ -1013,7 +1014,7 @@ fn read_crash_log() -> String {
     if sig != 0 {
         return format!(r#"{{"crash":true,"signal":{},"step":{}}}"#, sig, step);
     }
-    match std::fs::read_to_string("/sdcard/Android/media/jp.co.cygames.umamusume/hachimi/uma_predict.log") {
+    match std::fs::read_to_string("/sdcard/Android/media/com.bilibili.umamusume/hachimi/uma_predict.log") {
         Ok(s) if !s.is_empty() => s,
         _ => match std::fs::read_to_string("/data/local/tmp/uma_predict.log") {
             Ok(s) if !s.is_empty() => s,
@@ -1046,7 +1047,7 @@ fn base64_encode(data: &[u8]) -> String {
 }
 
 fn read_github_token() -> String {
-    let token_path = "/data/data/jp.co.cygames.umamusume/files/uma_github_token.txt";
+    let token_path = "/data/data/com.bilibili.umamusume/files/uma_github_token.txt";
     match std::fs::read_to_string(token_path) {
         Ok(t) => t.trim().to_string(),
         Err(_) => String::new(),
@@ -1068,7 +1069,7 @@ fn boot_trace(step: &str) {
             v.pop();
             v.pop().map(|s| s.to_string())
         })
-        .unwrap_or_else(|| "/data/data/jp.co.cygames.umamusume/files".to_string());
+        .unwrap_or_else(|| "/data/data/com.bilibili.umamusume/files".to_string());
     let log_path = format!("{}/ura_boot.log", so_dir);
     if step == "BEGIN" {
         let _ = std::fs::write(&log_path, "ura boot trace\n");
@@ -1123,7 +1124,7 @@ fn upload_file_to_repo(local_path: &str, repo_name: &str) {
         r#"{{"message":"auto-upload {}","content":"{}"}}"#,
         repo_name, b64
     );
-    let tmp = "/data/data/jp.co.cygames.umamusume/files/uma_upload.json";
+    let tmp = "/data/data/com.bilibili.umamusume/files/uma_upload.json";
     let _ = std::fs::write(tmp, &json);
     let cmd = format!(
         "curl -s --max-time 15 -X PUT -H 'Authorization: token {}' -H 'Content-Type: application/json' -d @{} https://api.github.com/repos/xf8410/hlpatch/contents/{} >/dev/null 2>&1",
@@ -1138,7 +1139,7 @@ fn upload_file_to_repo(local_path: &str, repo_name: &str) {
 }
 
 fn check_and_upload_crash_log() {
-    let path = "/sdcard/Android/media/jp.co.cygames.umamusume/hachimi/uma_predict.log";
+    let path = "/sdcard/Android/media/com.bilibili.umamusume/hachimi/uma_predict.log";
     if !std::path::Path::new(path).exists() {
         return;
     }
@@ -1159,18 +1160,18 @@ fn check_and_upload_crash_log() {
         r#"{{"message":"crash log auto-upload","content":"{}"}}"#,
         b64
     );
-    let _ = std::fs::write("/data/data/jp.co.cygames.umamusume/files/uma_upload.json", &json);
+    let _ = std::fs::write("/data/data/com.bilibili.umamusume/files/uma_upload.json", &json);
     let gh_token = read_github_token();
     if gh_token.is_empty() {
         return;
     }
-    let cmd = format!("curl -s --max-time 15 -X PUT -H 'Authorization: token {}' -H 'Content-Type: application/json' -d @/data/data/jp.co.cygames.umamusume/files/uma_upload.json https://api.github.com/repos/xf8410/hlpatch/contents/crash_log.txt >/dev/null 2>&1", gh_token);
+    let cmd = format!("curl -s --max-time 15 -X PUT -H 'Authorization: token {}' -H 'Content-Type: application/json' -d @/data/data/com.bilibili.umamusume/files/uma_upload.json https://api.github.com/repos/xf8410/hlpatch/contents/crash_log.txt >/dev/null 2>&1", gh_token);
     if let Ok(cmd_c) = std::ffi::CString::new(cmd) {
         unsafe {
             sys_system(cmd_c.as_ptr() as *const i8);
         }
     }
-    let _ = std::fs::remove_file("/data/data/jp.co.cygames.umamusume/files/uma_upload.json");
+    let _ = std::fs::remove_file("/data/data/com.bilibili.umamusume/files/uma_upload.json");
 }
 
 fn save_endpoint_log(endpoint: &str, data: &str) {
@@ -1185,16 +1186,16 @@ fn save_endpoint_log(endpoint: &str, data: &str) {
     {
         return;
     }
-    let _ = std::fs::create_dir_all("/data/data/jp.co.cygames.umamusume/files/uma_logs");
+    let _ = std::fs::create_dir_all("/data/data/com.bilibili.umamusume/files/uma_logs");
     let path = format!(
-        "/data/data/jp.co.cygames.umamusume/files/uma_logs/{}.json",
+        "/data/data/com.bilibili.umamusume/files/uma_logs/{}.json",
         safe_name
     );
     let _ = std::fs::write(&path, data);
 }
 
 fn upload_all_logs() -> String {
-    let dir = "/data/data/jp.co.cygames.umamusume/files/uma_logs";
+    let dir = "/data/data/com.bilibili.umamusume/files/uma_logs";
     let entries = match std::fs::read_dir(dir) {
         Ok(e) => e,
         Err(_) => return r#"{"error":"no_logs_dir"}"#.to_string(),
@@ -1213,7 +1214,7 @@ fn upload_all_logs() -> String {
         let b64 = base64_encode(&content);
         let github_path = format!("logs/{}", name);
         let json = format!(r#"{{"message":"upload {}","content":"{}"}}"#, name, b64);
-        let tmp_path = "/data/data/jp.co.cygames.umamusume/files/uma_upload_tmp.json";
+        let tmp_path = "/data/data/com.bilibili.umamusume/files/uma_upload_tmp.json";
         let _ = std::fs::write(tmp_path, &json);
 
         let cmd = format!(
@@ -1230,7 +1231,7 @@ fn upload_all_logs() -> String {
         file_names.push(name);
     }
 
-    let _ = std::fs::remove_file("/data/data/jp.co.cygames.umamusume/files/uma_upload_tmp.json");
+    let _ = std::fs::remove_file("/data/data/com.bilibili.umamusume/files/uma_upload_tmp.json");
 
     let files_json = file_names
         .iter()
@@ -4351,6 +4352,10 @@ unsafe fn query_next_turn_race_entry(next_turn: i32) -> bool {
 }
 
 fn read_summary() -> String {
+    // ★ cn-ura：国服 2.0.5（2022 老结构）走独立读取路径
+    #[cfg(feature = "cn_only")]
+    { return unsafe { cn_summary::read_summary_cn() }; }
+
     // [CRASH-DIAG3-3292] read_tid
     {
         let tid = unsafe { libc::syscall(libc::SYS_gettid) } as u32;
@@ -6710,6 +6715,7 @@ fn push_loop() {
                 install_event_choice_hook();
                 install_skill_tips_hook();
                 install_skill_model_hook();
+#[cfg(not(feature = "cn_only"))]
                 rng_consumption_probe::install();
                 // ★ v3.24.40: sniff hooks were missing here — fallback mode
                 // left /api/sniff permanently unhooked.
@@ -7694,6 +7700,7 @@ fn handle_http(mut stream: std::net::TcpStream) {
             }
         }
     } else if path == "/summary" {
+#[cfg(not(feature = "cn_only"))]
         unsafe { install_all_hooks_lazy() };
         let s = read_summary();
         // [HTTP-PAGE-3294] ?off=&len= 字节分页：绕过任何客户端/查看器长度上限
@@ -8095,7 +8102,7 @@ fn handle_http(mut stream: std::net::TcpStream) {
                                 let got = mem.read_at(&mut dbuf, abs as u64).unwrap_or(0);
                                 dbuf.truncate(got);
                                 let fname = format!(
-                                    "/sdcard/Android/media/jp.co.cygames.umamusume/hachimi/zdict_{:x}.bin",
+                                    "/sdcard/Android/media/com.bilibili.umamusume/hachimi/zdict_{:x}.bin",
                                     abs
                                 );
                                 let saved = std::fs::write(&fname, &dbuf).is_ok();
@@ -8373,6 +8380,7 @@ fn handle_http(mut stream: std::net::TcpStream) {
             }
             SIGSEGV_RECOVERY.store(true, std::sync::atomic::Ordering::Relaxed);
             let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| unsafe {
+#[cfg(not(feature = "cn_only"))]
                 install_all_hooks_lazy();
                 debug_skilltips_probe()
             }))
@@ -8574,6 +8582,7 @@ fn handle_http(mut stream: std::net::TcpStream) {
                 install_event_choice_hook();
                 install_skill_tips_hook();
                 install_skill_model_hook();
+#[cfg(not(feature = "cn_only"))]
                 rng_consumption_probe::install();
             }
         }
@@ -12427,6 +12436,7 @@ extern "C" fn on_game_initialized(_userdata: *mut c_void) {
         install_event_choice_hook();
                 install_skill_tips_hook();
                 install_skill_model_hook();
+#[cfg(not(feature = "cn_only"))]
                 rng_consumption_probe::install();
         // v3.22.51: Pre-cache all IL2CPP metadata on game thread
         precache_metadata();
@@ -14454,11 +14464,11 @@ fn stream_private_file(stream: &mut std::net::TcpStream, path: &str, filename: &
 
 fn find_mdb_path() -> Option<String> {
     let paths = [
-        "/data/data/jp.co.cygames.umamusume/files/master/master.mdb",
-        "/data/user/0/jp.co.cygames.umamusume/files/master/master.mdb",
-        "/data/data/jp.co.cygames.umamusume/files/master/master (1).mdb",
-        "/data/user/0/jp.co.cygames.umamusume/files/master/master (1).mdb",
-        "/storage/emulated/0/Android/data/jp.co.cygames.umamusume/files/master/master.mdb",
+        "/data/data/com.bilibili.umamusume/files/master/master.mdb",
+        "/data/user/0/com.bilibili.umamusume/files/master/master.mdb",
+        "/data/data/com.bilibili.umamusume/files/master/master (1).mdb",
+        "/data/user/0/com.bilibili.umamusume/files/master/master (1).mdb",
+        "/storage/emulated/0/Android/data/com.bilibili.umamusume/files/master/master.mdb",
     ];
 
     for p in &paths {
@@ -14861,7 +14871,7 @@ fn debug_push_table(table_name: &str, batch: usize, offset: usize) -> String {
         Err(_) => 0,
     };
 
-    let tmp_dir = "/data/data/jp.co.cygames.umamusume/files";
+    let tmp_dir = "/data/data/com.bilibili.umamusume/files";
     let tmp_path = format!("{}/uma_push_{}.json", tmp_dir, table_name);
 
     // If offset > 0 but tmp file doesn't exist, user needs to restart from offset=0
@@ -15022,7 +15032,7 @@ fn debug_download_table(table_name: &str, batch: usize) -> String {
             json_escape(table_name)
         );
     }
-    let tmp_dir = "/data/data/jp.co.cygames.umamusume/files";
+    let tmp_dir = "/data/data/com.bilibili.umamusume/files";
     let tmp_path = format!("{}/uma_push_{}.json", tmp_dir, table_name);
 
     // If file already exists from a previous successful build, return it directly

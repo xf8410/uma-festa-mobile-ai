@@ -1,0 +1,54 @@
+name: "Build hachimi_ura CN (workbench/cn-ura)"
+on:
+  push:
+    branches: [workbench/cn-ura]
+    paths:
+      - ".github/workflows/cn-ura-build.yml"
+      - "so/hachimi_ura_plugin/src/lib.rs"
+      - "so/hachimi_ura_plugin/src/cn_summary.rs"
+      - "so/hachimi_ura_plugin/Cargo.toml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      # [CN-URA] 国服版校验门：包名全换 + cn 分发在 + 日服包名零残留
+      - name: Verify cn markers
+        run: |
+          set -euo pipefail
+          grep -qF 'mod cn_summary;' so/hachimi_ura_plugin/src/lib.rs
+          grep -qF 'read_summary_cn' so/hachimi_ura_plugin/src/lib.rs
+          grep -qF 'com.bilibili.umamusume' so/hachimi_ura_plugin/src/lib.rs
+          ! grep -qF 'jp.co.cygames.umamusume' so/hachimi_ura_plugin/src/lib.rs
+          grep -qF 'cn_2022_structure' so/hachimi_ura_plugin/src/cn_summary.rs
+          echo "cn-ura source verified"
+      - name: Toolchain
+        run: |
+          set -euo pipefail
+          rustup target add aarch64-linux-android
+          NDK="${ANDROID_NDK_HOME:-${ANDROID_NDK_LATEST_HOME:-}}"
+          if [ -z "${NDK:-}" ] || [ ! -d "$NDK" ]; then NDK=$(ls -d /usr/local/lib/android/sdk/ndk/* 2>/dev/null | sort -V | tail -1 || true); fi
+          TC="$NDK/toolchains/llvm/prebuilt/linux-x86_64/bin"
+          mkdir -p so/hachimi_ura_plugin/.cargo
+          printf '[target.aarch64-linux-android]\nlinker = "%s/aarch64-linux-android24-clang"\n' "$TC" > so/hachimi_ura_plugin/.cargo/config.toml
+          { echo "CC_aarch64_linux_android=$TC/aarch64-linux-android24-clang"; echo "AR_aarch64_linux_android=$TC/llvm-ar"; } >> "$GITHUB_ENV"
+      - name: Build
+        working-directory: so/hachimi_ura_plugin
+        run: |
+          set -o pipefail
+          cargo build --release --target aarch64-linux-android --features cn_only 2>&1 | tee /tmp/ci-cn.txt | tail -40
+          ls -l target/aarch64-linux-android/release/libhachimi_ura.so
+          cp target/aarch64-linux-android/release/libhachimi_ura.so /tmp/libhachimi_ura_cn.so
+          sha256sum /tmp/libhachimi_ura_cn.so
+      - name: Upload artifact
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: libhachimi_ura_cn
+          path: /tmp/libhachimi_ura_cn.so
+          if-no-files-found: error
