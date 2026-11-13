@@ -18,8 +18,10 @@ const levelOf = id => {
   const e = lvList.find(x => Number(x && x.command_id) === id);
   return e ? Number(e.level || 0) : 0;
 };
-let trainLevelCount = [5101, 5102, 5103, 5104, 5105].map(levelOf);
-if (trainLevelCount.every(v => v === 0)) trainLevelCount = [101, 102, 103, 104, 105].map(levelOf);
+let trainLevel = [5101, 5102, 5103, 5104, 5105].map(levelOf);
+if (trainLevel.every(v => v === 0)) trainLevel = [101, 102, 103, 104, 105].map(levelOf);
+// [APP-FIX-115] trainLevelCount 语义 = 成功普通训练次数（等级 = count/4+1）→ 发「该等级最小次数」(lv-1)*4
+const trainLevelCount = trainLevel.map(lv => Math.max(0, lv - 1) * 4);
 // 协议 cardId 是「卡 ID × 10 + 突破等级」的合并值
 const cards = (src.support_cards || []).map(c => {
   const id = Number(c.support_card_id || c.id || 0);
@@ -28,6 +30,17 @@ const cards = (src.support_cards || []).map(c => {
 }).filter(x => x > 0);
 const effects = (src.chara_effect_ids || []).map(Number);
 const isAijiao = effects.includes(8);
+// [APP-FIX-115] 状态 ID → 协议字段（7=切者 25=正向思考 45=消除疲劳 47=助力支撑，与 FrameAdapter.kt 同口径）
+const isQieZhe = effects.includes(7);
+const positiveThinking = effects.includes(25) ? 1 : 0;
+const hasAssistSupport = effects.includes(47);
+const hasFatigueRecovery = effects.includes(45);
+// [APP-FIX-115] 种马蓝因子星数（SO-FIX-114 succession_factors=[[id,lv],...]，蓝因子 id 1..5）
+const blueCount = [0, 0, 0, 0, 0];
+(src.succession_factors || []).forEach(f => {
+  const fid = Number(f && f[0] || 0), flv = Number(f && f[1] || 0);
+  if (fid >= 1 && fid <= 5 && flv >= 1 && flv <= 3) blueCount[fid - 1] += flv;
+});
 if (!effects.length) notes.push('chara_effect_ids empty');
 // [APP-FIX-113] 待选多选项事件判定（与 FrameAdapter.kt 同口径）
 function isEventPending(s) {
@@ -176,11 +189,12 @@ const baseGame = {
   ptScoreRate: 1.0,
   failureRateBias: 0,
   isIll: false,
-  isQieZhe: false,
+  isQieZhe,
   isAiJiao: isAijiao,
+  PositiveThinkingCount: positiveThinking, // [APP-FIX-115]
   // [APP-FIX-112] 全量状态 ID 透传（与 FrameAdapter.kt 同口径）：引擎按 142 表判病种（变胖只认这条路）
   charaEffects: effects,
-  zhongMaBlueCount: [0, 0, 0, 0, 0],
+  zhongMaBlueCount: blueCount, // [APP-FIX-115]
   isRacing: false,
   cardId: cards,
   persons,
@@ -188,8 +202,9 @@ const baseGame = {
   lockedTrainingId: -1,
   friendship_noncard_yayoi: bondByTarget[102] || 0,   // [APP-FIX-105] 102=理事长
   friendship_noncard_reporter: bondByTarget[103] || 0, // [APP-FIX-105] 103=记者
-  friend_stage: 0,
-  friend_outgoingUsed: 0,
+  // [APP-FIX-115] friend_stage 推断：已出行段数>0 → 2；0/1 由 keyEvents 的 friend_first_event 纠正（同 FrameAdapter.kt）
+  friend_stage: Number(src.friend_outgoing_used || 0) > 0 ? 2 : 0,
+  friend_outgoingUsed: Number(src.friend_outgoing_used || 0),
   // [APP-FIX-109] 教诲窗口路由：playing_state=51 → special 帧（上游 route() 口径），引擎才走 Advice 分配决策
   playing_state: Number(src.playing_state || 1),
   // [APP-FIX-113] 事件帧（上游 G16）：待选多选项事件（id>0 && choices>1 && 未选择）→ source=event + storyId，
@@ -198,7 +213,10 @@ const baseGame = {
     : (isEventPending(src) ? 'event' : 'command'),
   ...(isEventPending(src) ? { storyId: Number(src.story_id) } : {}),
   isAfterTraining: false,
-  single_mode_chara_id: Number(src.chara_id || 0)
+  // [APP-FIX-115] 局号 = 局种子（引擎 sync_epoch 清跨帧基准）；keyEvents 由 App 侧持久跟踪，CI 单帧回放恒空
+  single_mode_chara_id: Number(src.fixed_turn_chara_seed || src.chara_id || 0),
+  keyEvents: [],
+  isFullGame: true
 };
 const frame = {
   baseGame,
@@ -206,10 +224,10 @@ const frame = {
     acts,
     maxActLevel: 10,
     campRemain: null,
-    assistSupportLeft: null,
-    fatigueRecovery: false,
+    assistSupportLeft: hasAssistSupport ? 1 : 0, // [APP-FIX-115]
+    fatigueRecovery: hasFatigueRecovery,         // [APP-FIX-115]
     checkPoints: cps.length ? cps : null,
-    trainLevelTotal: trainLevelCount,
+    trainLevelTotal: trainLevel, // [APP-FIX-115] 等级真值（与次数分列）
     kensan: null,
     persons: fPersons
   },

@@ -22,6 +22,76 @@ object FrameAdapter {
         cardDb = runCatching { JSONObject(file.readText()) }.getOrNull()
     }
 
+    // [APP-FIX-115] keyEvents 持久跟踪（上游：事件历史只能由 keyEvents 换算，否则 rollout
+    // 后续事件抽取与真机不一致——支援卡连续事件按段归 8001/8002/8003、friend_first_event
+    // 命中纠正友人 UnClicked→BeforeUnlock）。SO 只透传「当前事件」三元组，历史由本跟踪器
+    // 按局种子（fixed_turn_chara_seed）分桶持久化：事件挂起（story_id>0 未选择）→ 消失
+    // 或已选择 = 已发生，入账。
+    @Volatile private var stateDir: File? = null
+    private var trackEpoch: Long = -1
+    private var trackPending: Int = 0
+    private var trackFirstTurn: Int = -1
+    private val trackEvents = sortedSetOf<Int>()
+
+    fun initState(dir: File) {
+        stateDir = dir
+    }
+
+    private fun trackFile(): File? = stateDir?.let { File(it, "key_events.json") }
+
+    private fun trackLoad(epoch: Long) {
+        trackEpoch = epoch
+        trackPending = 0
+        trackFirstTurn = -1
+        trackEvents.clear()
+        val f = trackFile() ?: return
+        runCatching {
+            val o = JSONObject(f.readText())
+            if (o.optLong("epoch", -1) == epoch) {
+                trackFirstTurn = o.optInt("firstTurn", -1)
+                val a = o.optJSONArray("events") ?: JSONArray()
+                for (i in 0 until a.length()) trackEvents.add(a.optInt(i, 0))
+            }
+        }
+    }
+
+    private fun trackSave() {
+        val f = trackFile() ?: return
+        runCatching {
+            f.parentFile?.mkdirs()
+            val a = JSONArray()
+            for (e in trackEvents) a.put(e)
+            f.writeText(JSONObject().apply {
+                put("epoch", trackEpoch)
+                put("firstTurn", trackFirstTurn)
+                put("events", a)
+            }.toString())
+        }
+    }
+
+    /** 事件跟踪 + 局号。返回 Pair(局号, keyEvents 快照)。 */
+    @Synchronized
+    private fun trackEventFrame(src: JSONObject, turn: Int, storyId: Int, storySelected: Int): Pair<Long, List<Int>> {
+        val seed = src.optLong("fixed_turn_chara_seed", 0)
+        val epoch: Long = if (seed > 0) seed else src.optInt("chara_id", 0).toLong()
+        if (epoch != trackEpoch) trackLoad(epoch)
+        if (trackFirstTurn < 0 || turn < trackFirstTurn) trackFirstTurn = turn
+        // 挂起事件消失（已结算/被跳过）或已选择 → 入账
+        if (trackPending > 0 && (storyId != trackPending || storySelected >= 0)) {
+            trackEvents.add(trackPending)
+            trackPending = 0
+            trackSave()
+        }
+        if (storyId > 0) {
+            if (storySelected >= 0) {
+                if (trackEvents.add(storyId)) trackSave()
+            } else {
+                trackPending = storyId
+            }
+        }
+        return Pair(epoch, trackEvents.toList())
+    }
+
     private fun cardCharaId(cardId: Int): Int {
         val db = cardDb ?: return 0
         val o = db.optJSONObject(cardId.toString()) ?: return 0
@@ -215,6 +285,27 @@ object FrameAdapter {
         val effects = arrInt(src.optJSONArray("chara_effect_ids"))
         var aijiao = false
         for (e in effects) if (e == 8) aijiao = true
+        // [APP-FIX-115] 状态 ID → 协议字段（上游 online_wiring 状态表：7=切者 25=正向思考 45=消除疲劳 47=助力支撑）：
+        // 引擎 restore 只从 charaEffects 挑 1-6 病种，切者/心情盾不进 charaEffects 消费路径，
+        // 必须显式翻译，否则切者局的 PT 加权期望分与真机口径错位。
+        val isQieZhe = effects.contains(7)
+        val positiveThinking = if (effects.contains(25)) 1 else 0
+        val hasAssistSupport = effects.contains(47)
+        val hasFatigueRecovery = effects.contains(45)
+        // [APP-FIX-115] 种马蓝因子星数（SO-FIX-114 的 succession_factors=[[id,lv],...]，蓝因子 id 1..5=速耐力根智）。
+        // 恒 0 时引擎把 T30/T54 两次继承模拟成 0 收益（属性=蓝×6+剧本因子、上限=蓝×5.33），满配局期望分系统性偏低。
+        val blueCount = IntArray(5)
+        val sfArr = src.optJSONArray("succession_factors")
+        if (sfArr != null) {
+            for (i in 0 until sfArr.length()) {
+                val f = sfArr.optJSONArray(i) ?: continue
+                val fid = f.optInt(0, 0)
+                val flv = f.optInt(1, 0)
+                if (fid in 1..5 && flv in 1..3) blueCount[fid - 1] += flv
+            }
+        } else if (turn > 0) {
+            notes.put("succession_factors_missing")
+        }
 
         val base = JSONObject()
         base.put("scenarioId", 15)
@@ -230,17 +321,21 @@ object FrameAdapter {
         val skills = src.optJSONObject("skills")
         base.put("skillScore", skills?.optInt("eval", 0) ?: 0)
         base.put("totalHints", src.optInt("total_hints", 0)) // [APP-FIX-090]
-        base.put("trainLevelCount", JSONArray(trainLevel.toList()))
+        // [APP-FIX-115] trainLevelCount 语义 = 成功普通训练次数（上游 umasim：等级 = count/4+1），
+        // SO 给的是等级 → 换算「该等级最小次数」(lv-1)*4；引擎 restore 以帧 trainLevelTotal 为真值
+        // 反解 bonus，次数给对后 bonus 归零，rollout 的后续升级节奏与真机一致。
+        base.put("trainLevelCount", JSONArray(trainLevel.map { (it - 1).coerceAtLeast(0) * 4 }))
         base.put("ptScoreRate", 1.0)
         base.put("failureRateBias", 0)
         base.put("isIll", false)
-        base.put("isQieZhe", false)
+        base.put("isQieZhe", isQieZhe) // [APP-FIX-115]
         base.put("isAiJiao", aijiao)
+        base.put("PositiveThinkingCount", positiveThinking) // [APP-FIX-115]
         // [APP-FIX-112] 全量状态 ID 透传（上游 2026-11-08 handoff：baseGame.charaEffects）。
         // 引擎 restore 按 142 表从 effects 判病种覆盖 isIll 粗标记——变胖(FAT)只有这条路
         // 认得出来；纯 buff/空数组时引擎不覆盖，isIll=false 兜底不变。
         base.put("charaEffects", JSONArray(effects.toList()))
-        base.put("zhongMaBlueCount", JSONArray(listOf(0, 0, 0, 0, 0)))
+        base.put("zhongMaBlueCount", JSONArray(blueCount.toList())) // [APP-FIX-115]
         base.put("isRacing", false)
         base.put("cardId", JSONArray(cardIds))
         base.put("persons", JSONArray(persons.toList()))
@@ -248,7 +343,10 @@ object FrameAdapter {
         base.put("lockedTrainingId", -1)
         base.put("friendship_noncard_yayoi", bondByTarget[102] ?: 0) // [APP-FIX-105] 102=理事长
         base.put("friendship_noncard_reporter", bondByTarget[103] ?: 0) // [APP-FIX-105] 103=记者
-        base.put("friend_stage", 0)
+        // [APP-FIX-115] friend_stage 推断（上游 to_friend：0 未点击/1 已点击未出行/2 已出行/其它=离开）：
+        // 协议无法区分 0/1（上游 apply_key_events 注释），已出行段数>0 → 2；0/1 的区分交给
+        // keyEvents（friend_first_event=809052001 命中时引擎自己纠正为 1）。
+        base.put("friend_stage", if (src.optInt("friend_outgoing_used", 0) > 0) 2 else 0)
         base.put("friend_outgoingUsed", src.optInt("friend_outgoing_used", 0)) // [APP-FIX-090]
         val psVal = if (src.has("playing_state")) src.optInt("playing_state", 1) else 1
         base.put("playing_state", psVal) // [APP-FIX-090]
@@ -265,7 +363,13 @@ object FrameAdapter {
         base.put("source", if (psVal == 51) "special" else if (isEventPending) "event" else "command")
         if (isEventPending) base.put("storyId", storyId)
         base.put("isAfterTraining", false)
-        base.put("single_mode_chara_id", src.optInt("chara_id", 0))
+        // [APP-FIX-115] 局号 + keyEvents（见 trackEventFrame 注释）：
+        // 局号必须随局变化（fixed_turn_chara_seed），引擎 sync_epoch 靠它清跨帧基准/幂等集；
+        // 原来发 chara_id，同角色连开两局 epoch 不变，prev_levels/seen 跨局残留。
+        val (epoch, keyEvents) = trackEventFrame(src, turn, storyId, storySelected)
+        base.put("single_mode_chara_id", epoch)
+        base.put("keyEvents", JSONArray(keyEvents))
+        base.put("isFullGame", trackFirstTurn in 0..1)
 
         val fs = fsEarly
         // [APP-FIX-109] 転成教诲：summary festa.advice[] 是 advice_id→fusion 对，按 act.advice_id 反查补 fusionId
@@ -334,8 +438,9 @@ object FrameAdapter {
             // [APP-FIX-097] 合宿剩余回合 / 演目最高等级用游戏真值
             put("maxActLevel", finfo?.optInt("max_act_level", 10) ?: 10)
             put("campRemain", if (finfo != null && finfo.has("summer_camp_remain_turn")) finfo.optInt("summer_camp_remain_turn", 0) else JSONObject.NULL)
-            put("assistSupportLeft", JSONObject.NULL)
-            put("fatigueRecovery", false)
+            // [APP-FIX-115] 助力支撑(47)/消除疲劳(45) 从 charaEffects 翻译（上游 G4：有则 1 回合）
+            put("assistSupportLeft", if (hasAssistSupport) 1 else 0)
+            put("fatigueRecovery", hasFatigueRecovery)
             put("checkPoints", if (cpsJ.length() > 0) cpsJ else JSONObject.NULL)
             put("trainLevelTotal", JSONArray(trainLevel.toList()))
             put("kensan", if (kensanArr.length() == 5) kensanArr else JSONObject.NULL) // [APP-FIX-091]

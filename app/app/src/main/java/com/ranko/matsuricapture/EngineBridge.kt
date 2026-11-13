@@ -172,6 +172,8 @@ object EngineBridge {
         slot("matsuri").status = "extracting_data"
         copyAssetDir(ctx, "engine/data", dataDir(ctx))
         FrameAdapter.loadCardDb(File(dataDir(ctx), "cardDB.json"))
+        // [APP-FIX-115] keyEvents 持久跟踪的状态目录（跨进程重启保留事件历史）
+        FrameAdapter.initState(File(rootDir(ctx), "state"))
         val marker = File(rootDir(ctx), ".portable")
         if (!marker.exists()) marker.writeText("")
         // [APP-FIX-096] 上游 FileChannel 要求插件目录先存在，否则直接报错退出

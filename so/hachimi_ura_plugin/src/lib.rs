@@ -393,6 +393,11 @@ static EVENT_STATE_MUTEX: Mutex<()> = Mutex::new(());
 static HOOK_LOG: Mutex<Vec<String>> = Mutex::new(Vec::new());
 const HOOK_LOG_MAX: usize = 256;
 
+// [SO-FIX-114] 种马因子缓存：一局内 SuccessionFactor 不变，按 fixed_turn_chara_seed 缓存，
+// 避免每帧重复 il2cpp invoke（invoke 预算见 read_summary_inner_impl 头表）。
+// (seed, "[[factor_id,level],...]")；seed=-1 或空串 = 未读过。
+static SUCCESSION_FACTOR_CACHE: Mutex<(i64, String)> = Mutex::new((-1, String::new()));
+
 // ★ v3.24.42: high-frequency read_summary/push spam is excluded from the
 // ring (still goes to logcat) so event/sniff diagnostics survive.
 const HOOK_LOG_NOISE: &[&str] = &[
@@ -4620,6 +4625,57 @@ unsafe fn read_summary_inner() -> String {
     read_summary_inner_impl()
 }
 
+/// [SO-FIX-114] 读本局种马因子明细（WorkSingleModeCharaData.get_SuccessionFactor →
+/// FactorInfo[]，元素 ObscuredInt FactorId + ObscuredInt Level，dump: Gallop.FactorInfo）。
+/// 输出 "[[factor_id,level],...]"；任一环节读不到 → "[]"（接收端按无因子处理，不炸帧）。
+/// 蓝因子 id 1..=5 = 速/耐/力/根/智，level = 星数 1..=3；其余 id（适性/固有/剧本）原样透出。
+/// 只在换局时调用（调用方按 fixed_turn_chara_seed 缓存），不在稳态帧热路径上。
+unsafe fn read_succession_factors_json(
+    image: *mut c_void,
+    chara_class: *mut c_void,
+    chara_obj: *const c_void,
+) -> String {
+    if image.is_null() || chara_class.is_null() || chara_obj.is_null() {
+        return "[]".to_string();
+    }
+    let arr = call_getter_on_instance(chara_class, chara_obj, "get_SuccessionFactor");
+    if arr.is_null() {
+        return "[]".to_string();
+    }
+    let base = arr as *const u8;
+    let count = std::ptr::read_unaligned::<usize>(base.add(IL2CPP_LIST_COUNT_OFF) as *const usize);
+    if count == 0 || count > 64 {
+        return "[]".to_string();
+    }
+    let fi_class = find_class(image, to_cstr("Gallop").as_ptr(), to_cstr("FactorInfo").as_ptr());
+    if fi_class.is_null() {
+        return "[]".to_string();
+    }
+    let items = base.add(IL2CPP_LIST_ITEMS_OFF) as *const usize;
+    let mut out = String::from("[");
+    let mut first = true;
+    for i in 0..count {
+        let elem = std::ptr::read_unaligned::<usize>(items.add(i)) as *const c_void;
+        if elem.is_null() {
+            continue;
+        }
+        let fid = call_getter_obscured_int(fi_class, elem, "get_FactorId");
+        let flv = call_getter_obscured_int(fi_class, elem, "get_Level");
+        // ObscuredInt 读失败返回 -1；因子 id/星数必然为正，负值一律丢弃
+        if fid <= 0 || flv <= 0 || flv > 3 {
+            continue;
+        }
+        if !first {
+            out.push(',');
+        }
+        first = false;
+        out.push_str(&format!("[{},{}]", fid, flv));
+    }
+    out.push(']');
+    ura_log(3, &format!("★ succession_factors: {}", out));
+    out
+}
+
 /// ★ INVOKE INVENTORY — read_summary_inner_impl 热路径所有 il2cpp_runtime_invoke 调用点
 ///
 /// 每次 call_getter_* 都是一次 il2cpp_runtime_invoke（非主线程）。
@@ -4646,6 +4702,9 @@ unsafe fn read_summary_inner() -> String {
 ///       v3.24.12 加 shining 检测新增一次 get_EquipSupportCardArray → 回归；
 ///       v3.24.13 复用 shining 结果消除重复调用 → 修复。
 /// 维护规则：新增 call_getter_* 前，先在本表登记行号和是否重复。
+/// [SO-FIX-114] get_SuccessionFactor + FactorInfo.get_FactorId/get_Level：
+/// 只在换局（fixed_turn_chara_seed 变化）时读一次并缓存（SUCCESSION_FACTOR_CACHE），
+/// 稳态帧 0 invoke；单局一次性约 1+2N 次（N=因子数，封顶 64）。
 unsafe fn read_summary_inner_impl() -> String {
     if API.is_null() {
         return r#"{"error":"api_null"}"#.to_string();
@@ -4800,6 +4859,26 @@ unsafe fn read_summary_inner_impl() -> String {
         read_obscured_int_at(sm_obj, 408)
     } else {
         0
+    };
+    // [SO-FIX-114] 种马因子明细：一局不变，按局种子缓存；换局才触发一轮 invoke。
+    let succession_factors_json: String = {
+        let hit = if let Ok(c) = SUCCESSION_FACTOR_CACHE.lock() {
+            (c.0 == fixed_turn_chara_seed as i64 && !c.1.is_empty()).then(|| c.1.clone())
+        } else {
+            None
+        };
+        match hit {
+            Some(s) => s,
+            None => {
+                let s = read_succession_factors_json(image, chara_class, chara_obj);
+                if s != "[]" {
+                    if let Ok(mut c) = SUCCESSION_FACTOR_CACHE.lock() {
+                        *c = (fixed_turn_chara_seed as i64, s.clone());
+                    }
+                }
+                s
+            }
+        }
     };
     let chara_effect_ids_arr = read_ptr_at(chara_obj, 1080); // _charaEffectIdArray
     let chara_effect_ids: Vec<i32> = if !chara_effect_ids_arr.is_null() {
@@ -6495,7 +6574,7 @@ unsafe fn read_summary_inner_impl() -> String {
 
     log_predict_step("S:json");
     let __json_out = format!(
-        r#"{{"version":"{}","year":{},"turn":{},"raw_total_turn_num":{},"ui_turn_semantics":"countdown","raw_field_mapping":"verified_ramen_upstream_semantics","month":{},"half":{},"scenario":"{}","chara_id":{},"stats":{{"speed":{},"stamina":{},"power":{},"guts":{},"wiz":{},"vital":{},"max_vital":{},"motivation":"{}","skill_point":{},"fan":{}}},"max_stats":{{"speed":{},"stamina":{},"power":{},"guts":{},"wiz":{}}},"proper":{{"dist_short":{},"dist_mile":{},"dist_mid":{},"dist_long":{},"ground_turf":{},"ground_dirt":{},"style_nige":{},"style_senko":{},"style_sashi":{},"style_oikomi":{}}},"running_style":{},"scenario_progress":{},"training_event_type":{},"talent_level":{},"chara_grade":{},"difficulty":{},"fixed_turn_chara_seed":{},"trainings":{},"support_cards":{},"evaluation":{},"training_levels":{},"buffs":{},"chara_effect_ids":[{}],"skills":{{"eval":{},"count":{},"list":{}}},"skill_tips":{}{}{}{} }}"#,
+        r#"{{"version":"{}","year":{},"turn":{},"raw_total_turn_num":{},"ui_turn_semantics":"countdown","raw_field_mapping":"verified_ramen_upstream_semantics","month":{},"half":{},"scenario":"{}","chara_id":{},"stats":{{"speed":{},"stamina":{},"power":{},"guts":{},"wiz":{},"vital":{},"max_vital":{},"motivation":"{}","skill_point":{},"fan":{}}},"max_stats":{{"speed":{},"stamina":{},"power":{},"guts":{},"wiz":{}}},"proper":{{"dist_short":{},"dist_mile":{},"dist_mid":{},"dist_long":{},"ground_turf":{},"ground_dirt":{},"style_nige":{},"style_senko":{},"style_sashi":{},"style_oikomi":{}}},"running_style":{},"scenario_progress":{},"training_event_type":{},"talent_level":{},"chara_grade":{},"difficulty":{},"fixed_turn_chara_seed":{},"trainings":{},"support_cards":{},"evaluation":{},"training_levels":{},"buffs":{},"chara_effect_ids":[{}],"skills":{{"eval":{},"count":{},"list":{}}},"skill_tips":{}{}{}{},"succession_factors":{} }}"#,
         PLUGIN_VERSION,
         year,
         cumulative_turn,
@@ -6548,7 +6627,8 @@ unsafe fn read_summary_inner_impl() -> String {
         tips_json,
         team_json,
         ramen_json,
-        last_action_json
+        last_action_json,
+        succession_factors_json
     );
     // [BOOTGATE-3292] 已经能读到育成数据 → 置位，后续所有端点放行
     GAME_INITIALIZED.store(true, Ordering::Relaxed);
