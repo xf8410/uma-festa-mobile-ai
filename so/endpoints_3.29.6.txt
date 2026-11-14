@@ -1,0 +1,196 @@
+================================================================================
+hlpatch SO 插件完整端点清单（实测）
+版本: 3.29.6（二进制内 version 串 + /api/auth/status 双证）
+采样: 2026-11-14  真机 jp.co.cygames.umamusume
+基址: http://127.0.0.1:18765
+总数: 156
+================================================================================
+
+⚠ 与旧版（142 个，2026-08-05）的差异
+  新增: /api/auth/*（6）、/api/rng/consumption/*（5）、/il2cpp/invoke_instance、
+        /il2cpp/invoke_static、/classes/search/keyword、/debug/ringlog、
+        /debug/selftest、/debug/summary_integrity
+  无删除：旧清单里的 /il2cpp/read_mem、/il2cpp/static、/il2cpp/read_string 仍在
+
+★ 关键端点（做无头/取常量必用）
+  /il2cpp/read_mem?addr=0x..&len=N   — 读任意进程内存（hex dump）
+  /il2cpp/static?name=<类>&field=<字段> — 读静态字段真实值（含字符串）
+  /il2cpp/methods?name=<类>          — 类方法清单（含参数个数）
+  /il2cpp/disassemble?class=&method= — 方法反汇编（hex）
+  /api/md5log                        — MakeMd5 的 in→out，output 即请求头 SID
+  /debug/mem_scan_hex?hex=           — 内存扫描（只回地址，不回内容）
+  /debug/maps_list?filter=           — maps 过滤（filter 参数必用，全量会卡死）
+  /debug/private_file_inventory?confirm=1 — 私有文件清单（需 confirm）
+  /debug/file_dl?path=               — 下载已映射文件（path 须在 maps 内）
+
+=== 根级 (41) ===
+  /
+  /action/latest
+  /carddb
+  /classes
+  /classes/search/keyword
+  /config
+  /config.html
+  /data
+  /dev/
+  /event/recommend
+  /events
+  /fields
+  /find_method
+  /hall
+  /health
+  /inherit/compat
+  /log
+  /log/turn
+  /mdb
+  /mdb/dl_batch
+  /mdb/raw
+  /mdb/schema
+  /mdb/search
+  /methods
+  /ramen
+  /ranking
+  /saddle-analysis
+  /saddles
+  /saddles-dl
+  /scan
+  /scenario
+  /seed/history
+  /seed/stats
+  /singletons
+  /skilldata
+  /status
+  /summary
+  /tables
+  /training/result
+  /update
+  /update/status
+
+=== auth（认证/会话，3.29.x 新增） (6) ===
+  /api/auth/clear
+  /api/auth/handshake
+  /api/auth/headers
+  /api/auth/status
+  /api/auth/targets
+  /api/auth/toggle
+
+=== event (4) ===
+  /api/event/choices
+  /api/event/clear
+  /api/event/observations
+  /api/event/observations/clear
+
+=== md5log（MakeMd5 记录，output 即 SID） (3) ===
+  /api/md5log
+  /api/md5log/clear
+  /api/md5log/install
+
+=== rng（随机消费，3.29.x 新增） (5) ===
+  /api/rng/consumption
+  /api/rng/consumption/clear
+  /api/rng/consumption/context
+  /api/rng/consumption/status
+  /api/rng/consumption/toggle
+
+=== sniff（协议观测） (7) ===
+  /api/sniff
+  /api/sniff/clear
+  /api/sniff/diag
+  /api/sniff/metadata
+  /api/sniff/status
+  /api/sniff/toggle
+  /api/sniff/unity
+
+=== debug (64) ===
+  /debug/all
+  /debug/breeders
+  /debug/cmdinfo
+  /debug/crashlog
+  /debug/download_table
+  /debug/dump
+  /debug/dumpclass
+  /debug/event_reward_targets
+  /debug/file_dl
+  /debug/file_range_hex
+  /debug/file_scan_hex
+  /debug/gauge
+  /debug/gauge2
+  /debug/global_metadata_probe
+  /debug/hint_gain
+  /debug/hookdiag
+  /debug/hooklog
+  /debug/laststep
+  /debug/maps_list
+  /debug/mdb_all_tables
+  /debug/mdb_schema_dump
+  /debug/mem_maps
+  /debug/mem_scan_hex
+  /debug/mem_scan_sqlite
+  /debug/mem_scan_zdict
+  /debug/meta_dump
+  /debug/params
+  /debug/paramsincdec
+  /debug/private_file_dl
+  /debug/private_file_inventory
+  /debug/push_table
+  /debug/race_random_program_exact
+  /debug/ramen_dataset_path
+  /debug/ramen_formula_targets
+  /debug/ramen_participants
+  /debug/ramen_planner_state
+  /debug/ramen_region_select
+  /debug/ramen_transition
+  /debug/ramenfields
+  /debug/ramengains
+  /debug/rameninfo
+  /debug/resource_crypto_symbols
+  /debug/resource_db_keys
+  /debug/resource_file_dl
+  /debug/resource_meta_dl
+  /debug/resource_meta_key
+  /debug/resource_meta_probe
+  /debug/resource_meta_schema
+  /debug/resource_reads
+  /debug/resource_storage
+  /debug/ringlog
+  /debug/sc_effect
+  /debug/selftest
+  /debug/storydata
+  /debug/summary_integrity
+  /debug/table
+  /debug/training_log
+  /debug/training_log_dl
+  /debug/training_partners
+  /debug/training_seed
+  /debug/turn_probe
+  /debug/unique_detail
+  /debug/unique_skills
+  /debug/upload
+
+=== il2cpp（内存/反射，关键） (26) ===
+  /il2cpp/call
+  /il2cpp/call_static
+  /il2cpp/classes
+  /il2cpp/disassemble
+  /il2cpp/disassemble_addr
+  /il2cpp/disassemble_addr_dl
+  /il2cpp/disassemble_dl
+  /il2cpp/dump
+  /il2cpp/dump_all_methods
+  /il2cpp/dump_all_methods_dl
+  /il2cpp/field
+  /il2cpp/invoke_instance
+  /il2cpp/invoke_static
+  /il2cpp/methods
+  /il2cpp/read_mem
+  /il2cpp/read_mem_dl
+  /il2cpp/read_string
+  /il2cpp/search_float
+  /il2cpp/search_float_dl
+  /il2cpp/search_int
+  /il2cpp/search_int_dl
+  /il2cpp/search_methods
+  /il2cpp/search_methods_dl
+  /il2cpp/search_methods_page
+  /il2cpp/static
+  /il2cpp/tree
