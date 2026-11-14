@@ -9171,7 +9171,8 @@ fn handle_http(mut stream: std::net::TcpStream) {
         let p3 = parse_query(&full_uri, "p3").parse::<i64>().unwrap_or(0);
         let p4 = parse_query(&full_uri, "p4").parse::<i64>().unwrap_or(0);
         let param_count = parse_query(&full_uri, "n").parse::<i32>().unwrap_or(0);
-        unsafe { il2cpp_invoke_static_method(&class_name, &method_name, p0, p1, p2, p3, p4, param_count) }
+        let s0 = parse_query(&full_uri, "s0");
+        unsafe { il2cpp_invoke_static_method(&class_name, &method_name, &s0, p0, p1, p2, p3, p4, param_count) }
     } else if path.starts_with("/il2cpp/call_static") {
         // v3.25: 调用static方法 (无需singleton实例)
         let class_name = parse_query(&full_uri, "class");
@@ -17554,6 +17555,7 @@ unsafe fn il2cpp_dump_singleton(class_name: &str) -> String {
 unsafe fn il2cpp_invoke_static_method(
     class_name: &str,
     method_name: &str,
+    s0: &str,
     p0: i64,
     p1: i64,
     p2: i64,
@@ -17605,8 +17607,8 @@ unsafe fn il2cpp_invoke_static_method(
         let raw_name = get_type_name(parameter_type);
         let type_name = if raw_name.is_null() { "unknown".to_string() } else { CStr::from_ptr(raw_name).to_string_lossy().into_owned() };
         signature.push(type_name.clone());
-        if type_name != "System.Int32" {
-            return format!(r#"{{"ok":false,"error":"unsupported_parameter_type","index":{},"type_name":"{}","supported":["System.Int32"]}}"#, index, json_escape(&type_name));
+        if type_name != "System.Int32" && type_name != "System.String" {
+            return format!(r#"{{"ok":false,"error":"unsupported_parameter_type","index":{},"type_name":"{}","supported":["System.Int32","System.String"]}}"#, index, json_escape(&type_name));
         }
     }
     if class_name == "SingleModeRamenAPI" && method_name == "SendUrafEffectApply" {
@@ -17614,12 +17616,36 @@ unsafe fn il2cpp_invoke_static_method(
             json_escape(class_name), json_escape(method_name), signature.iter().map(|value| format!("\"{}\"", json_escape(value))).collect::<Vec<_>>().join(","));
     }
 
-    // This endpoint accepts verified System.Int32 value parameters only.
-    // runtime_invoke wants pointers to raw values, not boxed Int32 objects.
+    // ★ patch: 支持 System.String 参数（il2cpp_string_new 构造），并解析返回类型
+    let str_new_ptr = resolve_il2cpp_symbol("il2cpp_string_new");
+    let ret_type_ptr = resolve_il2cpp_symbol("il2cpp_method_get_return_type");
+    let mut ret_is_string = false;
+    if !ret_type_ptr.is_null() {
+        let get_ret: unsafe extern "C" fn(*const c_void) -> *const c_void = std::mem::transmute(ret_type_ptr);
+        let rt = get_ret(method_info);
+        if !rt.is_null() {
+            let nm = get_type_name(rt);
+            if !nm.is_null() {
+                ret_is_string = CStr::from_ptr(nm).to_string_lossy() == "System.String";
+            }
+        }
+    }
     let mut raw_args = [p0 as i32, p1 as i32, p2 as i32, p3 as i32, p4 as i32];
+    let mut str_objs: [*mut c_void; 5] = [ptr::null_mut(); 5];
     let mut argv: [*mut c_void; 5] = [ptr::null_mut(); 5];
     for index in 0..param_count as usize {
-        argv[index] = &mut raw_args[index] as *mut i32 as *mut c_void;
+        if signature[index] == "System.String" {
+            if str_new_ptr.is_null() {
+                return r#"{"ok":false,"error":"il2cpp_string_new_not_found"}"#.to_string();
+            }
+            let str_new: unsafe extern "C" fn(*const c_char) -> *mut c_void = std::mem::transmute(str_new_ptr);
+            let text = if index == 0 { s0 } else { "" };
+            let cs = to_cstr(text);
+            str_objs[index] = str_new(cs.as_ptr());
+            argv[index] = &mut str_objs[index] as *mut *mut c_void as *mut c_void;
+        } else {
+            argv[index] = &mut raw_args[index] as *mut i32 as *mut c_void;
+        }
     }
     let argv_ptr = if param_count == 0 {
         ptr::null_mut()
@@ -17631,7 +17657,11 @@ unsafe fn il2cpp_invoke_static_method(
     if !exc.is_null() {
         return format!(r#"{{"ok":false,"class":"{}","method":"{}","error":"exception","exc_addr":"0x{:x}"}}"#, class_name, method_name, exc as usize);
     }
-    format!(r#"{{"ok":true,"class":"{}","method":"{}","params":{},"result_addr":"0x{:x}"}}"#, class_name, method_name, param_count, result as usize)
+    let mut extra = String::new();
+    if ret_is_string && !result.is_null() {
+        extra = format!(r#","result_string":"{}""#, json_escape(&read_il2cpp_string(result as *const c_void)));
+    }
+    format!(r#"{{"ok":true,"class":"{}","method":"{}","params":{},"result_addr":"0x{:x}"{}}}"#, class_name, method_name, param_count, result as usize, extra)
 }
 
 
