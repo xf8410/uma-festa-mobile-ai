@@ -9,7 +9,7 @@
 
 | 目录 | 内容 | 当前版本 |
 |---|---|---|
-| `so/` | SO 内存直读插件（Rust，hachimi 插件，**纯采集**：不算分、不推荐、不投影）| **v3.29.5** |
+| `so/` | SO 内存直读插件（Rust，hachimi 插件，**纯采集**：不算分、不推荐、不投影）| **v3.29.7**（Cargo.toml 为准） |
 | `app/` | Android 浮窗 App（Kotlin + WebView；**算分/彩圈/决策全部在 App 侧**）| v0.9.31-dsh40 |
 | `ai-engine/umaai-matsuri/` | 祭典杯模拟器核心（Rust，上游 matsuri-core 路线）| 移植中 |
 | `ai-engine/umaai_next/` | AI 决策引擎（umaai_next，运气分/训练建议口径来源）| 移植中 |
@@ -68,7 +68,7 @@
 - 引擎 = 上游 umaai-matsuri **main**（PR#3 已于 2026-11-09 合入，1914a18）CI 现合现编
 - 真机 SIGSEGV 已根修（arrayfix：`read_il2cpp_int_list` 把内联 ObscuredInt[] 误当指针数组解引用）
 - festa 已接线：sid=15 走 `WorkSingleModeCharaData.<ScenarioFesta>@1232` 字段直读，acts/教诲/检查点进 /summary
-- 源码 = 仓库内权威版本（SO 3.29.5 / App 0.9.36-dsh45）；CI **不再重放任何 apply_\* 补丁**
+- 源码 = 仓库内权威版本（SO 3.29.7 / App 0.9.36-dsh45）；版本号以 `so/hachimi_ura_plugin/Cargo.toml` 为准；CI **不再重放任何 apply_\* 补丁**
   （旧 3.29.2 工作流已全部退役，防已删除的启发式代码被补丁注回）；CI 发布步骤禁止 force-push
 
 ## 编译
@@ -91,7 +91,7 @@ cd app && gradle assembleDebug   # 需自备 Android SDK 35 + JDK 17，写 local
 
 ## 版本基线说明
 
-- **真机当前运行 = `so/`（v3.29.5 纯采集）**。交接资料里另有 `手机AI_SO重编译源码` 两个 workbench
+- **真机当前运行 = 3.29.6（`so/dist/libhachimi_ura-3.29.6-succfactors.so`）；仓库源码 = 3.29.7**。交接资料里另有 `手机AI_SO重编译源码` 两个 workbench
   （3.28.16-merged-scenario15 / 3.28.17-readall-p1p2）是**未上机实验版**，不在本仓库；
   其中 `read_festa_dataset` 等 festa 代码是死代码，仅供后续 festa 接线参考。
 - GitHub 上另有旧仓 `uma-festa-so-build`，只有 v3.15 旧内核，**不要**拿它当当前基线。
