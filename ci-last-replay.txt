@@ -1,20 +1,8 @@
-step=clone
-step=build
-   Compiling umaai-cli v0.1.0 (/tmp/w/umaai_next/crates/umaai-cli)
-   Compiling matsuri-ai v0.1.0 (/tmp/w/umaai-matsuri/crates/matsuri-ai)
-   Compiling inquire v0.9.4
-   Compiling clap v4.6.6
-   Compiling matsuri-cli v0.1.0 (/tmp/w/umaai-matsuri/crates/matsuri-cli)
-    Finished `release` profile [optimized] target(s) in 45.01s
--rwxr-xr-x 2 runner runner 6922208 Nov  8 16:08 target/release/matsuri
-step=frame
-frame_bytes=1580
-step=run
-exit=1
-stdout_bytes=304 stderr_bytes=36
----- stdout ----
+frame_bytes=2316
+engine_exit=0
+---- decision json ----
 {"event":"connected","scenario":"matsuri","type":"info"}
-{"message":"编成不合规：没带 SSR 吾妻（本剧本仅支持带 SSR 吾妻的编成）；卡组不符合通用规则：卡类型不合法（card_id 30137，card_type=6；本剧本不模拟团队卡）","scenario":"matsuri","type":"error"}
+{"action_index":2,"candidate_descriptions":["流镝稽古","神旗稽古","纳舞稽古","大曳稽古","飞悬稽古","休息","普通出行"],"candidate_n":8192,"candidate_scores":[76041.22705078125,75967.14811197917,76067.69494628906,75857.79833984375,75947.634765625,75936.14876302083,75952.1826171875],"decision_kind":"train","scenario":"matsuri","scenario_extra":{"baseline":75996.9236188616,"candidate_detail":[{"five":[2225.0,1849.9895833333333,1847.9697265625,1714.11962890625,1800.0],"i":0,"n":6144,"pt":10788.121256510416,"s":76041.22705078125},{"five":[2225.0,1849.9820963541667,1847.9798177083333,1714.3792317708333,1800.0],"i":1,"n":3072,"pt":10769.594075520834,"s":75967.14811197917},{"five":[2225.0,1849.977783203125,1847.96142578125,1714.2469482421875,1799.987060546875],"i":2,"n":8192,"pt":10798.232177734375,"s":76067.69494628906},{"five":[2225.0,1849.9755859375,1847.95263671875,1714.1689453125,1800.0],"i":3,"n":2048,"pt":10742.802734375,"s":75857.79833984375},{"five":[2225.0,1849.9098307291667,1847.9440104166667,1714.0406901041667,1800.0],"i":4,"n":3072,"pt":10763.680989583334,"s":75947.634765625},{"five":[2225.0,1849.990234375,1847.9931640625,1713.7486979166667,1799.9899088541667],"i":5,"n":3072,"pt":10760.595703125,"s":75936.14876302083},{"five":[2225.0,1849.990234375,1847.9931640625,1713.9069010416667,1799.9899088541667],"i":6,"n":3072,"pt":10764.756184895834,"s":75952.1826171875}],"expected_rank":"UA5","expected_score":59714,"expected_stdev":1562,"reason":"搜索：候选排名加权均分最高","score_source":"search"},"score":76067.69494628906,"turn":12,"type":"decision"}
+
 ---- stderr ----
-错误: 回放有 1 帧处理失败
 ---- end ----
