@@ -164,7 +164,11 @@ jobs:
           grep -qF '[APP-FIX-115]' $K/FrameAdapter.kt
           grep -qF '[APP-FIX-115]' .github/scripts/summary_to_frame.js
           grep -qF '[APP-FIX-115]' $K/EngineBridge.kt
-          sed -i 's/versionName = "[^"]*"/versionName = "0.9.38-dsh47"/' app/app/build.gradle.kts
+          grep -qF '[APP-FIX-116]' $K/FrameAdapter.kt
+          grep -qF '[APP-FIX-116]' $K/NativeEngine.kt
+          grep -qF '[APP-FIX-116]' .github/scripts/summary_to_frame.js
+          grep -qF '[APP-FIX-117]' $K/NativeEngine.kt
+          sed -i 's/versionName = "[^"]*"/versionName = "0.9.39-dsh48"/' app/app/build.gradle.kts
           sed -i 's/versionCode = [0-9]\+/versionCode = 63/' app/app/build.gradle.kts
           grep -E 'versionCode|versionName' app/app/build.gradle.kts
 
@@ -184,15 +188,15 @@ jobs:
           set -euo pipefail
           mkdir -p app/dist
           SRC=$(find app/app/build/outputs/apk/release -name "*.apk" | head -1)
-          cp "$SRC" app/dist/matsuri-ai-0.9.38-dsh47.apk
+          cp "$SRC" app/dist/matsuri-ai-0.9.39-dsh48.apk
           cp "$SRC" app/dist/matsuri-ai-latest.apk
           ls -l app/dist/
           git config user.name dsh-bot
           git config user.email dsh-bot@users.noreply.github.com
-          git add -f app/dist/matsuri-ai-0.9.38-dsh47.apk app/dist/matsuri-ai-latest.apk
+          git add -f app/dist/matsuri-ai-0.9.39-dsh48.apk app/dist/matsuri-ai-latest.apk
           git add -f app/app/src/main/java app/app/src/main/assets/index.html app/app/build.gradle.kts 2>/dev/null || true
           git add -u  # tracked 修改全暂存，否则 rebase 报 unstaged changes
-          git commit -m "build(app): 0.9.38-dsh47 协议补全：keyEvents事件历史+蓝因子+切者心情盾+友人阶段+局种子epoch" || echo nothing
+          git commit -m "build(app): 0.9.39-dsh48 回合年项修复+盘面人头合成修复（cardDB反查）" || echo nothing
           git fetch origin main || true
           git rebase origin/main || git rebase --abort || true
           git push origin HEAD:main || echo "push failed（禁止 force，防吞并提）"

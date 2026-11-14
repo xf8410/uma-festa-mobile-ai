@@ -1,4 +1,4 @@
-name: "Build hachimi_ura 3.29.6 (succession-factors)"
+name: "Build hachimi_ura 3.29.7 (festa-heads+year)"
 on:
   push:
     branches: [main]
@@ -35,6 +35,7 @@ jobs:
           grep -qF '/debug/summary_integrity' so/hachimi_ura_plugin/src/lib.rs
           grep -qF '[SO-FIX-113]' so/hachimi_ura_plugin/src/lib.rs
           grep -qF '[SO-FIX-114]' so/hachimi_ura_plugin/src/lib.rs
+          grep -qF '[SO-FIX-115]' so/hachimi_ura_plugin/src/lib.rs
           grep -qF 'S:resp_written=' so/hachimi_ura_plugin/src/lib.rs
           ! grep -qF 'evaluate_ai' so/hachimi_ura_plugin/src/lib.rs
           ! grep -qF 'five_status_final_score' so/hachimi_ura_plugin/src/lib.rs
@@ -61,12 +62,12 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p so/dist
-          cp so/hachimi_ura_plugin/target/aarch64-linux-android/release/libhachimi_ura.so so/dist/libhachimi_ura-3.29.6-succfactors.so
+          cp so/hachimi_ura_plugin/target/aarch64-linux-android/release/libhachimi_ura.so so/dist/libhachimi_ura-3.29.7-festaheads.so
           git config user.name dsh-bot
           git config user.email dsh-bot@users.noreply.github.com
-          git add -f so/dist/libhachimi_ura-3.29.6-succfactors.so
+          git add -f so/dist/libhachimi_ura-3.29.7-festaheads.so
           git add -u
-          git commit -m "build(so): 3.29.6 种马因子明细透传（蓝因子星数→zhongMaBlueCount，按局种子缓存）" || echo nothing
+          git commit -m "build(so): 3.29.7 Festa人头按字段名偏移恢复读取+year年界24/48/72修正" || echo nothing
           git fetch origin main || true
           git rebase origin/main || git rebase --abort || true
           git push origin HEAD:main || echo "push failed（禁止 force，防吞并提）"

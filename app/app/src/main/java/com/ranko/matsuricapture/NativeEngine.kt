@@ -666,13 +666,17 @@ object NativeEngine {
         run {
             val fPersons = festa?.optJSONArray("persons") ?: return@run
             if (fPersons.length() == 0) return@run
-            // chara_id → 支援卡 id（summary support_cards 自带 chara_id，不依赖 cardDB）
+            // chara_id → 支援卡 id（[APP-FIX-117] SO support_cards.chara_id 恒 -1（fixture 实证），
+            // 必须经 FrameAdapter 的 cardDB 反查，否则卡人头永远合成不出来、盘面人头全灭）
             val cardByChara = HashMap<Long, Long>()
             val scArr = listOf(summary, "support_cards")
             for (i in 0 until scArr.length()) {
                 val s = scArr.optJSONObject(i) ?: continue
-                val ch = iv(s, "chara_id"); val cid = iv(s, "support_card_id")
-                if (ch > 0 && cid > 0 && !cardByChara.containsKey(ch)) cardByChara[ch] = cid
+                val cid = iv(s, "support_card_id")
+                if (cid <= 0) continue
+                var ch = iv(s, "chara_id")
+                if (ch <= 0) ch = FrameAdapter.charaIdOfCard(cid.toInt()).toLong()
+                if (ch > 0 && !cardByChara.containsKey(ch)) cardByChara[ch] = cid
             }
             // target_id → current_bond（evaluation 段与 festa.persons 同 id 空间）
             val bondByTarget = HashMap<Long, Long>()
@@ -759,7 +763,9 @@ object NativeEngine {
             .put("turn", iv(summary, "turn"))
             // [APP-FIX-105] 引擎口径回合（0..77 推进制）：summary.turn 是 countdown 剩余回合，
             // 与引擎决策行的 turn 差 1+，mergeDecision 对齐必须用这个
-            .put("turn_engine", ((iv(summary, "month").toInt().coerceAtLeast(1) - 1) * 2 + (iv(summary, "half").toInt().coerceAtLeast(1) - 1)).coerceIn(0, 77))
+            // [APP-FIX-116] 统一走 FrameAdapter.engineTurn（含 (year-1)*24 年项 + 回绕兜底），
+            // 与喂给引擎的帧回合保持同一来源，决策对齐不会因历法分叉
+            .put("turn_engine", FrameAdapter.engineTurn(summary))
             .put("raw_total_turn_num", iv(summary, "raw_total_turn_num"))
             .put("year", iv(summary, "year"))
             .put("month", iv(summary, "month"))

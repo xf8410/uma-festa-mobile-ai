@@ -31,6 +31,8 @@ object FrameAdapter {
     private var trackEpoch: Long = -1
     private var trackPending: Int = 0
     private var trackFirstTurn: Int = -1
+    private var trackYearBase: Int = 0 // [APP-FIX-116] 历法年基准（0/24/48/72）
+    private var trackPrevMH: Int = -1  // [APP-FIX-116] 上一帧 month*2+half（回绕检测）
     private val trackEvents = sortedSetOf<Int>()
 
     fun initState(dir: File) {
@@ -43,12 +45,16 @@ object FrameAdapter {
         trackEpoch = epoch
         trackPending = 0
         trackFirstTurn = -1
+        trackYearBase = 0
+        trackPrevMH = -1
         trackEvents.clear()
         val f = trackFile() ?: return
         runCatching {
             val o = JSONObject(f.readText())
             if (o.optLong("epoch", -1) == epoch) {
                 trackFirstTurn = o.optInt("firstTurn", -1)
+                trackYearBase = o.optInt("yearBase", 0)
+                trackPrevMH = o.optInt("prevMH", -1)
                 val a = o.optJSONArray("events") ?: JSONArray()
                 for (i in 0 until a.length()) trackEvents.add(a.optInt(i, 0))
             }
@@ -64,9 +70,37 @@ object FrameAdapter {
             f.writeText(JSONObject().apply {
                 put("epoch", trackEpoch)
                 put("firstTurn", trackFirstTurn)
+                put("yearBase", trackYearBase)
+                put("prevMH", trackPrevMH)
                 put("events", a)
             }.toString())
         }
+    }
+
+    /** [APP-FIX-116] 引擎回合（上游 umaai-rs 历法：0 基、1 月起算、年界 24/48/72）。
+     *  实证链：继承事件 4012/4013 固定 T30/T54 = 第二/三年 4月前半（= 24+6 / 48+6）；
+     *  合宿窗 12-15/36-39/60-63 = 各年 7-8 月。turn = (year-1)*24 + (month-1)*2 + (half-1)。
+     *  旧公式丢了 (year-1)*24：第二/三年回合重复 0-23，继承/合宿/决赛全部错位。
+     *  year 主用 SO 的 year 字段（其 raw_total_turn_num 真机有读崩先例），同局内
+     *  月份回绕（12月后半→1月前半）时 yearBase+24 兜底，两者取大。 */
+    @Synchronized
+    fun engineTurn(src: JSONObject): Int {
+        val seed = src.optLong("fixed_turn_chara_seed", 0)
+        val epoch: Long = if (seed > 0) seed else src.optInt("chara_id", 0).toLong()
+        if (epoch != trackEpoch) trackLoad(epoch)
+        val mon = src.optInt("month", 1).coerceIn(1, 12)
+        val half = src.optInt("half", 1).coerceIn(1, 2)
+        val mh = mon * 2 + half
+        // 真年界只认「11/12月 → 1月」的回绕（26→3）；画面切换的瞬时 1月 误读（mh 小但
+        // 上一帧不在年末）不年界+1，防假跨年把回合永久抬 24
+        if (trackPrevMH >= 23 && mh <= 4) {
+            trackYearBase = minOf(trackYearBase + 24, 72)
+            trackSave()
+        }
+        trackPrevMH = mh
+        val soYear = src.optInt("year", 1).coerceIn(1, 4)
+        val base = maxOf(trackYearBase, (soYear - 1) * 24)
+        return (base + (mon - 1) * 2 + (half - 1)).coerceIn(0, 77)
     }
 
     /** 事件跟踪 + 局号。返回 Pair(局号, keyEvents 快照)。 */
@@ -98,6 +132,9 @@ object FrameAdapter {
         return o.optInt("charaId", 0)
     }
 
+    /** [APP-FIX-117] cardDB 反查卡角色（NativeEngine 人头合成用；SO support_cards.chara_id 恒 -1） */
+    fun charaIdOfCard(cardId: Int): Int = cardCharaId(cardId)
+
     private fun arrInt(a: JSONArray?): IntArray {
         if (a == null) return IntArray(0)
         val out = IntArray(a.length())
@@ -126,9 +163,8 @@ object FrameAdapter {
         val five = intArrayOf(st.optInt("speed", 0), st.optInt("stamina", 0), st.optInt("power", 0), st.optInt("guts", 0), st.optInt("wiz", 0))
         val mx = src.optJSONObject("max_stats") ?: JSONObject()
         val fiveLimit = intArrayOf(mx.optInt("speed", 0), mx.optInt("stamina", 0), mx.optInt("power", 0), mx.optInt("guts", 0), mx.optInt("wiz", 0))
-        val mon = maxOf(1, src.optInt("month", 1))
-        val half = maxOf(1, src.optInt("half", 1))
-        val turn = minOf(77, maxOf(0, (mon - 1) * 2 + (half - 1)))
+        // [APP-FIX-116] 回合统一走 engineTurn（含年项 + 回绕兜底；旧公式无年项，二/三年全错位）
+        val turn = engineTurn(src)
         // [APP-FIX-105] training_levels 是 [{command_id, level}]（对齐 JS 版 summary_to_frame）：
         // 稽古位 5101-5105 优先，全 0 退化到设施 101-105
         val lvList = src.optJSONArray("training_levels")
@@ -369,7 +405,8 @@ object FrameAdapter {
         val (epoch, keyEvents) = trackEventFrame(src, turn, storyId, storySelected)
         base.put("single_mode_chara_id", epoch)
         base.put("keyEvents", JSONArray(keyEvents))
-        base.put("isFullGame", trackFirstTurn in 0..1)
+        // [APP-FIX-116] 完整局判定跟新历法：首帧 ≤ 6（一年 4月前半 = 上游 T6）即全程在记
+        base.put("isFullGame", trackFirstTurn in 0..6)
 
         val fs = fsEarly
         // [APP-FIX-109] 転成教诲：summary festa.advice[] 是 advice_id→fusion 对，按 act.advice_id 反查补 fusionId

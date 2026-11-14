@@ -4806,11 +4806,15 @@ unsafe fn read_summary_inner_impl() -> String {
         };
         (y, raw_total_turn_num)
     } else if raw_total_turn_num > 0 {
-        let y = if raw_total_turn_num <= 18 {
+        // [SO-FIX-115] Festa(15) 的年界原来按 18/42/66（误以为 raw 从 4 月起算）。
+        // 真机 fixture 实证 raw 是 1 月起算（7月前半=13）：年界与上游 umaai-rs 一致 24/48/72，
+        // 继承事件 4012/4013 固定 T30/T54 = 第二/三年 4月前半（24+6 / 48+6）。
+        // 旧映射把第一年 10-12 月（raw 19-24）错标成第二年，App 回合年项随之错位。
+        let y = if raw_total_turn_num <= 24 {
             1
-        } else if raw_total_turn_num <= 42 {
+        } else if raw_total_turn_num <= 48 {
             2
-        } else if raw_total_turn_num <= 66 {
+        } else if raw_total_turn_num <= 72 {
             3
         } else {
             4
@@ -5806,20 +5810,36 @@ unsafe fn read_summary_inner_impl() -> String {
                         // TrainingPartnerArray is ObscuredInt[] with
                         // inline 20-byte values.
                         // ★ v3.29.2: 非 legacy 布局（Festa）不读——偏移属于别的字段
+                        // [SO-FIX-115] 非 legacy 不再整段弃读，改为按字段名解析偏移
+                        // （cached_find_field_offset 会把 <TrainingPartnerArray>k__BackingField
+                        // 归一化命中）：布局洗牌/新类都能拿到正确偏移；类里真没有该字段才弃读。
+                        // 这样 Festa 下 trainings[].partners 恢复实测——上游协议里友人/理事长/
+                        // 记者/神驹站位只有这个数组给得出（festa.persons 的 act_type 不覆盖他们）。
                         let tp_arr = if legacy_layout {
                             read_ptr_at(ep as *const c_void, TRAINING_PARTNER_ARRAY_OFF)
                         } else {
-                            std::ptr::null_mut()
+                            let tp_off = cached_find_field_offset(ep_class, "TrainingPartnerArray");
+                            if tp_off > 0 {
+                                read_ptr_at(ep as *const c_void, tp_off as usize)
+                            } else {
+                                std::ptr::null_mut()
+                            }
                         };
 
                         // ★ v3.24.15: Read TipsEventPartnerArray for group card shining.
                         // Group cards (support_card_type=3) shine when they trigger a
                         // special tips event, not based on bond threshold.
                         // TipsEventPartnerArray is at offset 0x58 (88), same ObscuredInt[] format.
+                        // [SO-FIX-115] 非 legacy 同样按字段名解析偏移，拿不到才弃读。
                         let tips_arr = if legacy_layout {
                             read_ptr_at(ep as *const c_void, TIPS_EVENT_PARTNER_ARRAY_OFF)
                         } else {
-                            std::ptr::null_mut()
+                            let ev_off = cached_find_field_offset(ep_class, "TipsEventPartnerArray");
+                            if ev_off > 0 {
+                                read_ptr_at(ep as *const c_void, ev_off as usize)
+                            } else {
+                                std::ptr::null_mut()
+                            }
                         };
                         let mut tips_partner_ids: std::collections::HashSet<i32> =
                             std::collections::HashSet::new();

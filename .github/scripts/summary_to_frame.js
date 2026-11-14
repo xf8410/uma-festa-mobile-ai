@@ -11,7 +11,10 @@ const st = src.stats || {};
 const five = [st.speed || 0, st.stamina || 0, st.power || 0, st.guts || 0, st.wiz || 0];
 const lim = src.max_stats || {};
 const fiveLimit = [lim.speed || 0, lim.stamina || 0, lim.power || 0, lim.guts || 0, lim.wiz || 0];
-const turn = Math.max(0, Math.min(77, (Math.max(1, src.month || 1) - 1) * 2 + (Math.max(1, src.half || 1) - 1)));
+// [APP-FIX-116] 引擎历法：turn = (year-1)*24 + (month-1)*2 + (half-1)（0 基 1 月起算；
+// 继承 4012/4013 固定 T30/T54 = 二/三年 4月前半）。CI 脚本无持久态，回绕兜底只在 App 端。
+const yearBase = (Math.max(1, Math.min(4, src.year || 1)) - 1) * 24;
+const turn = Math.max(0, Math.min(77, yearBase + (Math.max(1, src.month || 1) - 1) * 2 + (Math.max(1, src.half || 1) - 1)));
 // training_levels 是 [{command_id, level}]（不是 5 个数字）：稽古位 5101-5105 优先，退化到设施 101-105
 const lvList = Array.isArray(src.training_levels) ? src.training_levels : [];
 const levelOf = id => {
