@@ -5820,7 +5820,7 @@ unsafe fn read_summary_inner_impl() -> String {
                         } else {
                             let tp_off = cached_find_field_offset(ep_class, "TrainingPartnerArray");
                             if tp_off > 0 {
-                                read_ptr_at(ep as *const c_void, tp_off as usize)
+                                read_ptr_at(ep as *const c_void, tp_off)
                             } else {
                                 std::ptr::null_mut()
                             }
@@ -5836,7 +5836,7 @@ unsafe fn read_summary_inner_impl() -> String {
                         } else {
                             let ev_off = cached_find_field_offset(ep_class, "TipsEventPartnerArray");
                             if ev_off > 0 {
-                                read_ptr_at(ep as *const c_void, ev_off as usize)
+                                read_ptr_at(ep as *const c_void, ev_off)
                             } else {
                                 std::ptr::null_mut()
                             }
